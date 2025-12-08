@@ -77,6 +77,21 @@ async function connectToWhatsApp() {
 
     const OPERATOR_ID = '233255529889864';
 
+    // Check operator robustly: accept numeric id or full JID appearance
+    const isOperator = (fullJid) => {
+        if (!fullJid) return false;
+        try {
+            const numeric = fullJid.split('@')[0];
+            if (numeric === OPERATOR_ID) return true;
+            if (fullJid.includes(OPERATOR_ID)) return true;
+            // also accept variants with @s.whatsapp.net
+            if (fullJid.endsWith(`${OPERATOR_ID}@s.whatsapp.net`) || fullJid.endsWith(`${OPERATOR_ID}@c.us`) || fullJid.endsWith(`${OPERATOR_ID}@g.us`)) return true;
+        } catch (e) {
+            return false;
+        }
+        return false;
+    };
+
     const grantRental = (scope, id, tier, days, grantedBy) => {
         const rentals = loadRentals();
         const key = id;
@@ -104,9 +119,9 @@ async function connectToWhatsApp() {
         return r;
     };
 
-    const hasAccessForCommand = (command, isGroup, senderId, groupId) => {
+    const hasAccessForCommand = (command, isGroup, senderFullJid, groupId) => {
         // operator always allowed
-        if (senderId === OPERATOR_ID) return true;
+        if (isOperator(senderFullJid)) return true;
         const cmd = command.toLowerCase();
         // always allow .sewa so non-rented users can see how to rent
         if (cmd === '.sewa') return true;
@@ -115,6 +130,7 @@ async function connectToWhatsApp() {
             const rental = getRental(groupId);
             return !!rental;
         } else {
+            const senderId = (senderFullJid || '').split('@')[0];
             const rental = getRental(senderId);
             return !!rental;
         }
@@ -194,16 +210,16 @@ async function connectToWhatsApp() {
                     return;
                 }
 
-                    // PING — cek apakah bot aktif dan tampilkan latency
-                    if (text.toLowerCase() === '.ping') {
-                        const msgTs = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
-                        const tick = Date.now() - msgTs;
-                        await sock.sendMessage(from, { text: `haloo, bot aktif dengan "${tick}"ms` });
-                        return;
-                    }
+                            // PING — cek apakah bot aktif dan tampilkan latency
+                            if (text.toLowerCase() === '.ping') {
+                                const msgTs = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
+                                const tick = Date.now() - msgTs;
+                                await sock.sendMessage(from, { text: `haloo, bot aktif dengan "${tick}"ms` });
+                                return;
+                            }
 
                     // PROFILE — tampilkan profil pengguna (nama, WA id, total penggunaan, bergabung sejak)
-                    if (text.toLowerCase() === '.profile' || text.toLowerCase() === '.profil') {
+                if (text.toLowerCase() === '.profile' || text.toLowerCase() === '.profil') {
                         // target via mention or reply, default = sender
                         const ext = msg.message?.extendedTextMessage;
                         let targetJid = null;
@@ -231,15 +247,15 @@ async function connectToWhatsApp() {
                     }
 
                     // GROUP CONTROL — buka / tutup grup (hanya admin)
-                    if (text.toLowerCase() === '.closegroup' || text.toLowerCase() === '.opengroup') {
+                if (text.toLowerCase() === '.closegroup' || text.toLowerCase() === '.opengroup') {
                         if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Perintah ini hanya untuk grup.' });
                         const group = await sock.groupMetadata(from);
                         const sender = msg.key.participant || msg.key.remoteJid;
                         const isSenderAdmin = group.participants.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin' || p.isAdmin || p.isSuperAdmin));
                         if (!isSenderAdmin) return sock.sendMessage(from, { text: 'Hanya admin grup yang bisa menggunakan perintah ini.' });
-                        // check rental: promote/demote/opengroup/closegroup require group premium
-                        const senderIdForCheck = (msg.key.participant || msg.key.remoteJid).split('@')[0];
-                        if (!hasAccessForCommand(text.split(' ')[0], true, senderIdForCheck, from)) return sock.sendMessage(from, { text: 'Fitur ini membutuhkan paket Group Premium. Ketik .sewa untuk info.' });
+                        // check rental: group must have active rental
+                        const fullSender = msg.key.participant || msg.key.remoteJid;
+                        if (!hasAccessForCommand(text.split(' ')[0], true, fullSender, from)) return sock.sendMessage(from, { text: 'Fitur ini membutuhkan paket sewa. Ketik .sewa untuk info.' });
 
                         try {
                             if (text.toLowerCase() === '.closegroup') {
@@ -259,12 +275,15 @@ async function connectToWhatsApp() {
                     }
 
                     // PROMOTE / DEMOTE — jadikan atau cabut admin (via mention atau reply)
-                    if (text.toLowerCase().startsWith('.promote') || text.toLowerCase().startsWith('.demote')) {
-                        if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Perintah ini hanya untuk grup.' });
-                        const group = await sock.groupMetadata(from);
-                        const sender = msg.key.participant || msg.key.remoteJid;
-                        const isSenderAdmin = group.participants.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin' || p.isAdmin || p.isSuperAdmin));
-                        if (!isSenderAdmin) return sock.sendMessage(from, { text: 'Hanya admin grup yang bisa menggunakan perintah ini.' });
+                if (text.toLowerCase().startsWith('.promote') || text.toLowerCase().startsWith('.demote')) {
+                    if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Perintah ini hanya untuk grup.' });
+                    const group = await sock.groupMetadata(from);
+                    const sender = msg.key.participant || msg.key.remoteJid;
+                    const isSenderAdmin = group.participants.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin' || p.isAdmin || p.isSuperAdmin));
+                    if (!isSenderAdmin) return sock.sendMessage(from, { text: 'Hanya admin grup yang bisa menggunakan perintah ini.' });
+                    // check rental: group must have active rental
+                    const fullSenderProm = msg.key.participant || msg.key.remoteJid;
+                    if (!hasAccessForCommand(text.split(' ')[0], true, fullSenderProm, from)) return sock.sendMessage(from, { text: 'Fitur ini membutuhkan paket sewa. Ketik .sewa untuk info.' });
 
                         // Dapatkan target: mention atau reply
                         let targets = [];
@@ -294,8 +313,8 @@ async function connectToWhatsApp() {
                 // TAGALL — BENERAN TAG SEMUA MEMBER (bukan cuma @everyone)
                 if (text.toLowerCase() === '.tagall') {
                     if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Di grup aja yaaa' });
-                    const senderId = (msg.key.participant || msg.key.remoteJid).split('@')[0];
-                    if (!hasAccessForCommand('.tagall', true, senderId, from)) return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk grup yang menyewa bot. Ketik .sewa untuk info.' });
+                    const fullSender = msg.key.participant || msg.key.remoteJid;
+                    if (!hasAccessForCommand('.tagall', true, fullSender, from)) return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk grup yang menyewa bot. Ketik .sewa untuk info.' });
                     const group = await sock.groupMetadata(from);
                     let teks = '┌──「 TAG ALL 」\n';
                     for (let mem of group.participants) {
@@ -309,8 +328,8 @@ async function connectToWhatsApp() {
                 // HIDETAG — TAG SEMUA TAPI DISEMBUNYIKAN, GANTI PESAN
                 if (text.toLowerCase().startsWith('.hidetag ')) {
                     if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'bisa dipake nyaa cuma di group' });
-                    const senderId = (msg.key.participant || msg.key.remoteJid).split('@')[0];
-                    if (!hasAccessForCommand('.hidetag', true, senderId, from)) return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk grup yang menyewa bot. Ketik .sewa untuk info.' });
+                    const fullSender = msg.key.participant || msg.key.remoteJid;
+                    if (!hasAccessForCommand('.hidetag', true, fullSender, from)) return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk grup yang menyewa bot. Ketik .sewa untuk info.' });
                     const pesan = text.slice(10);
                     const group = await sock.groupMetadata(from);
                     await sock.sendMessage(from, { text: pesan ? pesan : '‎', mentions: group.participants.map(a => a.id) });
@@ -357,12 +376,12 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
 
     await sock.sendMessage(from, { text: 'Sabar yaaa, lagi diprosess... ⏳' });
     try {
-        // check access: private premium or group premium
-        const senderId = (msg.key.participant || msg.key.remoteJid).split('@')[0];
+        // check access: rental required (single-tier)
+        const fullSenderForTt = msg.key.participant || msg.key.remoteJid;
         const isGroup = from.endsWith('@g.us');
         const groupId = from;
-        if (!hasAccessForCommand('.tt', isGroup, senderId, groupId)) {
-            return sock.sendMessage(from, { text: 'Fitur ini hanya untuk paket Premium. Cek .sewa untuk informasi.' });
+        if (!hasAccessForCommand('.tt', isGroup, fullSenderForTt, groupId)) {
+            return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk akun/grup yang menyewa bot. Ketik .sewa untuk info.' });
         }
         const res = await axios.get(`https://tikwm.com/api/?url=${url}`);
         if (res.data.code !== 0) throw new Error('API error: ' + res.data.msg);
@@ -384,58 +403,85 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
 
                 // SEWA — promotional info and how to rent
                 if (text.toLowerCase() === '.sewa') {
-                    const promo = `🌟 *SEWA BOT - Paket & Harga* 🌟\n\n` +
-                        `🔒 *Private Basic* — Fitur dasar (sticker, profile, ping)\n` +
-                        `💎 *Private Premium* — Semua Basic + TikTok downloader (.tt)\n\n` +
-                        `👥 *Group Basic* — Tagall & Hidetag untuk seluruh grup\n` +
-                        `👑 *Group Premium* — Semua Group Basic + promote/demote & buka/tutup grup\n\n` +
-                        `📞 Untuk sewa/beli: hubungi Operator: wa.me/62${OPERATOR_ID}\n` +
-                        `Contoh permintaan untuk operator: \n` +
-                        `• Grant private: .grant private premium @user 7 (hari)\n` +
-                        `• Grant group: .grant group basic 30 (hari) {reply ke grup atau mention}\n\n` +
-                        `Catatan: Harga dan metode pembayaran akan dikomunikasikan via chat dengan operator. Terima kasih! ✨`;
+                    const promo = `🌟 *SEWA BOT - Informasi* 🌟\n\n` +
+                        `✨ *Sistem sewa sekarang sederhana:*\n` +
+                        `• *Sewa = Bisa menggunakan semua fitur bot*\n` +
+                        `• *Tidak sewa = Tidak bisa menggunakan perintah yang diawali titik (.)*\n\n` +
+                        `📌 Cara penyewaan:\n` +
+                        `• Private: berikan ID pengguna (nomor tanpa @) ke operator, contoh: .grant private 62812xxxxxxx 30\n` +
+                        `• Group: jalankan perintah .grant group 30 oleh operator di dalam grup atau mention grup\n\n` +
+                        `📞 Hubungi Operator untuk proses & harga: ID operator: ${OPERATOR_ID}\n` +
+                        `Contoh perintah operator:\n` +
+                        `• .grant private <id_user> <days>\n` +
+                        `• .grant group <days>  (jalankan di grup atau sebutkan group id)\n\n` +
+                        `Terima kasih! ✨`;
                     await sock.sendMessage(from, { text: promo });
                     return;
                 }
 
                 // OPERATOR: grant/revoke rentals
                 if (text.toLowerCase().startsWith('.grant ') || text.toLowerCase().startsWith('.revoke ')) {
-                    const senderId = (msg.key.participant || msg.key.remoteJid).split('@')[0];
-                    if (senderId !== OPERATOR_ID) return sock.sendMessage(from, { text: 'Hanya operator yang bisa menjalankan perintah ini.' });
+                if (text.toLowerCase().startsWith('.grant ') || text.toLowerCase().startsWith('.revoke ')) {
+                    const fullSender = msg.key.participant || msg.key.remoteJid;
+                    if (!isOperator(fullSender)) return sock.sendMessage(from, { text: 'Hanya operator yang bisa menjalankan perintah ini.' });
 
                     const parts = text.trim().split(/\s+/);
                     const cmd = parts[0].toLowerCase();
                     try {
                         if (cmd === '.grant') {
-                            // .grant <private|group> <basic|premium> <days> [target]
+                            // Grant formats:
+                            // .grant private <id_user> <days>
+                            // .grant group <days>  (if run inside group) OR .grant group <groupId> <days>
                             const scope = parts[1];
-                            const tier = parts[2];
-                            const days = parts[3];
-                            // target via mention or if scope=group and replying
-                            let target = null;
-                            const ext = msg.message?.extendedTextMessage;
-                            if (ext?.contextInfo?.mentionedJid && ext.contextInfo.mentionedJid.length) target = ext.contextInfo.mentionedJid[0].split('@')[0];
-                            else if (scope === 'group') target = from; // grant to current group
-                            else if (parts[4]) target = parts[4].replace(/[^0-9]/g, '');
+                            if (!scope) return sock.sendMessage(from, { text: 'Format .grant: .grant <private|group> ...' });
 
-                            if (!scope || !tier || !days) return sock.sendMessage(from, { text: 'Format: .grant <private|group> <basic|premium> <days> [target]' });
-                            if (!target) return sock.sendMessage(from, { text: 'Tidak menemukan target. Mention user atau jalankan di grup untuk grant group.' });
-
-                            const id = scope === 'group' ? target : target.replace(/^0/, '62');
-                            grantRental(scope, id, tier, Number(days), senderId);
-                            await sock.sendMessage(from, { text: `Sukses: diberikan ${tier} ${scope} untuk ${id} selama ${days} hari.` });
+                            if (scope === 'private') {
+                                const targetRaw = parts[2];
+                                const days = Number(parts[3]);
+                                if (!targetRaw || !days) return sock.sendMessage(from, { text: 'Format: .grant private <id_user> <days>' });
+                                // normalize id_user (strip non-digits, remove leading +)
+                                let id = targetRaw.replace(/[^0-9]/g, '');
+                                if (id.startsWith('0')) id = id.replace(/^0/, '62');
+                                grantRental('private', id, 'rented', days, fullSender);
+                                await sock.sendMessage(from, { text: `Sukses: diberikan akses sewa untuk ${id} selama ${days} hari.` });
+                            } else if (scope === 'group') {
+                                let days = null;
+                                let groupId = null;
+                                // if run inside group and parts[2] is days
+                                if (from.endsWith('@g.us') && parts[2] && /^\d+$/.test(parts[2])) {
+                                    days = Number(parts[2]);
+                                    groupId = from;
+                                } else if (parts[2] && parts[3] && /^\d+$/.test(parts[3])) {
+                                    groupId = parts[2];
+                                    days = Number(parts[3]);
+                                }
+                                if (!groupId || !days) return sock.sendMessage(from, { text: 'Format: .grant group <days> (jalankan di grup) atau .grant group <groupId> <days>' });
+                                grantRental('group', groupId, 'rented', days, fullSender);
+                                await sock.sendMessage(from, { text: `Sukses: diberikan akses sewa untuk grup ${groupId} selama ${days} hari.` });
+                            } else {
+                                return sock.sendMessage(from, { text: 'Scope tidak dikenal. Gunakan "private" atau "group".' });
+                            }
                         } else {
-                            // .revoke <private|group> [target]
+                            // .revoke <private|group> <id?>
                             const scope = parts[1];
-                            let target = null;
-                            const ext = msg.message?.extendedTextMessage;
-                            if (ext?.contextInfo?.mentionedJid && ext.contextInfo.mentionedJid.length) target = ext.contextInfo.mentionedJid[0].split('@')[0];
-                            else if (scope === 'group') target = from;
-                            else if (parts[2]) target = parts[2].replace(/[^0-9]/g, '');
-                            if (!target) return sock.sendMessage(from, { text: 'Format: .revoke <private|group> [target]' });
-                            const id = scope === 'group' ? target : target.replace(/^0/, '62');
-                            revokeRental(id);
-                            await sock.sendMessage(from, { text: `Sukses: rental untuk ${id} dicabut.` });
+                            if (!scope) return sock.sendMessage(from, { text: 'Format .revoke: .revoke <private|group> <id?>' });
+                            if (scope === 'private') {
+                                const targetRaw = parts[2];
+                                if (!targetRaw) return sock.sendMessage(from, { text: 'Format: .revoke private <id_user>' });
+                                let id = targetRaw.replace(/[^0-9]/g, '');
+                                if (id.startsWith('0')) id = id.replace(/^0/, '62');
+                                revokeRental(id);
+                                await sock.sendMessage(from, { text: `Sukses: rental untuk ${id} dicabut.` });
+                            } else if (scope === 'group') {
+                                let groupId = null;
+                                if (from.endsWith('@g.us') && !parts[2]) groupId = from;
+                                else if (parts[2]) groupId = parts[2];
+                                if (!groupId) return sock.sendMessage(from, { text: 'Format: .revoke group <groupId> (atau jalankan di grup tanpa argumen)' });
+                                revokeRental(groupId);
+                                await sock.sendMessage(from, { text: `Sukses: rental untuk grup ${groupId} dicabut.` });
+                            } else {
+                                return sock.sendMessage(from, { text: 'Scope tidak dikenal. Gunakan "private" atau "group".' });
+                            }
                         }
                     } catch (e) {
                         console.log('grant/revoke error:', e.message);
