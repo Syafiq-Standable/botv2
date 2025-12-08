@@ -118,7 +118,8 @@ async function connectToWhatsApp() {
                         try {
                             const action = text.toLowerCase().startsWith('.promote') ? 'promote' : 'demote';
                             await sock.groupParticipantsUpdate(from, targets, action);
-                            await sock.sendMessage(from, { text: `Sukses melakukan ${action} untuk ${targets.join(', ')}` });
+                            const mentionText = targets.map(jid => `@${jid.split('@')[0]}`).join(', ');
+                            await sock.sendMessage(from, { text: `Sukses melakukan ${action} untuk ${mentionText}`, mentions: targets });
                         } catch (err) {
                             console.log('Promote/Demote error:', err.message);
                             await sock.sendMessage(from, { text: `Gagal mengubah status admin: ${err.message}` });
