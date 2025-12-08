@@ -10,6 +10,26 @@ async function connectToWhatsApp() {
         version: [2, 3000, 1027934701] // versi stabil biar gak error aneh
     });
 
+    // Helper: set group announcement mode with fallbacks for different Baileys versions
+    const setGroupAnnouncement = async (jid, announce) => {
+        const mode = announce ? 'announcement' : 'not_announcement';
+        if (typeof sock.groupSettingChange === 'function') {
+            return sock.groupSettingChange(jid, mode);
+        }
+        if (typeof sock.groupSettingUpdate === 'function') {
+            return sock.groupSettingUpdate(jid, mode);
+        }
+        if (typeof sock.groupUpdate === 'function') {
+            // best-effort fallback; some implementations accept an object
+            try {
+                return sock.groupUpdate(jid, { announce });
+            } catch (e) {
+                // fallthrough to error below
+            }
+        }
+        throw new Error('group setting change not supported by this Baileys version');
+    };
+
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) qrcode.generate(qr, { small: true });
@@ -60,11 +80,11 @@ async function connectToWhatsApp() {
                         try {
                             if (text.toLowerCase() === '.closegroup') {
                                 // announcement => only admins can send messages
-                                await sock.groupSettingChange(from, 'announcement');
+                                await setGroupAnnouncement(from, true);
                                 await sock.sendMessage(from, { text: 'Sukses! Grup ditutup — hanya admin yang bisa mengirim pesan sekarang.' });
                             } else {
                                 // not_announcement => all participants can send messages
-                                await sock.groupSettingChange(from, 'not_announcement');
+                                await setGroupAnnouncement(from, false);
                                 await sock.sendMessage(from, { text: 'Sukses! Grup dibuka — semua anggota bisa mengirim pesan sekarang.' });
                             }
                         } catch (err) {
@@ -98,7 +118,7 @@ async function connectToWhatsApp() {
                         try {
                             const action = text.toLowerCase().startsWith('.promote') ? 'promote' : 'demote';
                             await sock.groupParticipantsUpdate(from, targets, action);
-                            await sock.sendMessage(from, { text: `Sukses: ${action} untuk ${targets.join(', ')}` });
+                            await sock.sendMessage(from, { text: `Sukses melakukan ${action} untuk ${group.participants.map(', ')}` });
                         } catch (err) {
                             console.log('Promote/Demote error:', err.message);
                             await sock.sendMessage(from, { text: `Gagal mengubah status admin: ${err.message}` });
