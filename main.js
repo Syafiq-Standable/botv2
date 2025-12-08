@@ -75,18 +75,35 @@ async function connectToWhatsApp() {
         }
     };
 
-    const OPERATOR_ID = '233255529889864';
+    // Operators DB (editable)
+    const OPERATORS_DB = path.join(__dirname, 'data', 'operators.json');
+
+    const loadOperators = () => {
+        try {
+            if (!fs.existsSync(OPERATORS_DB)) return [];
+            const raw = fs.readFileSync(OPERATORS_DB, 'utf8');
+            return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            console.log('Operators DB load error:', e.message);
+            return [];
+        }
+    };
 
     // Check operator robustly: accept numeric id or full JID appearance
     const isOperator = (fullJid) => {
         if (!fullJid) return false;
         try {
+            const list = loadOperators();
+            if (!fullJid) return false;
             const numeric = fullJid.split('@')[0];
-            if (numeric === OPERATOR_ID) return true;
-            if (fullJid.includes(OPERATOR_ID)) return true;
-            // also accept variants with @s.whatsapp.net
-            if (fullJid.endsWith(`${OPERATOR_ID}@s.whatsapp.net`) || fullJid.endsWith(`${OPERATOR_ID}@c.us`) || fullJid.endsWith(`${OPERATOR_ID}@g.us`)) return true;
+            for (const op of list) {
+                if (!op) continue;
+                if (String(op) === numeric) return true;
+                if (fullJid.includes(String(op))) return true;
+                if (fullJid.endsWith(`${op}@s.whatsapp.net`) || fullJid.endsWith(`${op}@c.us`) || fullJid.endsWith(`${op}@g.us`)) return true;
+            }
         } catch (e) {
+            console.log('isOperator check error:', e.message);
             return false;
         }
         return false;
