@@ -213,8 +213,9 @@ async function connectToWhatsApp() {
                             // PING — cek apakah bot aktif dan tampilkan latency
                             if (text.toLowerCase() === '.ping') {
                                 const msgTs = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
-                                const tick = Date.now() - msgTs;
-                                await sock.sendMessage(from, { text: `haloo, bot aktif dengan "${tick}"ms` });
+                                const LatencyMs = Date.now() - msgTs;
+                                const LatencySec = (latencyMs / 1000).toFixed(2);
+                                await sock.sendMessage(from, { text: `haloo, bot aktif dengan "${LatencySec}"ms` });
                                 return;
                             }
 
