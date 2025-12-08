@@ -436,72 +436,43 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
                     return;
                 }
 
-                // OPERATOR: grant/revoke rentals
+                                // OPERATOR: grant/revoke rentals (FIXED - NO DUPLICATE IF)
                 if (text.toLowerCase().startsWith('.grant ') || text.toLowerCase().startsWith('.revoke ')) {
                     const fullSender = msg.key.participant || msg.key.remoteJid;
-                    if (!isOperator(fullSender)) return sock.sendMessage(from, { text: 'Hanya operator yang bisa menjalankan perintah ini.' });
+                    if (!isOperator(fullSender)) return sock.sendMessage(from, { text: 'Hanya operator yang boleh pakai perintah ini!' });
 
                     const parts = text.trim().split(/\s+/);
                     const cmd = parts[0].toLowerCase();
+
                     try {
                         if (cmd === '.grant') {
-                            // Grant formats:
-                            // .grant private <id_user> <days>
-                            // .grant group <days>  (if run inside group) OR .grant group <groupId> <days>
-                            const scope = parts[1];
-                            if (!scope) return sock.sendMessage(from, { text: 'Format .grant: .grant <private|group> ...' });
+                            const scope = parts[1]?.toLowerCase();
+                            if (!scope || !['private', 'group'].includes(scope)) 
+                                return sock.sendMessage(from, { text: 'Format: .grant private <id> <hari> atau .grant group <hari>' });
+
+                            const days = Number(scope === 'group' ? parts[2] : parts[3]);
+                            if (!days || days <= 0) return sock.sendMessage(from, { text: 'Hari harus angka positif!' });
 
                             if (scope === 'private') {
-                                const targetRaw = parts[2];
-                                const days = Number(parts[3]);
-                                if (!targetRaw || !days) return sock.sendMessage(from, { text: 'Format: .grant private <id_user> <days>' });
-                                // normalize id_user (strip non-digits, remove leading +)
-                                let id = targetRaw.replace(/[^0-9]/g, '');
-                                if (id.startsWith('0')) id = id.replace(/^0/, '62');
-                                grantRental('private', id, 'rented', days, fullSender);
-                                await sock.sendMessage(from, { text: `Sukses: diberikan akses sewa untuk ${id} selama ${days} hari.` });
-                            } else if (scope === 'group') {
-                                let days = null;
-                                let groupId = null;
-                                // if run inside group and parts[2] is days
-                                if (from.endsWith('@g.us') && parts[2] && /^\d+$/.test(parts[2])) {
-                                    days = Number(parts[2]);
-                                    groupId = from;
-                                } else if (parts[2] && parts[3] && /^\d+$/.test(parts[3])) {
-                                    groupId = parts[2];
-                                    days = Number(parts[3]);
-                                }
-                                if (!groupId || !days) return sock.sendMessage(from, { text: 'Format: .grant group <days> (jalankan di grup) atau .grant group <groupId> <days>' });
-                                grantRental('group', groupId, 'rented', days, fullSender);
-                                await sock.sendMessage(from, { text: `Sukses: diberikan akses sewa untuk grup ${groupId} selama ${days} hari.` });
-                            } else {
-                                return sock.sendMessage(from, { text: 'Scope tidak dikenal. Gunakan "private" atau "group".' });
-                            }
-                        } else {
-                            // .revoke <private|group> <id?>
-                            const scope = parts[1];
-                            if (!scope) return sock.sendMessage(from, { text: 'Format .revoke: .revoke <private|group> <id?>' });
-                            if (scope === 'private') {
-                                const targetRaw = parts[2];
-                                if (!targetRaw) return sock.sendMessage(from, { text: 'Format: .revoke private <id_user>' });
-                                let id = targetRaw.replace(/[^0-9]/g, '');
-                                if (id.startsWith('0')) id = id.replace(/^0/, '62');
-                                revokeRental(id);
-                                await sock.sendMessage(from, { text: `Sukses: rental untuk ${id} dicabut.` });
-                            } else if (scope === 'group') {
-                                let groupId = null;
-                                if (from.endsWith('@g.us') && !parts[2]) groupId = from;
-                                else if (parts[2]) groupId = parts[2];
-                                if (!groupId) return sock.sendMessage(from, { text: 'Format: .revoke group <groupId> (atau jalankan di grup tanpa argumen)' });
-                                revokeRental(groupId);
-                                await sock.sendMessage(from, { text: `Sukses: rental untuk grup ${groupId} dicabut.` });
-                            } else {
-                                return sock.sendMessage(from, { text: 'Scope tidak dikenal. Gunakan "private" atau "group".' });
+                                let id = parts[2].replace(/[^0-9]/g, '');
+                                if (id.startsWith('0')) id = '62' + id.slice(1);
+                                grantRental('private', id, 'premium', days, fullSender);
+                                await sock.sendMessage(from, { text: `✅ Private ${id} disewa ${days} hari!` });
+                            } else { // group
+                                const groupId = from.endsWith('@g.us') ? from : parts[2];
+                                if (!groupId) return sock.sendMessage(from, { text: 'Jalankan di grup atau kasih group ID!' });
+                                grantRental('group', groupId, 'premium', days, fullSender);
+                                await sock.sendMessage(from, { text: `✅ Grup ini disewa ${days} hari!` });
                             }
                         }
+
+                        if (cmd === '.revoke') {
+                            const target = parts[1] || from;
+                            revokeRental(target.includes('@') ? target : target.replace(/[^0-9]/g, ''));
+                            await sock.sendMessage(from, { text: '❌ Rental dicabut!' });
+                        }
                     } catch (e) {
-                        console.log('grant/revoke error:', e.message);
-                        await sock.sendMessage(from, { text: `Gagal menjalankan perintah: ${e.message}` });
+                        await sock.sendMessage(from, { text: 'Error: ' + e.message });
                     }
                     return;
                 }
