@@ -35,6 +35,19 @@ async function connectToWhatsApp() {
                     await sock.sendMessage(from, { text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n\n✦ .tagall → tag semua member\n✦ .hidetag [pesan] → tag tersembunyi\n✦ .tt [link] → download TikTok\n✦ .stiker / reply .stiker → membuat stiker dari foto\n\nowner: wa.me/628952890624` });
                     return;
                 }
+                    // MENU (alias .help)
+                    if (text.toLowerCase() === '.menu' || text.toLowerCase() === '.help') {
+                        await sock.sendMessage(from, { text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n\n✦ .menu / .help → tampilkan menu ini\n✦ .tagall → tag semua member\n✦ .hidetag [pesan] → tag tersembunyi\n✦ .tt [link] → download TikTok\n✦ .stiker / reply .stiker → membuat stiker dari foto\n✦ .ping → memastikan bot tetap aktif dan mengecek jumlah delay\n\nowner: wa.me/628952890624` });
+                        return;
+                    }
+
+                    // PING — cek apakah bot aktif dan tampilkan latency
+                    if (text.toLowerCase() === '.ping') {
+                        const msgTs = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
+                        const tick = Date.now() - msgTs;
+                        await sock.sendMessage(from, { text: `haloo, bot aktif dengan "${tick}"ms` });
+                        return;
+                    }
 
                 // TAGALL — BENERAN TAG SEMUA MEMBER (bukan cuma @everyone)
                 if (text.toLowerCase() === '.tagall') {
