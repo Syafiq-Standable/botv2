@@ -75,7 +75,7 @@ async function connectToWhatsApp() {
         }
     };
 
-    const OPERATOR_ID = '6289528950624'; // your number without leading 0, per request "089528950624"
+    const OPERATOR_ID = '233255529889864';
 
     const grantRental = (scope, id, tier, days, grantedBy) => {
         const rentals = loadRentals();
@@ -105,33 +105,18 @@ async function connectToWhatsApp() {
     };
 
     const hasAccessForCommand = (command, isGroup, senderId, groupId) => {
-        // allow operator always
+        // operator always allowed
         if (senderId === OPERATOR_ID) return true;
-
         const cmd = command.toLowerCase();
-        // Private commands
-        const privateBasic = ['.menu', '.help', '.ping', '.profile', '.profil', '.stiker', '.sticker', '.s'];
-        const privatePremium = ['.tt'];
-
-        // Group commands mapping
-        const groupBasic = ['.tagall', '.hidetag'];
-        const groupPremium = ['.promote', '.demote', '.opengroup', '.closegroup', '.tt'];
-
+        // always allow .sewa so non-rented users can see how to rent
+        if (cmd === '.sewa') return true;
+        // check rental: if group context, check group rental; otherwise check private rental for sender
         if (isGroup) {
             const rental = getRental(groupId);
-            if (!rental) return false;
-            if (groupBasic.includes(cmd)) return (rental.tier === 'basic' || rental.tier === 'premium');
-            if (groupPremium.includes(cmd)) return (rental.tier === 'premium');
-            // default allow other commands if group has any rental
-            return true;
+            return !!rental;
         } else {
-            // private
-            if (privateBasic.includes(cmd)) return true; // basic available for all in private
-            if (privatePremium.includes(cmd)) {
-                const rental = getRental(senderId);
-                return rental && (rental.tier === 'premium');
-            }
-            return true; // default allow
+            const rental = getRental(senderId);
+            return !!rental;
         }
     };
 
