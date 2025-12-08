@@ -49,6 +49,64 @@ async function connectToWhatsApp() {
                         return;
                     }
 
+                    // GROUP CONTROL — buka / tutup grup (hanya admin)
+                    if (text.toLowerCase() === '.closegroup' || text.toLowerCase() === '.opengroup') {
+                        if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Perintah ini hanya untuk grup.' });
+                        const group = await sock.groupMetadata(from);
+                        const sender = msg.key.participant || msg.key.remoteJid;
+                        const isSenderAdmin = group.participants.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin' || p.isAdmin || p.isSuperAdmin));
+                        if (!isSenderAdmin) return sock.sendMessage(from, { text: 'Hanya admin grup yang bisa menggunakan perintah ini.' });
+
+                        try {
+                            if (text.toLowerCase() === '.closegroup') {
+                                // announcement => only admins can send messages
+                                await sock.groupSettingChange(from, 'announcement');
+                                await sock.sendMessage(from, { text: 'Sukses! Grup ditutup — hanya admin yang bisa mengirim pesan sekarang.' });
+                            } else {
+                                // not_announcement => all participants can send messages
+                                await sock.groupSettingChange(from, 'not_announcement');
+                                await sock.sendMessage(from, { text: 'Sukses! Grup dibuka — semua anggota bisa mengirim pesan sekarang.' });
+                            }
+                        } catch (err) {
+                            console.log('Group control error:', err.message);
+                            await sock.sendMessage(from, { text: `Gagal mengubah setelan grup: ${err.message}` });
+                        }
+                        return;
+                    }
+
+                    // PROMOTE / DEMOTE — jadikan atau cabut admin (via mention atau reply)
+                    if (text.toLowerCase().startsWith('.promote') || text.toLowerCase().startsWith('.demote')) {
+                        if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Perintah ini hanya untuk grup.' });
+                        const group = await sock.groupMetadata(from);
+                        const sender = msg.key.participant || msg.key.remoteJid;
+                        const isSenderAdmin = group.participants.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin' || p.isAdmin || p.isSuperAdmin));
+                        if (!isSenderAdmin) return sock.sendMessage(from, { text: 'Hanya admin grup yang bisa menggunakan perintah ini.' });
+
+                        // Dapatkan target: mention atau reply
+                        let targets = [];
+                        const ext = msg.message?.extendedTextMessage;
+                        if (ext?.contextInfo?.mentionedJid && ext.contextInfo.mentionedJid.length) {
+                            targets = ext.contextInfo.mentionedJid;
+                        } else if (ext?.contextInfo?.participant) {
+                            targets = [ext.contextInfo.participant];
+                        }
+
+                        if (!targets.length) {
+                            return sock.sendMessage(from, { text: 'Tandai (mention) atau reply ke pengguna yang ingin di-promote/demote.
+    Contoh: .promote @user' });
+                        }
+
+                        try {
+                            const action = text.toLowerCase().startsWith('.promote') ? 'promote' : 'demote';
+                            await sock.groupParticipantsUpdate(from, targets, action);
+                            await sock.sendMessage(from, { text: `Sukses: ${action} untuk ${targets.join(', ')}` });
+                        } catch (err) {
+                            console.log('Promote/Demote error:', err.message);
+                            await sock.sendMessage(from, { text: `Gagal mengubah status admin: ${err.message}` });
+                        }
+                        return;
+                    }
+
                 // TAGALL — BENERAN TAG SEMUA MEMBER (bukan cuma @everyone)
                 if (text.toLowerCase() === '.tagall') {
                     if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Di grup aja yaaa' });
