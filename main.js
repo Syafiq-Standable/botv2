@@ -32,7 +32,7 @@ async function connectToWhatsApp() {
 
                 // MENU
                 if (text.toLowerCase() === '.menu') {
-                    await sock.sendMessage(from, { text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n\n✦ .tagall → tag semua member\n✦ .hidetag [pesan] → tag tersembunyi\n✦ .tt [link] → download TikTok\n✦ .stiker / reply .stiker → membuat stiker dari foto\n\nowner: wa.me/628952890624` });
+                    await sock.sendMessage(from, { text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n\n✦ .menu / .help → tampilkan menu ini\n✦ .tagall → tag semua member\n✦ .hidetag [pesan] → tag tersembunyi\n✦ .tt [link] → download TikTok\n✦ .stiker / reply .stiker → membuat stiker dari foto\n✦ .ping → memastikan bot tetap aktif dan mengecek jumlah delay\n\nowner: wa.me/628952890624` });
                     return;
                 }
                     // MENU (alias .help)
