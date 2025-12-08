@@ -92,8 +92,7 @@ async function connectToWhatsApp() {
                         }
 
                         if (!targets.length) {
-                            return sock.sendMessage(from, { text: 'Tandai (mention) atau reply ke pengguna yang ingin di-promote/demote.
-    Contoh: .promote @user' });
+                            return sock.sendMessage(from, { text: 'Tandai (mention) atau reply ke pengguna yang ingin di-promote/demote.\nContoh: .promote @user' });
                         }
 
                         try {
