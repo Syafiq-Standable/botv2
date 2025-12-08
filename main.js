@@ -1,6 +1,8 @@
 const { default: makeWASocket, DisconnectReason, useMultiFileAuthState, downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -30,6 +32,72 @@ async function connectToWhatsApp() {
         throw new Error('group setting change not supported by this Baileys version');
     };
 
+    // Users DB path
+    const USERS_DB = path.join(__dirname, 'data', 'users.json');
+    // Ensure data directory exists
+    try {
+        const dir = path.dirname(USERS_DB);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    } catch (e) {
+        console.log('Could not ensure data directory:', e.message);
+    }
+
+    const loadUsers = () => {
+        try {
+            if (!fs.existsSync(USERS_DB)) return {};
+            const raw = fs.readFileSync(USERS_DB, 'utf8');
+            return raw ? JSON.parse(raw) : {};
+        } catch (e) {
+            console.log('Users DB load error:', e.message);
+            return {};
+        }
+    };
+
+    const saveUsers = (users) => {
+        try {
+            fs.writeFileSync(USERS_DB, JSON.stringify(users, null, 2), 'utf8');
+        } catch (e) {
+            console.log('Users DB save error:', e.message);
+        }
+    };
+
+    const updateUserRecord = async (msg) => {
+        try {
+            const userJid = msg.key.participant || msg.key.remoteJid;
+            if (!userJid) return;
+            const users = loadUsers();
+            const id = userJid.split('@')[0];
+            const now = Date.now();
+            if (!users[id]) {
+                users[id] = {
+                    jid: userJid,
+                    name: msg.pushName || '',
+                    firstSeen: now,
+                    count: 1
+                };
+            } else {
+                users[id].count = (users[id].count || 0) + 1;
+                if (msg.pushName) users[id].name = msg.pushName;
+                if (!users[id].firstSeen) users[id].firstSeen = now;
+            }
+            saveUsers(users);
+        } catch (e) {
+            console.log('updateUserRecord error:', e.message);
+        }
+    };
+
+    const formatDate = (ts) => {
+        try {
+            const d = new Date(Number(ts));
+            const dd = String(d.getDate()).padStart(2, '0');
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const yyyy = d.getFullYear();
+            return `${dd}-${mm}-${yyyy}`;
+        } catch (e) {
+            return 'Unknown';
+        }
+    };
+
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) qrcode.generate(qr, { small: true });
@@ -50,22 +118,48 @@ async function connectToWhatsApp() {
                 const from = msg.key.remoteJid;
                 const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || '').trim();
 
-                // MENU
-                if (text.toLowerCase() === '.menu') {
-                    await sock.sendMessage(from, { text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n\n✦ .menu / .help → tampilkan menu ini\n✦ .tagall → tag semua member\n✦ .hidetag [pesan] → tag tersembunyi\n✦ .tt [link] → download TikTok\n✦ .stiker / reply .stiker → membuat stiker dari foto\n✦ .ping → memastikan bot tetap aktif dan mengecek jumlah delay\n\nowner: wa.me/628952890624` });
+                // Update user record (count, name, firstSeen)
+                await updateUserRecord(msg);
+
+                // MENU / HELP
+                if (text.toLowerCase() === '.menu' || text.toLowerCase() === '.help') {
+                    await sock.sendMessage(from, { text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n\n✦ .menu / .help → tampilkan menu ini\n✦ .tagall → tag semua member\n✦ .hidetag [pesan] → tag tersembunyi\n✦ .tt [link] → download TikTok\n✦ .stiker / reply .stiker → membuat stiker dari foto\n✦ .ping → cek bot aktif dan delay\n✦ .promote @user → jadikan admin (hanya admin yang bisa pakai)\n✦ .demote @user → cabut admin (hanya admin yang bisa pakai)\n✦ .opengroup → buka grup supaya semua bisa chat (hanya admin)\n✦ .closegroup → tutup grup supaya hanya admin yang bisa chat (hanya admin)\n\nowner: wa.me/628952890624` });
                     return;
                 }
-                    // MENU (alias .help)
-                    if (text.toLowerCase() === '.menu' || text.toLowerCase() === '.help') {
-                        await sock.sendMessage(from, { text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n\n✦ .menu / .help → tampilkan menu ini\n✦ .tagall → tag semua member\n✦ .hidetag [pesan] → tag tersembunyi\n✦ .tt [link] → download TikTok\n✦ .stiker / reply .stiker → membuat stiker dari foto\n✦ .ping → memastikan bot tetap aktif dan mengecek jumlah delay\n\nowner: wa.me/628952890624` });
-                        return;
-                    }
 
                     // PING — cek apakah bot aktif dan tampilkan latency
                     if (text.toLowerCase() === '.ping') {
                         const msgTs = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
                         const tick = Date.now() - msgTs;
                         await sock.sendMessage(from, { text: `haloo, bot aktif dengan "${tick}"ms` });
+                        return;
+                    }
+
+                    // PROFILE — tampilkan profil pengguna (nama, WA id, total penggunaan, bergabung sejak)
+                    if (text.toLowerCase() === '.profile' || text.toLowerCase() === '.profil') {
+                        // target via mention or reply, default = sender
+                        const ext = msg.message?.extendedTextMessage;
+                        let targetJid = null;
+                        if (ext?.contextInfo?.mentionedJid && ext.contextInfo.mentionedJid.length) {
+                            targetJid = ext.contextInfo.mentionedJid[0];
+                        } else if (ext?.contextInfo?.participant) {
+                            targetJid = ext.contextInfo.participant;
+                        } else {
+                            targetJid = msg.key.participant || msg.key.remoteJid;
+                        }
+
+                        const users = loadUsers();
+                        const id = (targetJid || msg.key.remoteJid).split('@')[0];
+                        const record = users[id] || { jid: targetJid || msg.key.remoteJid, name: msg.pushName || 'Unknown', firstSeen: null, count: 0 };
+                        const name = record.name || 'Unknown';
+                        const waId = id;
+                        const count = record.count || 0;
+                        const firstSeen = record.firstSeen ? formatDate(record.firstSeen) : 'Unknown';
+
+                        const profileText = `*-- [ PROFILE KAMU ] --*\n👤 Nama: ${name}\n🆔 WA ID: ${waId}\n📊 Total Penggunaan: ${count}x\n⏱️ Bergabung Sejak: ${firstSeen}\nTerus gunakan bot ini ya! 😉`;
+
+                        const mentions = targetJid ? [targetJid] : [];
+                        await sock.sendMessage(from, { text: profileText, mentions });
                         return;
                     }
 
