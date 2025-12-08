@@ -228,13 +228,12 @@ async function connectToWhatsApp() {
                 }
 
                             // PING — cek apakah bot aktif dan tampilkan latency
-                            if (text.toLowerCase() === '.ping') {
-                                const msgTs = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
-                                const LatencyMs = Date.now() - msgTs;
-                                const LatencySec = (latencyMs / 1000).toFixed(2);
-                                await sock.sendMessage(from, { text: `haloo, bot aktif dengan "${LatencySec}"ms` });
-                                return;
-                            }
+                if (text.toLowerCase() === '.ping') {
+                    const msgTs = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
+                    const tick = Date.now() - msgTs;
+                    await sock.sendMessage(from, { text: `haloo, bot aktif dengan "${tick}"ms` });
+                    return;
+                }
 
                     // PROFILE — tampilkan profil pengguna (nama, WA id, total penggunaan, bergabung sejak)
                 if (text.toLowerCase() === '.profile' || text.toLowerCase() === '.profil') {
@@ -542,13 +541,7 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
                             .toBuffer();
 
                         // Kirim stiker final
-                        await sock.sendMessage(from, {
-                            sticker: stickerBuffer
-                        }, {
-                            packname: "𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ",
-                            author: "Owner Ganteng",
-                            categories: ['👍', '❤️']
-                        });
+                        await sock.sendMessage(from, { sticker: stickerBuffer });
 
                     } catch (err) {
                         console.log('Stiker Sharp error:', err.message);
