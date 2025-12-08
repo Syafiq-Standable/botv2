@@ -422,7 +422,6 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
 
                 // OPERATOR: grant/revoke rentals
                 if (text.toLowerCase().startsWith('.grant ') || text.toLowerCase().startsWith('.revoke ')) {
-                if (text.toLowerCase().startsWith('.grant ') || text.toLowerCase().startsWith('.revoke ')) {
                     const fullSender = msg.key.participant || msg.key.remoteJid;
                     if (!isOperator(fullSender)) return sock.sendMessage(from, { text: 'Hanya operator yang bisa menjalankan perintah ini.' });
 
