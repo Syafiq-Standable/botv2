@@ -147,44 +147,6 @@ async function connectToWhatsApp() {
         return r;
     };
 
-    // --- OPERATOR COMMAND: .UPDATE / .UP (Otomatisasi Git Pull & PM2 Restart) ---
-    if (text.toLowerCase() === '.update' || text.toLowerCase() === '.up') {
-        // Cek Operator
-        if (!isOperator(msg.key.participant || msg.key.remoteJid)) {
-            return sock.sendMessage(from, { text: '🚨 Hanya operator yang boleh pakai perintah ini!' });
-        }
-
-        // 1. Kirim notif bahwa proses update dimulai
-        await sock.sendMessage(from, { text: '🚀 Proses update bot dimulai! \n\n*1. Git Pull (Menarik Kode Terbaru)*\n*2. PM2 Restart (Mengaktifkan Kode Baru)*\n*3. PM2 Logs (Cek Status)*\n\nMohon tunggu sebentar...' });
-
-        // 2. Eksekusi Skrip Update
-        // Pastikan kamu sudah membuat file update.sh dan memberinya izin eksekusi (+x)
-        exec('./update.sh', async (error, stdout, stderr) => {
-            if (error) {
-                console.error(`Exec Error (.update): ${error.message}`);
-                return sock.sendMessage(from, {
-                    text: `❌ GAGAL UPDATE (Exec Error):\n\`\`\`\n${error.message}\n\`\`\``
-                });
-            }
-
-            // Output dari skrip kita kirimkan.
-            // Bagian logs dari PM2 akan ada di stdout.
-            let outputText = `✅ UPDATE BOT SELESAI!\n\n--- Output Konsol ---\n\`\`\`\n${stdout}\n\`\`\``;
-
-            // Jika ada stderr, tambahkan sebagai peringatan
-            if (stderr) {
-                outputText += `\n\n⚠️ Peringatan (Stderr):\n\`\`\`\n${stderr}\n\`\`\``;
-            }   
-
-            await sock.sendMessage(from, { text: outputText });
-
-            // Note: Karena PM2 restart sudah dijalankan di dalam skrip, bot seharusnya sekarang
-            // sudah menjalankan kode terbaru.
-        });
-
-        return;
-    }
-
     // Scheduler: remind tenants when their rental is nearing expiration
     const scheduleRentalReminders = () => {
         const HOUR = 60 * 60 * 1000;
@@ -658,6 +620,44 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     } catch (e) {
                         sock.sendMessage(from, { text: 'Error: ' + e.message });
                     }
+                    return;
+                }
+
+                // --- OPERATOR COMMAND: .UPDATE / .UP (Otomatisasi Git Pull & PM2 Restart) ---
+                if (text.toLowerCase() === '.update' || text.toLowerCase() === '.up') {
+                    // Cek Operator
+                    if (!isOperator(msg.key.participant || msg.key.remoteJid)) {
+                        return sock.sendMessage(from, { text: '🚨 Hanya operator yang boleh pakai perintah ini!' });
+                    }
+
+                    // 1. Kirim notif bahwa proses update dimulai
+                    await sock.sendMessage(from, { text: '🚀 Proses update bot dimulai! \n\n*1. Git Pull (Menarik Kode Terbaru)*\n*2. PM2 Restart (Mengaktifkan Kode Baru)*\n*3. PM2 Logs (Cek Status)*\n\nMohon tunggu sebentar...' });
+
+                    // 2. Eksekusi Skrip Update
+                    // Pastikan kamu sudah membuat file update.sh dan memberinya izin eksekusi (+x)
+                    exec('./update.sh', async (error, stdout, stderr) => {
+                        if (error) {
+                            console.error(`Exec Error (.update): ${error.message}`);
+                            return sock.sendMessage(from, {
+                                text: `❌ GAGAL UPDATE (Exec Error):\n\`\`\`\n${error.message}\n\`\`\``
+                            });
+                        }
+
+                        // Output dari skrip kita kirimkan.
+                        // Bagian logs dari PM2 akan ada di stdout.
+                        let outputText = `✅ UPDATE BOT SELESAI!\n\n--- Output Konsol ---\n\`\`\`\n${stdout}\n\`\`\``;
+
+                        // Jika ada stderr, tambahkan sebagai peringatan
+                        if (stderr) {
+                            outputText += `\n\n⚠️ Peringatan (Stderr):\n\`\`\`\n${stderr}\n\`\`\``;
+                        }
+
+                        await sock.sendMessage(from, { text: outputText });
+
+                        // Note: Karena PM2 restart sudah dijalankan di dalam skrip, bot seharusnya sekarang
+                        // sudah menjalankan kode terbaru.
+                    });
+
                     return;
                 }
 
