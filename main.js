@@ -317,7 +317,8 @@ async function connectToWhatsApp() {
                                     .kick @user - Mengeluarkan (kick) anggota dari grup.
                                     .join / add [link] - Undang bot masuk ke grup via link invite.\n\n
                                     🥳 Berminat menggunakan semua fitur ini tanpa batas?
-                                    Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone` +});
+                                                    Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
+                                    });
                     return;
                 }
 
