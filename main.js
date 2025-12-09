@@ -295,31 +295,6 @@ async function connectToWhatsApp() {
                 const from = msg.key.remoteJid;
                 const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || '').trim();
 
-// Ambil sender dengan aman
-const sender =
-    msg.key.participant ||
-    msg.participant ||
-    (msg.key.remoteJid?.endsWith("@g.us") ? msg.key.participant : msg.key.remoteJid);
-
-// Jika gagal tetap fallback ke remoteJid
-const safeSender = sender || msg.key.remoteJid || from;
-
-// VALIDASI OPERATOR
-if (
-    text.startsWith(".jualan") ||
-    text.startsWith(".ordermasuk") ||
-    text.startsWith(".cekorder") ||
-    text.startsWith(".done") ||
-    text.startsWith(".editorder") ||
-    text.startsWith(".hapusorder") ||
-    text.startsWith(".refund") ||
-    text.startsWith(".rekapbulan")
-) {
-    if (!OPERATOR.includes(safeSender)) {
-        return sock.sendMessage(from, { text: "❌ Kamu tidak punya akses fitur jualan." });
-    }
-}
-
 if (text.startsWith(".jualan")) return bakulan.jualMenu(sock, from);
 if (text.startsWith(".ordermasuk")) return bakulan.addOrder(sock, from, text);
 if (text === ".cekorder") return bakulan.cekOrder(sock, from);
