@@ -298,7 +298,26 @@ async function connectToWhatsApp() {
 
                 // MENU / HELP
                 if (text.toLowerCase() === '.menu' || text.toLowerCase() === '.help') {
-                    await sock.sendMessage(from, { text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n\n✦ .menu / .help → tampilkan menu ini\n✦ .tagall → tag semua member\n✦ .hidetag [pesan] → tag tersembunyi\n✦ .tt [link] → download TikTok\n✦ .stiker / reply .stiker → membuat stiker dari foto\n✦ .ping → cek bot aktif dan delay\n✦ .promote @user → jadikan admin (hanya admin yang bisa pakai)\n✦ .demote @user → cabut admin (hanya admin yang bisa pakai)\n✦ .opengroup → buka grup supaya semua bisa chat (hanya admin)\n✦ .closegroup → tutup grup supaya hanya admin yang bisa chat (hanya admin)\n\nberminat untuk sewa?\nowner: wa.me/6289528950624 - Sam @Sukabyone` });
+                    await sock.sendMessage(from, {
+                        text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n\n
+                                Berikut daftar perintah yang tersedia:\n
+                                    .menu / .help - Menampilkan daftar menu ini.
+                                    .ping - Cek status bot (aktif dan kecepatan delay).
+                                    .profile - Lihat profil dan statistik penggunaanmu.
+                                    .sewa - Info lengkap harga dan cara sewa bot.
+                                    .ceksewa - Cek status kedaluwarsa sewamu (Grup/Private).
+                                    .cekidgroup - Menampilkan ID JID grup saat ini. +
+                                \n\n*Perintah Khusus Grup:*\n +
+                                    .tagall - Men-tag semua anggota grup.
+                                    .hidetag [pesan] - Men-tag semua anggota dengan pesan tersembunyi.
+                                    .promote @user - Jadikan anggota sebagai Admin grup.
+                                    .demote @user - Cabut status Admin grup.
+                                    .closegroup - Tutup grup (hanya Admin yang bisa chat).
+                                    .opengroup - Buka grup (semua anggota bisa chat).
+                                    .kick @user - Mengeluarkan (kick) anggota dari grup.
+                                    .join / add [link] - Undang bot masuk ke grup via link invite.\n\n
+                                    🥳 Berminat menggunakan semua fitur ini tanpa batas?
+                                    Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone` +});
                     return;
                 }
 
