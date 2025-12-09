@@ -631,6 +631,98 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
                     return;
                 }
 
+                // CEKSEWA — cek status sewa untuk group atau private
+                if (text.toLowerCase().startsWith('.ceksewa')) {
+                    try {
+                        const parts = text.trim().split(/\s+/);
+                        // formats supported:
+                        // .ceksewa group <groupId>
+                        // .ceksewa private <@mention|id>
+                        // .ceksewa <id>  (auto-detect private)
+                        // .ceksewa (inside group -> checks that group)
+
+                        const arg1 = parts[1];
+                        const arg2 = parts[2];
+                        const ext = msg.message?.extendedTextMessage;
+
+                        let scope = null;
+                        let target = null;
+
+                        if (!arg1) {
+                            // no args: if in group, check that group; else check sender
+                            if (from && from.endsWith('@g.us')) {
+                                scope = 'group';
+                                target = from;
+                            } else {
+                                scope = 'private';
+                                target = (msg.key.participant || msg.key.remoteJid).split('@')[0];
+                            }
+                        } else if (arg1.toLowerCase() === 'group') {
+                            scope = 'group';
+                            target = arg2 || (from.endsWith('@g.us') ? from : null);
+                        } else if (arg1.toLowerCase() === 'private') {
+                            scope = 'private';
+                            target = arg2 || null;
+                        } else {
+                            // could be direct id or mention
+                            if (arg1.includes('@') || (ext?.contextInfo?.mentionedJid && ext.contextInfo.mentionedJid.length)) {
+                                // if mention present, use that
+                                if (ext?.contextInfo?.mentionedJid && ext.contextInfo.mentionedJid.length) {
+                                    scope = 'private';
+                                    target = ext.contextInfo.mentionedJid[0];
+                                } else {
+                                    // direct jid passed
+                                    if (arg1.includes('@')) {
+                                        // group or user jid
+                                        if (arg1.endsWith('@g.us')) {
+                                            scope = 'group';
+                                            target = arg1;
+                                        } else {
+                                            scope = 'private';
+                                            target = arg1.split('@')[0];
+                                        }
+                                    } else {
+                                        // numeric id passed, treat as private
+                                        scope = 'private';
+                                        target = arg1;
+                                    }
+                                }
+                            } else {
+                                // numeric or string without @ -> assume private id
+                                scope = 'private';
+                                target = arg1;
+                            }
+                        }
+
+                        if (!scope || !target) return sock.sendMessage(from, { text: 'Format: .ceksewa group <groupId> atau .ceksewa private <@mention|idUser> atau jalankan di grup tanpa argumen untuk cek grup.' });
+
+                        // normalize target key used by getRental
+                        let key = target;
+                        if (scope === 'private') {
+                            if (typeof key === 'string' && key.includes('@')) key = key.split('@')[0];
+                            key = String(key).replace(/[^0-9]/g, '');
+                            if (key.startsWith('0')) key = '62' + key.slice(1);
+                        }
+
+                        const rental = getRental(key);
+                        if (!rental) {
+                            return sock.sendMessage(from, { text: `Tidak ada sewa aktif untuk ${scope} ${target}` });
+                        }
+
+                        const remainingMs = rental.expires - Date.now();
+                        const textOut = `📌 Info Sewa (${scope})\n` +
+                            `Target: ${target}\n` +
+                            `Tier: ${rental.tier || 'standard'}\n` +
+                            `Kadaluarsa: ${formatDate(rental.expires)} (${formatDuration(remainingMs)})\n` +
+                            `Diberikan oleh: ${rental.grantedBy || 'unknown'}`;
+
+                        return sock.sendMessage(from, { text: textOut });
+                    } catch (e) {
+                        console.log('ceksewa error:', e.message);
+                        return sock.sendMessage(from, { text: 'Terjadi error saat memeriksa sewa: ' + e.message });
+                    }
+                }
+
                 // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
                 // Error handling for the event handler
             }
