@@ -657,7 +657,10 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
                 }
 
                 // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
-            console.log('Error tapi bot tetep hidup:', err.message);
+                // Error handling for the event handler
+            }
+        } catch (e) {
+            console.log('messages.upsert error:', e.message);
         }
     });
 }
