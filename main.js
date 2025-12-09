@@ -571,9 +571,32 @@ async function connectToWhatsApp() {
                         }
 
                         if (cmd === '.revoke') {
-                            const target = args[1] || from;
-                            revokeRental(target.includes('@') ? target : target.replace(/[^0-9]/g, ''));
-                            sock.sendMessage(from, { text: '❌ Rental berhasil dicabut!' });
+                            const targetRaw = args[1]; // Ambil target mentah (id, jid, atau kosong)
+                            let keyToRevoke = targetRaw;
+
+                            // Jika target tidak ada, cek apakah ini di grup. Jika iya, targetnya adalah grup itu sendiri.
+                            if (!keyToRevoke && from.endsWith('@g.us')) {
+                                keyToRevoke = from; // Default revoke group current
+                            } else if (!keyToRevoke) {
+                                // Kalau di private chat tanpa argumen, gak jelas mau revoke siapa.
+                                return sock.sendMessage(from, { text: 'Format: .revoke <groupId> atau .revoke <idUser>' });
+                            }
+
+                            // --- NORMALISASI ID UNTUK PRIVATE ---
+                            if (!keyToRevoke.includes('@g.us')) { // Cek jika ini BUKAN Group JID
+                                // Hapus semua karakter non-angka dan pecah JID jika ada
+                                if (keyToRevoke.includes('@')) keyToRevoke = keyToRevoke.split('@')[0];
+                                keyToRevoke = String(keyToRevoke).replace(/[^0-9]/g, '');
+
+                                // Tambahkan 62 jika dimulai dengan 0 (Normalisasi seperti saat Grant)
+                                if (keyToRevoke.startsWith('0')) {
+                                    keyToRevoke = '62' + keyToRevoke.slice(1);
+                                }
+                            }
+
+                            // --- Eksekusi Revoke ---
+                            revokeRental(keyToRevoke);
+                            sock.sendMessage(from, { text: `❌ Rental untuk *${keyToRevoke}* berhasil dicabut!` });
                         }
                     } catch (e) {
                         sock.sendMessage(from, { text: 'Error: ' + e.message });
