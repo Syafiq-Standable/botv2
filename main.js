@@ -306,15 +306,14 @@ Berikut daftar perintah yang tersedia:
 .sewa - Info lengkap sewa bot.
 .ceksewa - Cek status kedaluwarsa sewamu.
 .cekidgroup - Menampilkan ID grup ini.
-\n*Perintah Khusus Grup:*
+\n*Perintah Khusus Admin Untuk Grup:*
 .tagall - tag semua anggota grup.
 .hidetag [pesan] - tag semua orang dengan pesan.
 .promote @user - Jadikan Admin grup.
 .demote @user - Cabut status Admin grup.
 .closegroup - Tutup grup.
 .opengroup - Buka grup.
-.kick @user - Mengeluarkan anggota dari grup.
-.join / add [link] - Undang masuk ke grup.\n\n
+.kick @user - Mengeluarkan anggota dari grup.\n\n
 🥳 Berminat menggunakan semua fitur ini tanpa batas?
 Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     }); 
