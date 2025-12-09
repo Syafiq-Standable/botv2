@@ -494,26 +494,31 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
 }
 
                 // SEWA — promotional info and how to rent
-                if (text.toLowerCase() === '.sewa') {
-                    const ops = loadOperators();
-                    const opText = ops && ops.length ? ops.join(', ') : '6289528950624 - Sam @Sukabyone';
-                    const promo = `🌟 *Sistem Penyewaan Bot* 🌟 \n 𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ \n\n` +
-                        `✨ *Sistem sewa sederhana:*\n` +
-                        `• *Sewa = Bisa menggunakan semua fitur bot*\n` +
-                        `• *Tidak sewa = Tidak bisa menggunakan sama sekali*\n\n` +
-                        `📌 Cara penyewaan:\n` +
-                        `• Hubungi kontak Owner / Admin di bawah \n` +
-                        `• Chat Admin dan katakan bahwa ingin menyewa bot. \n _contoh: "Saya ingin menyewa bot selama 30 hari"_ \n\n` +
-                        `💰 *Harga Sewa:*\n` +
-                        `• Rp 10.000 untuk 30 hari (1 bulan)\n` +
-                        `• Rp 25.000 untuk 90 hari (3 bulan)\n` +
-                        `• Rp 45.000 untuk 180 hari (6 bulan)\n\n` +
-                        `📞 *Kontak Owner / Admin:*\n` +
-                        ops.map(op => `• wa.me/${op} - Sam @Sukabyone`).join('\n') + `\n\n` +
-                        `Terima kasih! ✨`;
-                    await sock.sendMessage(from, { text: promo });
-                    return;
-                }
+if (text.toLowerCase() === '.sewa') {
+    // loadOperators() masih dipanggil, tapi tidak perlu pakai opText lagi
+    const ops = loadOperators();
+    
+    // Baris di bawah ini TIDAK PERLU lagi:
+    // const opText = ops && ops.length ? ops.join(', ') : '6289528950624 - Sam @Sukabyone'; 
+    
+    const promo = `🌟 *Sistem Penyewaan Bot* 🌟 \n 𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ \n\n` +
+        `✨ *Sistem sewa sederhana:*\n` +
+        `• *Sewa = Bisa menggunakan semua fitur bot*\n` +
+        `• *Tidak sewa = Tidak bisa menggunakan sama seka   li*\n\n` +
+        `📌 Cara penyewaan:\n` +
+        `• Hubungi kontak Owner / Admin di bawah \n` +
+        `• Chat Admin dan katakan bahwa ingin menyewa bot. \n _contoh: "Saya ingin menyewa bot selama 30 hari"_ \n\n` +
+        `💰 *Harga Sewa:*\n` +
+        `• Rp 10.000 untuk 30 hari (1 bulan)\n` +
+        `• Rp 25.000 untuk 90 hari (3 bulan)\n` +
+        `• Rp 45.000 untuk 180 hari (6 bulan)\n\n` +
+        `📞 *Kontak Owner / Admin:*\n` +
+        // Gunakan list 'ops' yang sudah di-map, dengan fallback jika list ops kosong:
+        (ops && ops.length ? ops.map(op => `• wa.me/${op} - Sam @Sukabyone`).join('\n') : `• wa.me/6289528950624 - Sam @Sukabyone (Default)`)+ `\n\n` +
+        `Terima kasih! ✨`;
+    await sock.sendMessage(from, { text: promo });
+    return;
+}
 
                    // OPERATOR COMMAND: .grant & .revoke (FIXED 100% NO SYNTAX ERROR)
                 if (text.toLowerCase().startsWith('.grant ') || text.toLowerCase().startsWith('.revoke ')) {
