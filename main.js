@@ -94,8 +94,18 @@ async function connectToWhatsApp() {
         if (!fullJid) return false;
         try {
             const list = loadOperators();
-            if (!fullJid) return false;
             const numeric = fullJid.split('@')[0];
+
+            // Allow bot's own account to act as operator as well
+            try {
+                const myId = (sock?.user && (sock.user.id || sock.user.jid)) || null;
+                if (myId) {
+                    if (fullJid.includes(myId) || fullJid.endsWith(`${myId}@s.whatsapp.net`)) return true;
+                }
+            } catch (e) {
+                // ignore
+            }
+
             for (const op of list) {
                 if (!op) continue;
                 if (String(op) === numeric) return true;
@@ -113,7 +123,7 @@ async function connectToWhatsApp() {
         const rentals = loadRentals();
         const key = id;
         const expires = Date.now() + (Number(days) || 0) * 24 * 60 * 60 * 1000;
-        rentals[key] = { scope, tier, expires, grantedBy, grantedAt: Date.now() };
+        rentals[key] = { scope, tier, expires, grantedBy, grantedAt: Date.now(), notified3days: false, notified1day: false, notifiedExpired: false };
         saveRentals(rentals);
         return rentals[key];
     };
@@ -134,6 +144,45 @@ async function connectToWhatsApp() {
             return null;
         }
         return r;
+    };
+
+    // Scheduler: remind tenants when their rental is nearing expiration
+    const scheduleRentalReminders = () => {
+        const HOUR = 60 * 60 * 1000;
+        setInterval(async () => {
+            try {
+                const rentals = loadRentals();
+                const now = Date.now();
+                let changed = false;
+                for (const [key, r] of Object.entries(rentals)) {
+                    if (!r || !r.expires) continue;
+                    const remaining = r.expires - now;
+                    if (remaining <= 0) {
+                        if (!r.notifiedExpired) {
+                            const target = r.scope === 'group' ? key : `${key}@s.whatsapp.net`;
+                            const text = `⚠️ Masa sewa Anda untuk *${r.scope}* telah berakhir. Akses fitur akan dihentikan. Ketik .sewa untuk info.`;
+                            try { await sock.sendMessage(target, { text }); } catch (e) {}
+                            r.notifiedExpired = true; changed = true;
+                        }
+                        continue;
+                    }
+                    if (remaining <= 24 * 3600 * 1000 && !r.notified1day) {
+                        const target = r.scope === 'group' ? key : `${key}@s.whatsapp.net`;
+                        const text = `📢 Pengingat: masa sewa akan berakhir dalam kurang dari 24 jam (${formatDuration(remaining)}). Silakan perpanjang.`;
+                        try { await sock.sendMessage(target, { text }); } catch (e) {}
+                        r.notified1day = true; changed = true;
+                    } else if (remaining <= 3 * 24 * 3600 * 1000 && !r.notified3days) {
+                        const target = r.scope === 'group' ? key : `${key}@s.whatsapp.net`;
+                        const text = `📢 Pengingat: masa sewa akan berakhir dalam ${Math.ceil(remaining / (24 * 3600 * 1000))} hari (${formatDuration(remaining)}).`;
+                        try { await sock.sendMessage(target, { text }); } catch (e) {}
+                        r.notified3days = true; changed = true;
+                    }
+                }
+                if (changed) saveRentals(rentals);
+            } catch (e) {
+                console.log('rental scheduler error:', e.message);
+            }
+        }, HOUR);
     };
 
     const hasAccessForCommand = (command, isGroup, senderFullJid, groupId) => {
@@ -206,6 +255,12 @@ async function connectToWhatsApp() {
             if (shouldReconnect) connectToWhatsApp();
         } else if (connection === 'open') {
             console.log('SAM BOT NYALA GACOR BANGET BROOO 🔥🔥🔥');
+            // start rental reminder scheduler when connection is open
+            try {
+                scheduleRentalReminders();
+            } catch (e) {
+                console.log('Failed to start rental scheduler:', e.message);
+            }
         }
     });
 
@@ -449,28 +504,49 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
                     try {
                         if (cmd === '.grant') {
                             const scope = parts[1]?.toLowerCase();
-                            if (!scope || !['private', 'group'].includes(scope)) 
+                            if (!scope || !['private', 'group'].includes(scope))
                                 return sock.sendMessage(from, { text: 'Format: .grant private <id> <hari> atau .grant group <hari>' });
 
-                            const days = Number(scope === 'group' ? parts[2] : parts[3]);
-                            if (!days || days <= 0) return sock.sendMessage(from, { text: 'Hari harus angka positif!' });
-
                             if (scope === 'private') {
-                                let id = parts[2].replace(/[^0-9]/g, '');
+                                // .grant private <id> <days>
+                                const idRaw = parts[2];
+                                const days = Number(parts[3]);
+                                if (!idRaw || !days || days <= 0) return sock.sendMessage(from, { text: 'Format: .grant private <id> <hari> (hari harus angka > 0)' });
+                                let id = idRaw.replace(/[^0-9]/g, '');
                                 if (id.startsWith('0')) id = '62' + id.slice(1);
                                 grantRental('private', id, 'premium', days, fullSender);
                                 await sock.sendMessage(from, { text: `✅ Private ${id} disewa ${days} hari!` });
-                            } else { // group
-                                const groupId = from.endsWith('@g.us') ? from : parts[2];
-                                if (!groupId) return sock.sendMessage(from, { text: 'Jalankan di grup atau kasih group ID!' });
+                            } else {
+                                // group: two modes:
+                                // 1) run inside the group: .grant group <days>
+                                // 2) run from private: .grant group <groupId> <days>
+                                let groupId = null;
+                                let days = null;
+                                if (from.endsWith('@g.us') && parts.length >= 3 && !parts[2].includes('@')) {
+                                    days = Number(parts[2]);
+                                    groupId = from;
+                                } else if (parts.length >= 3) {
+                                    // parts[2] might be groupId or days
+                                    if (parts[2].includes('@') || parts[2].startsWith('g.us') || parts[2].startsWith('https://chat.whatsapp.com/')) {
+                                        groupId = parts[2];
+                                        days = Number(parts[3]);
+                                    } else {
+                                        // assume days only, but not in a group
+                                        days = Number(parts[2]);
+                                        groupId = from.endsWith('@g.us') ? from : null;
+                                    }
+                                }
+                                if (!groupId || !days || days <= 0) return sock.sendMessage(from, { text: 'Format: .grant group <hari> (jalankan di grup) atau .grant group <groupId> <hari>' });
                                 grantRental('group', groupId, 'premium', days, fullSender);
-                                await sock.sendMessage(from, { text: `✅ Grup ini disewa ${days} hari!` });
+                                await sock.sendMessage(from, { text: `✅ Grup ${groupId} disewa ${days} hari!` });
                             }
                         }
 
                         if (cmd === '.revoke') {
-                            const target = parts[1] || from;
-                            revokeRental(target.includes('@') ? target : target.replace(/[^0-9]/g, ''));
+                            const targetRaw = parts[1] || from;
+                            let target = targetRaw;
+                            if (!target.includes('@')) target = target.replace(/[^0-9]/g, '');
+                            revokeRental(target.includes('@') ? target : target);
                             await sock.sendMessage(from, { text: '❌ Rental dicabut!' });
                         }
                     } catch (e) {
@@ -478,6 +554,7 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
                     }
                     return;
                 }
+
 
                 // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
                 if (text.toLowerCase().includes('.stiker') || text.toLowerCase().includes('.sticker') || text.toLowerCase().includes('.s')) {
@@ -522,8 +599,64 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
                     }
                     return;
                 }
-            }
-        } catch (err) {
+
+                // CEKIDGROUP — tunjukkan ID grup
+                if (text.toLowerCase() === '.cekidgroup') {
+                    if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Perintah ini hanya untuk grup.' });
+                    const meta = await sock.groupMetadata(from);
+                    const gid = from;
+                    const title = meta?.subject || 'Group';
+                    await sock.sendMessage(from, { text: `Group: ${title}\nID: ${gid}` });
+                    return;
+                }
+
+                // JOIN — gabung ke grup lewat link: .join https://chat.whatsapp.com/XXXXXXXX
+                if (text.toLowerCase().startsWith('.join ')) {
+                    const parts = text.split(/\s+/);
+                    const link = parts[1];
+                    if (!link || !link.includes('chat.whatsapp.com')) return sock.sendMessage(from, { text: 'Format: .join <link chat.whatsapp.com/...>' });
+                    const code = link.split('chat.whatsapp.com/')[1];
+                    if (!code) return sock.sendMessage(from, { text: 'Link invalid.' });
+                    try {
+                        await sock.groupAcceptInvite(code);
+                        await sock.sendMessage(from, { text: 'Berhasil join grup via link!' });
+                    } catch (e) {
+                        console.log('join error:', e.message);
+                        await sock.sendMessage(from, { text: `Gagal join: ${e.message}` });
+                    }
+                    return;
+                }
+
+                // KICK — keluarkan member via mention/reply
+                if (text.toLowerCase().startsWith('.kick')) {
+                    if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Perintah ini hanya untuk grup.' });
+                    const group = await sock.groupMetadata(from);
+                    const sender = msg.key.participant || msg.key.remoteJid;
+                    const isSenderAdmin = group.participants.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin' || p.isAdmin || p.isSuperAdmin));
+                    if (!isSenderAdmin) return sock.sendMessage(from, { text: 'Hanya admin grup yang bisa menggunakan perintah ini.' });
+                    const fullSender = msg.key.participant || msg.key.remoteJid;
+                    if (!hasAccessForCommand('.kick', true, fullSender, from)) return sock.sendMessage(from, { text: 'Fitur ini membutuhkan paket sewa. Ketik .sewa untuk info.' });
+
+                    // get targets
+                    let targets = [];
+                    const ext = msg.message?.extendedTextMessage;
+                    if (ext?.contextInfo?.mentionedJid && ext.contextInfo.mentionedJid.length) {
+                        targets = ext.contextInfo.mentionedJid;
+                    } else if (ext?.contextInfo?.participant) {
+                        targets = [ext.contextInfo.participant];
+                    }
+                    if (!targets.length) return sock.sendMessage(from, { text: 'Tandai (mention) atau reply ke pengguna yang ingin dikick.' });
+                    try {
+                        await sock.groupParticipantsUpdate(from, targets, 'remove');
+                        await sock.sendMessage(from, { text: `Sukses mengeluarkan: ${targets.map(t => '@' + t.split('@')[0]).join(', ')}`, mentions: targets });
+                    } catch (e) {
+                        console.log('kick error:', e.message);
+                        await sock.sendMessage(from, { text: `Gagal kick: ${e.message}` });
+                    }
+                    return;
+                }
+
+                // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
             console.log('Error tapi bot tetep hidup:', err.message);
         }
     });
