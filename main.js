@@ -388,21 +388,21 @@ async function connectToWhatsApp() {
                     const fullSender = msg.key.participant || msg.key.remoteJid;
                     if (!hasAccessForCommand('.tagall', true, fullSender, from)) return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk grup yang menyewa bot. Ketik .sewa untuk info.' });
                     const group = await sock.groupMetadata(from);
-                    let teks = '┌──「 TAG ALL 」\n';
+                    let teks = 'TAG SEMUA ORANG!\n';
                     for (let mem of group.participants) {
-                        teks += `├ @${mem.id.split('@')[0]}\n`;
+                        teks += ` @${mem.id.split('@')[0]}\n`;
                     }
-                    teks += `└────`;
+                    teks += ` \nBERHASIL TAG SEMUA ORANG ✅`;
                     await sock.sendMessage(from, { text: teks, mentions: group.participants.map(a => a.id) });
                     return;
                 }
 
                 // HIDETAG — TAG SEMUA TAPI DISEMBUNYIKAN, GANTI PESAN
-                if (text.toLowerCase().startsWith('.hidetag ')) {
+                if (text.toLowerCase().startsWith('.hidetag ') || text.toLowerCase().startsWith('.h ')) {
                     if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'bisa dipake nyaa cuma di group' });
                     const fullSender = msg.key.participant || msg.key.remoteJid;
                     if (!hasAccessForCommand('.hidetag', true, fullSender, from)) return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk grup yang menyewa bot. Ketik .sewa untuk info.' });
-                    const pesan = text.slice(10);
+                    const pesan = text.slice(9);
                     const group = await sock.groupMetadata(from);
                     await sock.sendMessage(from, { text: pesan ? pesan : '‎', mentions: group.participants.map(a => a.id) });
                     return;
@@ -444,7 +444,7 @@ const getSsStikUrl = async (url) => {
 // Di event messages.upsert, ganti handler TikTok jadi ini:
 if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tiktok ')) {
     const url = text.split(' ').slice(1).join(' ');
-    if (!url.includes('tiktok')) return sock.sendMessage(from, { text: 'link TikTok manaaaa? gini nih contohnya: .tt https://vt.tiktok.com/abc' });
+    if (!url.includes('tiktok')) return sock.sendMessage(from, { text: 'link TikTok-nya SALAAHHHHH!\n gini nih contoh yang bener: .tt https://vt.tiktok.com/abc' });
 
     await sock.sendMessage(from, { text: 'Sabar yaaa, lagi diprosess... ⏳' });
     try {
@@ -476,13 +476,13 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
                 // SEWA — promotional info and how to rent
                 if (text.toLowerCase() === '.sewa') {
                     const ops = loadOperators();
-                    const opText = ops && ops.length ? ops.join(', ') : '6289528950624';
+                    const opText = ops && ops.length ? ops.join(', ') : '6289528950624 - Sam @Sukabyone';
                     const promo = `🌟 *SEWA BOT - Informasi* 🌟\n\n` +
-                        `✨ *Sistem sewa sekarang sederhana:*\n` +
+                        `✨ *Sistem sewa sederhana:*\n` +
                         `• *Sewa = Bisa menggunakan semua fitur bot*\n` +
-                        `• *Tidak sewa = Tidak bisa menggunakan perintah yang diawali titik (.)*\n\n` +
+                        `• *Tidak sewa = Tidak bisa menggunakan sama sekali*\n\n` +
                         `📌 Cara penyewaan:\n` +
-                        `• Private: berikan ID pengguna (nomor tanpa @) ke operator, contoh: .grant private 62812xxxxxxx 30\n` +
+                        `• Hubungi kontak Owner / Admin di bawah \n` +
                         `• Group: jalankan perintah .grant group 30 oleh operator di dalam grup atau mention grup\n\n` +
                         `📞 Hubungi Operator untuk proses & harga: ID operator: ${opText}\n` +
                         `Contoh perintah operator:\n` +
@@ -536,7 +536,7 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
                     let imgMsg = null;
 
                     // Cara 1: Kirim gambar + caption !stiker langsung
-                    if (msg.message?.imageMessage && (msg.message.imageMessage.caption || '').toLowerCase().includes('.stiker')) {
+                    if (msg.message?.imageMessage && (msg.message.imageMessage.caption || '').toLowerCase().includes('.stiker').toLowerCase().includes('.s').toLowerCase().includes('.sticker')) {
                         imgMsg = msg.message.imageMessage;
                     }
                     // Cara 2: Reply gambar + !stiker
