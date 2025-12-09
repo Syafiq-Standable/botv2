@@ -536,7 +536,7 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
                     let imgMsg = null;
 
                     // Cara 1: Kirim gambar + caption !stiker langsung
-                    if (msg.message?.imageMessage && (msg.message.imageMessage.caption || '').toLowerCase().includes('.stiker').toLowerCase().includes('.s').toLowerCase().includes('.sticker')) {
+                    if (msg.message?.imageMessage && (msg.message.imageMessage.caption || '').toLowerCase().includes('.stiker')) {
                         imgMsg = msg.message.imageMessage;
                     }
                     // Cara 2: Reply gambar + !stiker
