@@ -377,7 +377,7 @@ async function connectToWhatsApp() {
                             await sock.sendMessage(from, { text: `Sukses melakukan ${action} untuk ${mentionText}`, mentions: targets });
                         } catch (err) {
                             console.log('Promote/Demote error:', err.message);
-                            await sock.sendMessage(from, { text: `Gagal mengubah status admin: ${err.message}` });
+                            await sock.sendMessage(from, { text: `Gagal mengubah status admin \n _keterangan: bot belum menjadi admin atau target merupakan pembuat group_` });
                         }
                         return;
                     }
@@ -503,7 +503,7 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
                         `• *Tidak sewa = Tidak bisa menggunakan sama sekali*\n\n` +
                         `📌 Cara penyewaan:\n` +
                         `• Hubungi kontak Owner / Admin di bawah \n` +
-                        `• Chat Admin dan katakan bahwa ingin menyewa bot. \n _contoh: "Saya ingin menyewa bot selama 30 hari"_ \n\n` +
+                        `• Chat Admin dan katakan bahwa ingin menyewa bot. \n  •_contoh: "Saya ingin menyewa bot selama 30 hari"_ \n\n` +
                         `💰 *Harga Sewa:*\n` +
                         `• Rp 10.000 untuk 30 hari (1 bulan)\n` +
                         `• Rp 25.000 untuk 90 hari (3 bulan)\n` +
