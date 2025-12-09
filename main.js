@@ -4,6 +4,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
+const bakulan = require('./bakulan');
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -293,6 +294,14 @@ async function connectToWhatsApp() {
             if (!msg.key.fromMe && m.type === 'notify') {
                 const from = msg.key.remoteJid;
                 const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || '').trim();
+
+if (text.startsWith(".ordermasuk")) return bakulan.addOrder(sock, from, text);
+if (text === ".cekorder") return bakulan.cekOrder(sock, from);
+if (text.startsWith(".done")) return bakulan.markDone(sock, from, text);
+if (text.startsWith(".editorder")) return bakulan.editOrder(sock, from, text);
+if (text.startsWith(".hapusorder")) return bakulan.deleteOrder(sock, from, text);
+if (text.startsWith(".refund")) return bakulan.refundOrder(sock, from, text);
+if (text.startsWith(".rekapbulan")) return bakulan.rekapBulan(sock, from, text);
 
                 // Update user record (count, name, firstSeen)
                 await updateUserRecord(msg);
