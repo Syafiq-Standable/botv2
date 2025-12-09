@@ -323,9 +323,16 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
 
                 // PING — cek apakah bot aktif dan tampilkan latency
                 if (text.toLowerCase() === '.ping') {
+                    // Ambil waktu pesan dikirim (dalam ms)
                     const msgTs = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
-                    const tick = Date.now() - msgTs;
-                    await sock.sendMessage(from, { text: `haloo, bot aktif dengan "${tick}"ms` });
+
+                    // Hitung latency dalam milidetik (ms)
+                    const tickMs = Date.now() - msgTs;
+
+                    // Konversi ke detik (s) dan bulatkan 2 angka di belakang koma
+                    const tickS = (tickMs / 1000).toFixed(2);
+
+                    await sock.sendMessage(from, { text: `🚀 Bot aktif!\nLatency: ${tickS} detik (${tickMs} ms)` });
                     return;
                 }
 
@@ -660,40 +667,6 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
 
                     return;
                 }
-
-                // ... setelah handler .update
-
-                // --- OPERATOR COMMAND: .LOGS / .LOG (Cek Log PM2) ---
-                if (text.toLowerCase() === '.logs' || text.toLowerCase() === '.log') {
-                    // Cek Hak Akses (Pastikan hanya operator yang bisa pakai)
-                    if (!['operator', 'owner'].includes(userScope)) {
-                        return sock.sendMessage(from, { text: '❌ Command ini hanya untuk Operator/Owner.' });
-                    }
-
-                    // Eksekusi Skrip Logs
-                    exec('./logs.sh', async (error, stdout, stderr) => {
-                        if (error) {
-                            console.error(`Exec Error (.logs): ${error.message}`);
-                            return sock.sendMessage(from, {
-                                text: `❌ GAGAL AMBIL LOGS (Exec Error):\n\`\`\`\n${error.message}\n\`\`\``
-                            });
-                        }
-
-                        // Output dari skrip logs.sh (stdout) adalah logs-nya
-                        let outputText = `✅ PM2 LOGS BOT:\n\n\`\`\`\n${stdout}\n\`\`\``;
-
-                        // Jika ada stderr, tambahkan sebagai peringatan
-                        if (stderr) {
-                            outputText += `\n\n⚠️ Peringatan (Stderr):\n\`\`\`\n${stderr}\n\`\`\``;
-                        }
-
-                        // Kirim hasil logs ke WA
-                        return sock.sendMessage(from, { text: outputText });
-                    });
-
-                    return;
-                }
-// ...
 
                 // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
                 if (text.toLowerCase().includes('.stiker') || text.toLowerCase().includes('.sticker') || text.toLowerCase().includes('.s')) {
