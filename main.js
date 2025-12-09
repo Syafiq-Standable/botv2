@@ -661,6 +661,39 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     return;
                 }
 
+                // ... setelah handler .update
+
+                // --- OPERATOR COMMAND: .LOGS / .LOG (Cek Log PM2) ---
+                if (text.toLowerCase() === '.logs' || text.toLowerCase() === '.log') {
+                    // Cek Hak Akses (Pastikan hanya operator yang bisa pakai)
+                    if (!['operator', 'owner'].includes(userScope)) {
+                        return sock.sendMessage(from, { text: '❌ Command ini hanya untuk Operator/Owner.' });
+                    }
+
+                    // Eksekusi Skrip Logs
+                    exec('./logs.sh', async (error, stdout, stderr) => {
+                        if (error) {
+                            console.error(`Exec Error (.logs): ${error.message}`);
+                            return sock.sendMessage(from, {
+                                text: `❌ GAGAL AMBIL LOGS (Exec Error):\n\`\`\`\n${error.message}\n\`\`\``
+                            });
+                        }
+
+                        // Output dari skrip logs.sh (stdout) adalah logs-nya
+                        let outputText = `✅ PM2 LOGS BOT:\n\n\`\`\`\n${stdout}\n\`\`\``;
+
+                        // Jika ada stderr, tambahkan sebagai peringatan
+                        if (stderr) {
+                            outputText += `\n\n⚠️ Peringatan (Stderr):\n\`\`\`\n${stderr}\n\`\`\``;
+                        }
+
+                        // Kirim hasil logs ke WA
+                        return sock.sendMessage(from, { text: outputText });
+                    });
+
+                    return;
+                }
+// ...
 
                 // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
                 if (text.toLowerCase().includes('.stiker') || text.toLowerCase().includes('.sticker') || text.toLowerCase().includes('.s')) {
