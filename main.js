@@ -354,7 +354,7 @@ Berikut daftar perintah yang tersedia:
 .opengroup - Buka grup.
 .kick @user - Mengeluarkan anggota dari grup.\n\n
 🥳 Berminat menggunakan semua fitur ini tanpa batas?
-Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
+Hubungi Owner: wa.me/6289528950624 - Sam Ganteng @Sukabyone`
                     });
                     return;
                 }
