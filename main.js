@@ -156,7 +156,7 @@ async function connectToWhatsApp() {
             });
 
             return;
-        }
+        };
 
     const grantRental = (scope, id, tier, days, grantedBy) => {
         const rentals = loadRentals();
