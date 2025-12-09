@@ -299,23 +299,22 @@ async function connectToWhatsApp() {
                 // MENU / HELP
                 if (text.toLowerCase() === '.menu' || text.toLowerCase() === '.help') {
                     await sock.sendMessage(from, {
-                        text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n\n
+                        text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n
 Berikut daftar perintah yang tersedia:\n
 .menu / .help - Menampilkan daftar menu ini.
-.ping - Cek status bot (aktif dan kecepatan delay).
-.profile - Lihat profil dan statistik penggunaanmu.
-.sewa - Info lengkap harga dan cara sewa bot.
-.ceksewa - Cek status kedaluwarsa sewamu (Grup/Private).
-.cekidgroup - Menampilkan ID JID grup saat ini. +
-\n\n*Perintah Khusus Grup:*\n +
-.tagall - Men-tag semua anggota grup.
-.hidetag [pesan] - Men-tag semua anggota dengan pesan tersembunyi.
-.promote @user - Jadikan anggota sebagai Admin grup.
+.profile - Lihat profil dan statistik pemakaian.
+.sewa - Info lengkap sewa bot.
+.ceksewa - Cek status kedaluwarsa sewamu.
+.cekidgroup - Menampilkan ID grup ini.
+\n\n*Perintah Khusus Grup:*\n
+.tagall - tag semua anggota grup.
+.hidetag [pesan] - tag semua orang dengan pesan.
+.promote @user - Jadikan Admin grup.
 .demote @user - Cabut status Admin grup.
-.closegroup - Tutup grup (hanya Admin yang bisa chat).
-.opengroup - Buka grup (semua anggota bisa chat).
-.kick @user - Mengeluarkan (kick) anggota dari grup.
-.join / add [link] - Undang bot masuk ke grup via link invite.\n\n
+.closegroup - Tutup grup.
+.opengroup - Buka grup.
+.kick @user - Mengeluarkan anggota dari grup.
+.join / add [link] - Undang masuk ke grup.\n\n
 🥳 Berminat menggunakan semua fitur ini tanpa batas?
 Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     }); 
