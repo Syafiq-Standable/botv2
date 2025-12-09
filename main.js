@@ -295,6 +295,7 @@ async function connectToWhatsApp() {
                 const from = msg.key.remoteJid;
                 const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || '').trim();
 
+if (text.startsWith(".jualan")) return bakulan.jualMenu(sock, from);
 if (text.startsWith(".ordermasuk")) return bakulan.addOrder(sock, from, text);
 if (text === ".cekorder") return bakulan.cekOrder(sock, from);
 if (text.startsWith(".done")) return bakulan.markDone(sock, from, text);
