@@ -407,9 +407,9 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
         const title = res.data.data.title || 'TikTok Video Gacor';
         const author = res.data.data.author.unique_id || 'unknown';
 
-        await sock.sendMessage(from, { 
-            video: { url: videoUrl }, 
-            caption: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* ✅\n\n👤 Akun: @${author}\n📝 ${title}\n\donee, VT HD siap jadi SW — No Watermark! 🔥\nOriginal: ${url}` 
+        await sock.sendMessage(from, {
+            video: { url: videoUrl },
+            caption: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* ✅\n\n👤 Akun: @${author}\n📝 ${title}\n\nVT HD siap jadi SW — No Watermark! 🔥\nOriginal: ${url}`
         });
     } catch (err) {
         console.log('TikWM Error:', err.message);  // Buat debug di terminal
@@ -420,6 +420,8 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
 
                 // SEWA — promotional info and how to rent
                 if (text.toLowerCase() === '.sewa') {
+                    const ops = loadOperators();
+                    const opText = ops && ops.length ? ops.join(', ') : '6289528950624';
                     const promo = `🌟 *SEWA BOT - Informasi* 🌟\n\n` +
                         `✨ *Sistem sewa sekarang sederhana:*\n` +
                         `• *Sewa = Bisa menggunakan semua fitur bot*\n` +
@@ -427,7 +429,7 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
                         `📌 Cara penyewaan:\n` +
                         `• Private: berikan ID pengguna (nomor tanpa @) ke operator, contoh: .grant private 62812xxxxxxx 30\n` +
                         `• Group: jalankan perintah .grant group 30 oleh operator di dalam grup atau mention grup\n\n` +
-                        `📞 Hubungi Operator untuk proses & harga: ID operator: ${OPERATOR_ID}\n` +
+                        `📞 Hubungi Operator untuk proses & harga: ID operator: ${opText}\n` +
                         `Contoh perintah operator:\n` +
                         `• .grant private <id_user> <days>\n` +
                         `• .grant group <days>  (jalankan di grup atau sebutkan group id)\n\n` +
