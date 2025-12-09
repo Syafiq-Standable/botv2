@@ -300,13 +300,13 @@ async function connectToWhatsApp() {
                 if (text.toLowerCase() === '.menu' || text.toLowerCase() === '.help') {
                     await sock.sendMessage(from, {
                         text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n
-Berikut daftar perintah yang tersedia:\n
+Berikut daftar perintah yang tersedia:
 .menu / .help - Menampilkan daftar menu ini.
 .profile - Lihat profil dan statistik pemakaian.
 .sewa - Info lengkap sewa bot.
 .ceksewa - Cek status kedaluwarsa sewamu.
 .cekidgroup - Menampilkan ID grup ini.
-\n\n*Perintah Khusus Grup:*\n
+\n*Perintah Khusus Grup:*
 .tagall - tag semua anggota grup.
 .hidetag [pesan] - tag semua orang dengan pesan.
 .promote @user - Jadikan Admin grup.
