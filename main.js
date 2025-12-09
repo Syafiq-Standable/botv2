@@ -638,7 +638,7 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     }
 
                     // 1. Kirim notif bahwa proses update dimulai
-                    await sock.sendMessage(from, { text: '🚀 Proses update bot dimulai! \n\n*1. Git Pull (Menarik Kode Terbaru)*\n*2. PM2 Restart (Mengaktifkan Kode Baru)*\n*3. PM2 Logs (Cek Status)*\n\nMohon tunggu sebentar...' });
+                    await sock.sendMessage(from, { text: '🚀 Proses update bot dimulai! \n\n*~ Menarik Kode Terbaru*\n*~ Mengaktifkan Kode Baru*\n*~ Cek Status*\n\nMohon tunggu sebentar...' });
 
                     // 2. Eksekusi Skrip Update
                     // Pastikan kamu sudah membuat file update.sh dan memberinya izin eksekusi (+x)
