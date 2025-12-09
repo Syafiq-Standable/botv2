@@ -497,17 +497,19 @@ if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tik
                 if (text.toLowerCase() === '.sewa') {
                     const ops = loadOperators();
                     const opText = ops && ops.length ? ops.join(', ') : '6289528950624 - Sam @Sukabyone';
-                    const promo = `🌟 *SEWA BOT - Informasi* 🌟\n\n` +
+                    const promo = `🌟 *Sistem Penyewaan Bot* 🌟 \n 𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ \n\n` +
                         `✨ *Sistem sewa sederhana:*\n` +
                         `• *Sewa = Bisa menggunakan semua fitur bot*\n` +
                         `• *Tidak sewa = Tidak bisa menggunakan sama sekali*\n\n` +
                         `📌 Cara penyewaan:\n` +
                         `• Hubungi kontak Owner / Admin di bawah \n` +
-                        `• Group: jalankan perintah .grant group 30 oleh operator di dalam grup atau mention grup\n\n` +
-                        `📞 Hubungi Operator untuk proses & harga: ID operator: ${opText}\n` +
-                        `Contoh perintah operator:\n` +
-                        `• .grant private <id_user> <days>\n` +
-                        `• .grant group <days>  (jalankan di grup atau sebutkan group id)\n\n` +
+                        `• Chat Admin dan katakan bahwa ingin menyewa bot. \n _contoh: "Saya ingin menyewa bot selama 30 hari"_ \n\n` +
+                        `💰 *Harga Sewa:*\n` +
+                        `• Rp 10.000 untuk 30 hari (1 bulan)\n` +
+                        `• Rp 25.000 untuk 90 hari (3 bulan)\n` +
+                        `• Rp 45.000 untuk 180 hari (6 bulan)\n\n` +
+                        `📞 *Kontak Owner / Admin:*\n` +
+                        ops.map(op => `• wa.me/${op} - Sam @Sukabyone`).join('\n') + `\n\n` +
                         `Terima kasih! ✨`;
                     await sock.sendMessage(from, { text: promo });
                     return;
