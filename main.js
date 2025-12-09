@@ -786,7 +786,6 @@ async function connectToWhatsApp() {
                         const remainingMs = rental.expires - Date.now();
                         const textOut = `📌 Info Sewa (${scope})\n` +
                             `Target: ${target}\n` +
-                            `Tier: ${rental.tier || 'standard'}\n` +
                             `Kadaluarsa: ${formatDate(rental.expires)} (${formatDuration(remainingMs)})\n` +
                             `Diberikan oleh: ${rental.grantedBy || 'unknown'}`;
 
