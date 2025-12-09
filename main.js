@@ -295,7 +295,16 @@ async function connectToWhatsApp() {
                 const from = msg.key.remoteJid;
                 const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || '').trim();
 
-// Validasi operator untuk fitur jualan
+// Ambil sender dengan aman
+const sender =
+    msg.key.participant ||
+    msg.participant ||
+    (msg.key.remoteJid?.endsWith("@g.us") ? msg.key.participant : msg.key.remoteJid);
+
+// Jika gagal tetap fallback ke remoteJid
+const safeSender = sender || msg.key.remoteJid || from;
+
+// VALIDASI OPERATOR
 if (
     text.startsWith(".jualan") ||
     text.startsWith(".ordermasuk") ||
@@ -306,9 +315,7 @@ if (
     text.startsWith(".refund") ||
     text.startsWith(".rekapbulan")
 ) {
-    const sender = msg.key.participant || msg.key.remoteJid;
-
-    if (!OPERATOR.includes(sender)) {
+    if (!OPERATOR.includes(safeSender)) {
         return sock.sendMessage(from, { text: "❌ Kamu tidak punya akses fitur jualan." });
     }
 }
