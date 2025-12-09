@@ -398,15 +398,35 @@ async function connectToWhatsApp() {
                 }
 
                 // HIDETAG — TAG SEMUA TAPI DISEMBUNYIKAN, GANTI PESAN
-                if (text.toLowerCase().startsWith('.hidetag ') || text.toLowerCase().startsWith('.h ')) {
-                    if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'bisa dipake nyaa cuma di group' });
-                    const fullSender = msg.key.participant || msg.key.remoteJid;
-                    if (!hasAccessForCommand('.hidetag', true, fullSender, from)) return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk grup yang menyewa bot. Ketik .sewa untuk info.' });
-                    const pesan = text.slice(9);
-                    const group = await sock.groupMetadata(from);
-                    await sock.sendMessage(from, { text: pesan ? pesan : '‎', mentions: group.participants.map(a => a.id) });
-                    return;
-                }
+if (text.toLowerCase().startsWith('.hidetag ') || text.toLowerCase().startsWith('.h ')) {
+    if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'bisa dipake nyaa cuma di group' });
+
+    const fullSender = msg.key.participant || msg.key.remoteJid;
+    if (!hasAccessForCommand('.hidetag', true, fullSender, from)) return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk grup yang menyewa bot. Ketik .sewa untuk info.' });
+
+    // Tentukan panjang potongan (slice length) berdasarkan command yang dipakai
+    let sliceLength;
+    if (text.toLowerCase().startsWith('.hidetag ')) {
+        sliceLength = 9; // Untuk '.hidetag ' (9 karakter)
+    } else if (text.toLowerCase().startsWith('.h ')) {
+        sliceLength = 3; // Untuk '.h ' (3 karakter)
+    } else {
+        // Ini sebenarnya gak akan kena karena sudah dicek di 'if' awal, tapi buat jaga-jaga
+        return;
+    }
+
+    const pesan = text.slice(sliceLength).trim(); // Potong teks dan hapus spasi di awal/akhir
+    
+    // Gunakan pesan atau karakter kosong jika pesan kosong
+    const messageToSend = pesan ? pesan : '‎'; 
+    
+    const group = await sock.groupMetadata(from);
+    await sock.sendMessage(from, { 
+        text: messageToSend, 
+        mentions: group.participants.map(a => a.id) 
+    });
+    return;
+}
 
                 // Fungsi SSSTik Downloader (Free, No Key)
 const getSsStikUrl = async (url) => {
