@@ -295,6 +295,22 @@ async function connectToWhatsApp() {
                 const from = msg.key.remoteJid;
                 const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || '').trim();
 
+// Semua command bakulan hanya untuk operator
+if (
+    text.startsWith(".jualan") ||
+    text.startsWith(".ordermasuk") ||
+    text.startsWith(".cekorder") ||
+    text.startsWith(".done") ||
+    text.startsWith(".editorder") ||
+    text.startsWith(".hapusorder") ||
+    text.startsWith(".refund") ||
+    text.startsWith(".rekapbulan")
+) {
+    if (!OPERATOR.includes(msg.key.participant || from)) {
+        return sock.sendMessage(from, { text: "❌ Kamu tidak punya akses fitur jualan." });
+    }
+}
+
 if (text.startsWith(".jualan")) return bakulan.jualMenu(sock, from);
 if (text.startsWith(".ordermasuk")) return bakulan.addOrder(sock, from, text);
 if (text === ".cekorder") return bakulan.cekOrder(sock, from);
