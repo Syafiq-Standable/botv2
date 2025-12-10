@@ -7,6 +7,7 @@ const { exec } = require('child_process');
 const bakulan = require('./bakulan');
 const promo = require('./promo');
 const welcome = require('./welcome');
+const cron = require('node-cron');
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -16,11 +17,84 @@ async function connectToWhatsApp() {
         version: [2, 3000, 1027934701] // versi stabil biar gak error aneh
     });
 
-    promo(sock);     // promosi harian otomatis
-    welcome(sock);   // welcome + setwelcome
-    // Scheduler pengingat order belum selesai
-    try { bakulan.startOrderReminderScheduler(sock); } catch (e) { console.log('Order reminder scheduler error:', e.message); }
-    
+    // ====================== PROMO HARIAN + .topup (SATU TEMPAT) ======================
+    const PROMO_TARGET = '6289528950624@s.whatsapp.net'; // ganti kalau mau ke grup
+    const FOLDER = path.join(__dirname, 'data');
+
+    const promos = [
+        { time: '30 7 * * *', photo: 'promo_3d.jpg', caption: `🔥 *JASA 3D FREE FIRE MURAH!*\n\n• 3D Solo: 50rb\n• 3D Couple: 70rb\n• 3D Squad: 100rb-150rb\n\nHasil Super HD! Anti Pasaran!\nChat: wa.me/6289528950624` },
+        { time: '0 12 * * *', photo: 'promo_topup.jpg', caption: `💎 *TOPUP GAME TERMURAH!*\n\nFF 70 DM: 10k • 140 DM: 20k\nML 86 DM: 22k • Weekly Pass: 25k\nRoblox • PUBG • Genshin juga ada!\nChat: wa.me/6289528950624` },
+        { time: '00 19 * * *', photo: 'promo_sewa.jpg', caption: `�**SEWA BOT PREMIUM 10K/BULAN!*\n\nTagall • Downloader • Anti Spam • Stiker • Play Lagu\nOn 24 Jam • Zero DC\nSewa: wa.me/6289528950624` },
+        { time: '30 20 * * *', photo: 'promo_3d.jpg', caption: `🌙 *MALAM GACOR — 3D DISKON 20RB!*\n\nOrder malam ini langsung dikerjain!\nChat: wa.me/6289528950624` }
+    ];
+
+    promos.forEach(p => {
+        cron.schedule(p.time, async () => {
+            const photoPath = path.join(FOLDER, p.photo);
+            if (fs.existsSync(photoPath)) {
+                await sock.sendMessage(PROMO_TARGET, { image: fs.readFileSync(photoPath), caption: p.caption });
+            }
+        }, { timezone: 'Asia/Jakarta' });
+    });
+
+    // ====================== WELCOME + .setwelcome ======================
+    const WELCOME_DB = path.join(__dirname, 'data', 'welcome.json');
+    const loadWelcome = () => fs.existsSync(WELCOME_DB) ? JSON.parse(fs.readFileSync(WELCOME_DB)) : {};
+    const saveWelcome = (data) => fs.writeFileSync(WELCOME_DB, JSON.stringify(data, null, 2));
+
+    sock.ev.on('group-participants.update', async (update) => {
+        if (update.action !== 'add') return;
+        const welcomes = loadWelcome();
+        const caption = welcomes[update.id] || `SELAMAT DATANG $nama DI $grup!\nNomor: $nomor\nSemoga betah ya! 🔥`;
+
+        for (const user of update.participants) {
+            try {
+                const meta = await sock.groupMetadata(update.id);
+                const pp = await sock.profilePictureUrl(user, 'image').catch(() => 'https://i.ibb.co/3mZmy8Z/default-pp.jpg');
+                const name = await sock.getName(user) || 'User';
+                const finalCaption = caption
+                    .replace('$nama', name)
+                    .replace('$nomor', user.split('@')[0])
+                    .replace('$grup', meta.subject);
+
+                await sock.sendMessage(update.id, { image: { url: pp }, caption: finalCaption });
+            } catch (e) { }
+        }
+    });
+
+    // ====================== FITUR .topup & .setwelcome di messages.upsert ======================
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        if (!msg.message || msg.key.fromMe) return;
+
+        const from = msg.key.remoteJid;
+        const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || '').trim().toLowerCase();
+
+        // .topup command
+        if (text === '.topup' || text === '.harga') {
+            const photo = path.join(FOLDER, 'promo_topup.jpg');
+            if (fs.existsSync(photo)) {
+                await sock.sendMessage(from, { image: fs.readFileSync(photo), caption: promos[1].caption });
+            }
+            return;
+        }
+
+        // .setwelcome
+        if (text.startsWith('.setwelcome ') && from.endsWith('@g.us')) {
+            const group = await sock.groupMetadata(from);
+            const isAdmin = group.participants.find(p => p.id === msg.key.participant)?.admin;
+            if (!isAdmin) return;
+
+            const newMsg = text.slice(12);
+            const welcomes = loadWelcome();
+            welcomes[from] = newMsg;
+            saveWelcome(welcomes);
+
+            await sock.sendMessage(from, { text: `Welcome diupdate!\nPreview:\n${newMsg.replace('$nama', 'Nama').replace('$nomor', '628xxx').replace('$grup', group.subject)}` });
+            return;
+        }
+    });
+
     // ====================== SISTEM BAN PER GRUP ======================
     const BANNED_DB = path.join(__dirname, 'data', 'banned.json');
 
@@ -382,7 +456,7 @@ async function connectToWhatsApp() {
                         try {
                             await sock.groupParticipantsUpdate(from, [sender], 'remove');
                             await sock.sendMessage(from, { text: `@${sender.split('@')[0]} dibanned dari grup ini!`, mentions: [sender] });
-                        } catch (e) {}
+                        } catch (e) { }
                         return;
                     }
                 }
@@ -447,7 +521,7 @@ async function connectToWhatsApp() {
                     return;
                 }
                 // ====================== END SISTEM BAN PER GRUP ======================
-                
+
                 if (text.startsWith(".jualan")) return bakulan.jualMenu(sock, from);
                 if (text.startsWith(".ordermasuk")) return bakulan.addOrder(sock, from, text);
                 if (text === ".cekorder") return bakulan.cekOrder(sock, from);
@@ -455,7 +529,7 @@ async function connectToWhatsApp() {
                 if (text.startsWith(".editorder")) return bakulan.editOrder(sock, from, text);
                 if (text.startsWith(".hapusorder")) return bakulan.deleteOrder(sock, from, text);
                 if (text.startsWith(".refund")) return bakulan.refundOrder(sock, from, text);
-                if (text.startsWith(".rekap")) return bakulan.rekap(sock, from, text);
+                if (text.startsWith(".rekapbulan")) return bakulan.rekapBulan(sock, from, text);
 
                 // Update user record (count, name, firstSeen)
                 await updateUserRecord(msg);
