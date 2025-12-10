@@ -22,7 +22,7 @@ async function connectToWhatsApp() {
     const FOLDER = path.join(__dirname, 'data');
 
     const promos = [
-        { time: '30 8 * * *', photo: 'promo_3d.jpg', caption: `🔥 *JASA 3D FREE FIRE MURAH!*\n\n` +
+        { time: '30 8 * * *', photo: 'promo_3d.jpg', caption: `🔥 *JASA 3D FREE FIRE MURAH!*\n` +
                      `• 3D Solo       : 50rb\n` +
                      `• 3D Couple     : 70rb\n` +
                      `• 3D Squad     : 100rb-150rb\n\n` +
@@ -31,18 +31,19 @@ async function connectToWhatsApp() {
                      `#3DFreeFire #3DFF #Jasa3D` },
         { time: '30 8 * * *', photo: 'promo_topup.jpg', caption: `💎 *TOPUP GAME TERMURAH SE-NUSANTARA!*\n` +
                      `🔥 *Free Fire*\n` +
-                     `• 70 Diamond   : Rp10.000\n` +
-                     `• 140 Diamond  : Rp20.000\n` +
+                     `• 70 Diamond           : Rp7.951\n` +
+                     `• 140 Diamond          : Rp15.502\n` +
+                     `🪪 Weekly Membership   : Rp26.127\n` +
                      `⚡ *Mobile Legends*\n` +
-                     `• 86 Diamond   : Rp22.000\n` +
-                     `• 172 Diamond  : Rp42.000\n` +
-                     `• Weekly Pass  : Rp25.000 (unlimited 30 hari)\n` +
+                     `• 3 Diamond            : Rp1.217\n` +
+                     `• 1050 Diamond          : Rp262.196\n` +
+                     `🪪 Weekly Pass         : Rp26.985\n` +
                      `🎮 *Lainnya*\n` +
-                     `• Roblox 400 Robux     : Rp18.000\n` +
-                     `• PUBG 60 UC           : Rp16.000\n` +
-                     `• Genshin 60 Crystals  : Rp24.000\n\n` +
-                     `\nKeterangan lebih lanjut langsung chat:\nwa.me/6289528950624\n\n` +
-                     `#TopUpMurah #DiamondMurah #TopUpFF` },
+                     `• Roblox 200 Robux     : Rp101.000\n` +
+                     `• PUBG 120 UC          : Rp29.917\n` +
+                     `• Genshin 60 Crystals  : Rp12.211\n\n` +
+                     `\nKeterangan lebih lanjut langsung chat:\n wa.me/6289528950624\n` +
+                     `#TopUpMurah #SamSukabyone #DiamondMurah` },
         { time: '30 8 * * *', photo: 'promo_sewa.jpg', caption: `🤖 *SEWA BOT WHATSAPP PREMIUM CUMA 10K/BULAN!*\n` +
                      `Fitur gacor:\n` +
                      `• Tagall / Hidetag\n` +
