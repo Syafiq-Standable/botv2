@@ -29,9 +29,10 @@ async function connectToWhatsApp() {
                      `Hasil Super HD! + Anti Pasaran!! \n` +
                      `Minat? Chat sekarang:\nwa.me/6289528950624\n\n` +
                      `#3DFreeFire #3DFF #Jasa3D` },
-        { time: '30 8 * * *', photo: 'promo_topup.jpg', caption: `💎 *TOPUP GAME TERMURAH SE-NUSANTARA!*\n` +
-                     `💎 TOPUP GAME TERMURAH SE-NUSANTARA!
-                     
+        { time: '30 8 * * *', photo: 'promo_topup.jpg', caption:
+                     `𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ
+                     💎 TOPUP GAME MURAHHH!
+
 🔥 Free Fire
 * 70 Diamond            : Rp7.951
 * 140 Diamond           : Rp15.502
