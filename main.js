@@ -14,7 +14,46 @@ async function connectToWhatsApp() {
         version: [2, 3000, 1027934701] // versi stabil biar gak error aneh
     });
 
+    // ====================== SISTEM BAN PER GRUP ======================
+    const BANNED_DB = path.join(__dirname, 'data', 'banned.json');
 
+    const loadBans = () => {
+        try {
+            if (!fs.existsSync(BANNED_DB)) return {};
+            return JSON.parse(fs.readFileSync(BANNED_DB, 'utf8'));
+        } catch (e) {
+            console.log('Load bans error:', e.message);
+            return {};
+        }
+    };
+
+    const saveBans = (data) => {
+        try {
+            fs.mkdirSync(path.dirname(BANNED_DB), { recursive: true });
+            fs.writeFileSync(BANNED_DB, JSON.stringify(data, null, 2));
+        } catch (e) {
+            console.log('Save bans error:', e.message);
+        }
+    };
+
+    // Auto kick banned user pas join grup (DI LUAR messages.upsert)
+    sock.ev.on('group-participants.update', async (update) => {
+        const { id, participants, action } = update;
+        if (action !== 'add') return;
+
+        const bans = loadBans();
+        if (!bans[id]) return;
+
+        const toKick = participants.filter(p => bans[id].includes(p));
+        if (toKick.length > 0) {
+            try {
+                await sock.groupParticipantsUpdate(id, toKick, 'remove');
+                for (const p of toKick) {
+                    await sock.sendMessage(id, { text: `@${p.split('@')[0]} dibanned dari grup ini!`, mentions: [p] });
+                }
+            } catch (e) { console.log('Auto kick join error:', e); }
+        }
+    });
 
     // Helper: set group announcement mode with fallbacks for different Baileys versions
     const setGroupAnnouncement = async (jid, announce) => {
@@ -278,7 +317,24 @@ async function connectToWhatsApp() {
             const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
             if (shouldReconnect) connectToWhatsApp();
         } else if (connection === 'open') {
-            console.log('SAM BOT NYALA GACOR BANGET BROOO 🔥🔥🔥');
+            console.clear(); // biar bersih dulu
+            console.log('\x1b[38;5;196m'); // warna merah terang (kalau terminal support)
+            console.log(`
+    ███████╗ █████╗ ███╗   ███╗     ██████╗  ██████╗ ████████╗
+    ██╔════╝██╔══██╗████╗ ████║    ██╔═══██╗██╔═══██╗╚══██╔══╝
+    ███████╗███████║██╔████╔██║    ██║   ██║██║   ██║   ██║   
+    ╚════██║██╔══██║██║╚██╔╝██║    ██║   ██║██║   ██║   ██║   
+    ███████║██║  ██║██║ ╚═╝ ██║    ╚██████╔╝╚██████╔╝   ██║   
+    ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝     ╚═════╝  ╚═════╝    ╚═╝   
+
+          ╔══════════════════════════════════════════════╗
+          ║    BOT SUKSES NYALA GACOR BANGET BROOO!!!    ║
+          ║       ON 24/7 • VPS • ZERO DC • PREMIUM      ║
+          ║           MADE BY SUKABYONE © 2025           ║
+          ╚══════════════════════════════════════════════╝
+            `);
+            console.log('\x1b[0m'); // reset warna
+
             // start rental reminder scheduler when connection is open
             try {
                 scheduleRentalReminders();
@@ -309,6 +365,81 @@ async function connectToWhatsApp() {
                 // Update user record (count, name, firstSeen)
                 await updateUserRecord(msg);
 
+                // ====================== SISTEM BAN PER GRUP (DI DALAM messages.upsert) ======================
+                // Auto kick banned user kalau kirim pesan
+                if (from.endsWith('@g.us')) {
+                    const bans = loadBans();
+                    const sender = msg.key.participant;
+                    if (bans[from]?.includes(sender)) {
+                        try {
+                            await sock.groupParticipantsUpdate(from, [sender], 'remove');
+                            await sock.sendMessage(from, { text: `@${sender.split('@')[0]} dibanned dari grup ini!`, mentions: [sender] });
+                        } catch (e) {}
+                        return;
+                    }
+                }
+
+                // .BAN command
+                if (text.toLowerCase().startsWith('.ban ')) {
+                    if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Fitur .ban hanya bisa di grup!' });
+
+                    const group = await sock.groupMetadata(from);
+                    const isAdmin = group.participants.find(p => p.id === (msg.key.participant || msg.key.remoteJid))?.admin;
+                    if (!isAdmin) return sock.sendMessage(from, { text: 'Hanya admin grup yang bisa ban!' });
+                    if (!getRental(from)) return sock.sendMessage(from, { text: 'Grup ini belum sewa bot!' });
+
+                    let target = null;
+                    if (msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length) {
+                        target = msg.message.extendedTextMessage.contextInfo.mentionedJid[0];
+                    } else if (text.split(' ')[1]) {
+                        target = text.split(' ')[1].replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+                    }
+
+                    if (!target) return sock.sendMessage(from, { text: 'Cara pakai: .ban @user atau .ban 628xxx' });
+
+                    try {
+                        await sock.groupParticipantsUpdate(from, [target], 'remove');
+                        const bans = loadBans();
+                        if (!bans[from]) bans[from] = [];
+                        if (!bans[from].includes(target)) bans[from].push(target);
+                        saveBans(bans);
+                        await sock.sendMessage(from, { text: `✅ @${target.split('@')[0]} berhasil dibanned & dikick!`, mentions: [target] });
+                    } catch (e) {
+                        await sock.sendMessage(from, { text: 'Gagal ban: ' + e.message });
+                    }
+                    return;
+                }
+
+                // .UNBAN command
+                if (text.toLowerCase().startsWith('.unban ')) {
+                    if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Fitur .unban hanya bisa di grup!' });
+
+                    const group = await sock.groupMetadata(from);
+                    const isAdmin = group.participants.find(p => p.id === (msg.key.participant || msg.key.remoteJid))?.admin;
+                    if (!isAdmin) return sock.sendMessage(from, { text: 'Hanya admin grup yang bisa unban!' });
+
+                    let target = null;
+                    if (msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length) {
+                        target = msg.message.extendedTextMessage.contextInfo.mentionedJid[0];
+                    } else if (text.split(' ')[1]) {
+                        target = text.split(' ')[1].replace(/[^0-9]/g, '') + '@s.whatsapp.net';
+                    }
+
+                    if (!target) return sock.sendMessage(from, { text: 'Cara pakai: .unban @user atau .unban 628xxx' });
+
+                    const bans = loadBans();
+                    if (bans[from]?.includes(target)) {
+                        bans[from] = bans[from].filter(u => u !== target);
+                        if (bans[from].length === 0) delete bans[from];
+                        saveBans(bans);
+                        await sock.sendMessage(from, { text: `✅ @${target.split('@')[0]} berhasil di-unban!`, mentions: [target] });
+                    } else {
+                        await sock.sendMessage(from, { text: 'User ini gak ada di daftar banned.' });
+                    }
+                    return;
+                }
+                // ====================== END SISTEM BAN PER GRUP ======================
+                
                 // MENU / HELP
                 if (text.toLowerCase() === '.menu' || text.toLowerCase() === '.help') {
                     await sock.sendMessage(from, {
