@@ -14,7 +14,43 @@ async function connectToWhatsApp() {
         version: [2, 3000, 1027934701] // versi stabil biar gak error aneh
     });
 
-    
+    // ====================== SISTEM BAN PER GRUP ======================
+    const BANNED_DB = path.join(__dirname, 'data', 'banned.json');
+    const loadBans = () => {
+        try {
+            if (!fs.existsSync(BANNED_DB)) return {};
+            return JSON.parse(fs.readFileSync(BANNED_DB, 'utf8'));
+        } catch (e) {
+            console.log('Load bans error:', e.message);
+            return {};
+        }
+    };
+
+    const saveBans = (data) => {
+        try {
+            fs.mkdirSync(path.dirname(BANNED_DB), { recursive: true });
+            fs.writeFileSync(BANNED_DB, JSON.stringify(data, null, 2));
+        } catch (e) {
+            console.log('Save bans error:', e.message);
+        }
+    };
+
+    // Auto kick banned user pas join grup (DI LUAR messages.upsert)
+    sock.ev.on('group-participants.update', async (update) => {
+        const { id, participants, action } = update;
+        if (action !== 'add') return;
+
+        const bans = loadBans();
+        if (!bans[id]) return;
+
+        const toKick = participants.filter(p => bans[id].includes(p));
+        if (toKick.length > 0) {
+            await sock.groupParticipantsUpdate(id, toKick, 'remove');
+            for (const p of toKick) {
+                await sock.sendMessage(id, { text: `@${p.split('@')[0]} dibanned dari grup ini!`, mentions: [p] });
+            }
+        }
+    });
 
     // Helper: set group announcement mode with fallbacks for different Baileys versions
     const setGroupAnnouncement = async (jid, announce) => {
@@ -143,7 +179,6 @@ async function connectToWhatsApp() {
         const r = rentals[id];
         if (!r) return null;
         if (r.expires && Date.now() > r.expires) {
-            // expired
             revokeRental(id);
             return null;
         }
@@ -251,26 +286,6 @@ async function connectToWhatsApp() {
         }
     };
 
-    const formatDuration = (ms) => {
-        if (ms <= 0) return 'Kadaluarsa';
-
-        const seconds = Math.floor(ms / 1000);
-        const minutes = Math.floor(seconds / 60);
-        const hours = Math.floor(minutes / 60);
-        const days = Math.floor(hours / 24);
-
-        const parts = [];
-        if (days > 0) parts.push(`${days} hari`);
-        if (hours % 24 > 0) parts.push(`${hours % 24} jam`);
-        if (minutes % 60 > 0 && days === 0) parts.push(`${minutes % 60} menit`);
-        // Tampilkan setidaknya 1 nilai, kalau durasinya sangat pendek
-        if (parts.length === 0 && ms > 0) {
-            return 'Kurang dari 1 menit';
-        }
-
-        return parts.join(', ');
-    };
-
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect, qr } = update;
         if (qr) qrcode.generate(qr, { small: true });
@@ -279,12 +294,6 @@ async function connectToWhatsApp() {
             if (shouldReconnect) connectToWhatsApp();
         } else if (connection === 'open') {
             console.log('SAM BOT NYALA GACOR BANGET BROOO 🔥🔥🔥');
-            // start rental reminder scheduler when connection is open
-            try {
-                scheduleRentalReminders();
-            } catch (e) {
-                console.log('Failed to start rental scheduler:', e.message);
-            }
         }
     });
 
@@ -297,158 +306,21 @@ async function connectToWhatsApp() {
                 const from = msg.key.remoteJid;
                 const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || '').trim();
 
-                    // ====================== SISTEM BAN PER GRUP (PASTE DI DALAM messages.upsert, BUKAN DI LUAR) ======================
-    // Auto kick banned user kalau kirim pesan
-    if (from.endsWith('@g.us')) {
-        const bans = loadBans();
-        const sender = msg.key.participant;
-        if (bans[from] && bans[from].includes(sender)) {
-            try {
-                await sock.groupParticipantsUpdate(from, [sender], 'remove');
-                await sock.sendMessage(from, { text: `@${sender.split('@')[0]} dibanned dari grup ini!`, mentions: [sender] });
-            } catch (e) { console.log('Auto kick ban error:', e.message); }
-            return;
-        }
-    }
-
-    // .BAN command
-    if (text.toLowerCase().startsWith('.ban ')) {
-        if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Fitur .ban hanya bisa dipakai di grup!' });
-
-        const groupMeta = await sock.groupMetadata(from);
-        const sender = msg.key.participant;
-        const isAdmin = groupMeta.participants.find(p => p.id === sender)?.admin;
-
-        if (!isAdmin) return sock.sendMessage(from, { text: 'Hanya admin grup yang bisa ban user!' });
-        if (!getRental(from)) return sock.sendMessage(from, { text: 'Grup ini belum sewa bot!' });
-
-        let target = null;
-        if (msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length) {
-            target = msg.message.extendedTextMessage.contextInfo.mentionedJid[0];
-        } else if (text.split(' ')[1]) {
-            target = text.split(' ')[1].replace(/[^0-9]/g, '') + '@s.whatsapp.net';
-        }
-
-        if (!target) return sock.sendMessage(from, { text: 'Cara pakai: .ban @user atau .ban 628xxx' });
-
-        try {
-            await sock.groupParticipantsUpdate(from, [target], 'remove');
-
-            const bans = loadBans();
-            if (!bans[from]) bans[from] = [];
-            if (!bans[from].includes(target)) bans[from].push(target);
-            saveBans(bans);
-
-            await sock.sendMessage(from, { text: `✅ @${target.split('@')[0]} berhasil dibanned & dikick!`, mentions: [target] });
-        } catch (e) {
-            await sock.sendMessage(from, { text: 'Gagal ban: ' + e.message });
-        }
-        return;
-    }
-
-    // .UNBAN command
-    if (text.toLowerCase().startsWith('.unban ')) {
-        if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Fitur .unban hanya bisa dipakai di grup!' });
-
-        const groupMeta = await sock.groupMetadata(from);
-        const sender = msg.key.participant;
-        const isAdmin = groupMeta.participants.find(p => p.id === sender)?.admin;
-
-        if (!isAdmin) return sock.sendMessage(from, { text: 'Hanya admin grup yang bisa unban user!' });
-
-        let target = null;
-        if (msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length) {
-            target = msg.message.extendedTextMessage.contextInfo.mentionedJid[0];
-        } else if (text.split(' ')[1]) {
-            target = text.split(' ')[1].replace(/[^0-9]/g, '') + '@s.whatsapp.net';
-        }
-
-        if (!target) return sock.sendMessage(from, { text: 'Cara pakai: .unban @user atau .unban 628xxx' });
-
-        const bans = loadBans();
-        if (bans[from] && bans[from].includes(target)) {
-            bans[from] = bans[from].filter(u => u !== target);
-            if (bans[from].length === 0) delete bans[from];
-            saveBans(bans);
-            await sock.sendMessage(from, { text: `✅ @${target.split('@')[0]} berhasil di-unban!`, mentions: [target] });
-        } else {
-            await sock.sendMessage(from, { text: 'User ini gak ada di daftar banned grup ini.' });
-        }
-        return;
-    }
-
-    // Auto kick banned user yang join grup
-    sock.ev.on('group-participants.update', async (update) => {
-        const { id, participants, action } = update;
-        if (action !== 'add') return;
-
-        const bans = loadBans();
-        if (!bans[id]) return;
-
-        const bannedJoining = participants.filter(p => bans[id].includes(p));
-        if (bannedJoining.length > 0) {
-            await sock.groupParticipantsUpdate(id, bannedJoining, 'remove');
-            for (const p of bannedJoining) {
-                await sock.sendMessage(id, { text: `@${p.split('@')[0]} dibanned dari grup ini!`, mentions: [p] });
-            }
-        }
-    });
-    // ====================== AKHIR SISTEM BAN ======================
-
-if (text.startsWith(".jualan")) return bakulan.jualMenu(sock, from);
-if (text.startsWith(".ordermasuk")) return bakulan.addOrder(sock, from, text);
-if (text === ".cekorder") return bakulan.cekOrder(sock, from);
-if (text.startsWith(".done")) return bakulan.markDone(sock, from, text);
-if (text.startsWith(".editorder")) return bakulan.editOrder(sock, from, text);
-if (text.startsWith(".hapusorder")) return bakulan.deleteOrder(sock, from, text);
-if (text.startsWith(".refund")) return bakulan.refundOrder(sock, from, text);
-if (text.startsWith(".rekapbulan")) return bakulan.rekapBulan(sock, from, text);
-
-                // Update user record (count, name, firstSeen)
                 await updateUserRecord(msg);
 
-                // MENU / HELP
                 if (text.toLowerCase() === '.menu' || text.toLowerCase() === '.help') {
-                    await sock.sendMessage(from, {
-                        text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n
-Berikut daftar perintah yang tersedia:
-.menu / .help - Menampilkan daftar menu ini.
-.profile - Lihat profil dan statistik pemakaian.
-.sewa - Info lengkap sewa bot.
-.ceksewa - Cek status kedaluwarsa sewamu.
-.cekidgroup - Menampilkan ID grup ini.
-\n*Perintah Khusus Admin Untuk Grup:*
-.tagall - tag semua anggota grup.
-.hidetag [pesan] - tag semua orang dengan pesan.
-.promote @user - Jadikan Admin grup.
-.demote @user - Cabut status Admin grup.
-.closegroup - Tutup grup.
-.opengroup - Buka grup.
-.kick @user - Mengeluarkan anggota dari grup.\n\n
-🥳 Berminat menggunakan semua fitur ini tanpa batas?
-Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
-                    });
+                    await sock.sendMessage(from, { text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n\n✦ .menu / .help → tampilkan menu ini\n✦ .tagall → tag semua member\n✦ .hidetag [pesan] → tag tersembunyi\n✦ .tt [link] → download TikTok\n✦ .stiker / reply .stiker → membuat stiker dari foto\n✦ .ping → cek bot aktif dan delay\n✦ .promote @user → jadikan admin (hanya admin yang bisa pakai)\n✦ .demote @user → cabut admin (hanya admin yang bisa pakai)\n✦ .opengroup → buka grup supaya semua bisa chat (hanya admin)\n✦ .closegroup → tutup grup supaya hanya admin yang bisa chat (hanya admin)\n\nberminat untuk sewa?\nowner: wa.me/6289528950624 - Sam @Sukabyone` });
                     return;
                 }
 
-                // PING — cek apakah bot aktif dan tampilkan latency
                 if (text.toLowerCase() === '.ping') {
-                    // Ambil waktu pesan dikirim (dalam ms)
                     const msgTs = msg.messageTimestamp ? Number(msg.messageTimestamp) * 1000 : Date.now();
-
-                    // Hitung latency dalam milidetik (ms)
-                    const tickMs = Date.now() - msgTs;
-
-                    // Konversi ke detik (s) dan bulatkan 2 angka di belakang koma
-                    const tickS = (tickMs / 1000).toFixed(2);
-
-                    await sock.sendMessage(from, { text: `🚀 Bot aktif!\nLatency: ${tickS} detik (${tickMs} ms)` });
+                    const latencyMs = Date.now() - msgTs;
+                    await sock.sendMessage(from, { text: `haloo, bot aktif dengan "${latencyMs}"ms` });
                     return;
                 }
 
-                // PROFILE — tampilkan profil pengguna (nama, WA id, total penggunaan, bergabung sejak)
                 if (text.toLowerCase() === '.profile' || text.toLowerCase() === '.profil') {
-                    // target via mention or reply, default = sender
                     const ext = msg.message?.extendedTextMessage;
                     let targetJid = null;
                     if (ext?.contextInfo?.mentionedJid && ext.contextInfo.mentionedJid.length) {
@@ -474,14 +346,12 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     return;
                 }
 
-                // GROUP CONTROL — buka / tutup grup (hanya admin)
                 if (text.toLowerCase() === '.closegroup' || text.toLowerCase() === '.opengroup') {
                     if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Perintah ini hanya untuk grup.' });
                     const group = await sock.groupMetadata(from);
                     const sender = msg.key.participant || msg.key.remoteJid;
                     const isSenderAdmin = group.participants.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin' || p.isAdmin || p.isSuperAdmin));
                     if (!isSenderAdmin) return sock.sendMessage(from, { text: 'Hanya admin grup yang bisa menggunakan perintah ini.' });
-                    // check rental: group must have active rental
                     const fullSender = msg.key.participant || msg.key.remoteJid;
                     if (!hasAccessForCommand(text.split(' ')[0], true, fullSender, from)) return sock.sendMessage(from, { text: 'Fitur ini membutuhkan paket sewa. Ketik .sewa untuk info.' });
 
@@ -489,40 +359,26 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                         if (text.toLowerCase() === '.closegroup') {
                             await setGroupAnnouncement(from, true);
                             await sock.sendMessage(from, { text: 'Sukses! Grup ditutup — hanya admin yang bisa mengirim pesan sekarang.' });
-
-                        } else { // ini berarti .opengroup
+                        } else {
                             await setGroupAnnouncement(from, false);
                             await sock.sendMessage(from, { text: 'Sukses! Grup dibuka — semua anggota bisa mengirim pesan sekarang.' });
                         }
                     } catch (err) {
                         console.log('Group control error:', err.message);
-
-                        // 👇 Custom pesan error berdasarkan command
-                        let customErrorMessage = 'Gagal mengubah setelan grup. Pastikan bot adalah admin grup dan memiliki izin penuh!';
-
-                        if (text.toLowerCase() === '.closegroup') {
-                            customErrorMessage = 'Gagal menutup grup. Mungkin bot bukan admin? 😭';
-                        } else if (text.toLowerCase() === '.opengroup') {
-                            customErrorMessage = 'Gagal membuka grup. Cek lagi status admin bot! 🤔';
-                        }
-
-                        await sock.sendMessage(from, { text: customErrorMessage });
+                        await sock.sendMessage(from, { text: `Gagal mengubah setelan grup: ${err.message}` });
                     }
                     return;
                 }
 
-                // PROMOTE / DEMOTE — jadikan atau cabut admin (via mention atau reply)
                 if (text.toLowerCase().startsWith('.promote') || text.toLowerCase().startsWith('.demote')) {
                     if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Perintah ini hanya untuk grup.' });
                     const group = await sock.groupMetadata(from);
                     const sender = msg.key.participant || msg.key.remoteJid;
                     const isSenderAdmin = group.participants.some(p => p.id === sender && (p.admin === 'admin' || p.admin === 'superadmin' || p.isAdmin || p.isSuperAdmin));
                     if (!isSenderAdmin) return sock.sendMessage(from, { text: 'Hanya admin grup yang bisa menggunakan perintah ini.' });
-                    // check rental: group must have active rental
                     const fullSenderProm = msg.key.participant || msg.key.remoteJid;
                     if (!hasAccessForCommand(text.split(' ')[0], true, fullSenderProm, from)) return sock.sendMessage(from, { text: 'Fitur ini membutuhkan paket sewa. Ketik .sewa untuk info.' });
 
-                    // Dapatkan target: mention atau reply
                     let targets = [];
                     const ext = msg.message?.extendedTextMessage;
                     if (ext?.contextInfo?.mentionedJid && ext.contextInfo.mentionedJid.length) {
@@ -542,98 +398,41 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                         await sock.sendMessage(from, { text: `Sukses melakukan ${action} untuk ${mentionText}`, mentions: targets });
                     } catch (err) {
                         console.log('Promote/Demote error:', err.message);
-                        await sock.sendMessage(from, { text: `Gagal mengubah status admin \n\n_keterangan: bot belum menjadi admin atau target merupakan pembuat group_` });
+                        await sock.sendMessage(from, { text: `Gagal mengubah status admin: ${err.message}` });
                     }
                     return;
                 }
 
-                // TAGALL — BENERAN TAG SEMUA MEMBER (bukan cuma @everyone)
                 if (text.toLowerCase() === '.tagall') {
                     if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'Di grup aja yaaa' });
                     const fullSender = msg.key.participant || msg.key.remoteJid;
                     if (!hasAccessForCommand('.tagall', true, fullSender, from)) return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk grup yang menyewa bot. Ketik .sewa untuk info.' });
                     const group = await sock.groupMetadata(from);
-                    let teks = 'TAG SEMUA ORANG!\n';
+                    let teks = '┌──「 TAG ALL 」\n';
                     for (let mem of group.participants) {
-                        teks += ` @${mem.id.split('@')[0]}\n`;
+                        teks += `├ @${mem.id.split('@')[0]}\n`;
                     }
-                    teks += ` \nBERHASIL TAG SEMUA ORANG ✅`;
+                    teks += `└────`;
                     await sock.sendMessage(from, { text: teks, mentions: group.participants.map(a => a.id) });
                     return;
                 }
 
-                // HIDETAG — TAG SEMUA TAPI DISEMBUNYIKAN, GANTI PESAN
-                if (text.toLowerCase().startsWith('.hidetag ') || text.toLowerCase().startsWith('.h ')) {
+                if (text.toLowerCase().startsWith('.hidetag ')) {
                     if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'bisa dipake nyaa cuma di group' });
-
                     const fullSender = msg.key.participant || msg.key.remoteJid;
                     if (!hasAccessForCommand('.hidetag', true, fullSender, from)) return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk grup yang menyewa bot. Ketik .sewa untuk info.' });
-
-                    // Tentukan panjang potongan (slice length) berdasarkan command yang dipakai
-                    let sliceLength;
-                    if (text.toLowerCase().startsWith('.hidetag ')) {
-                        sliceLength = 9; // Untuk '.hidetag ' (9 karakter)
-                    } else if (text.toLowerCase().startsWith('.h ')) {
-                        sliceLength = 3; // Untuk '.h ' (3 karakter)
-                    } else {
-                        // Ini sebenarnya gak akan kena karena sudah dicek di 'if' awal, tapi buat jaga-jaga
-                        return;
-                    }
-
-                    const pesan = text.slice(sliceLength).trim(); // Potong teks dan hapus spasi di awal/akhir
-
-                    // Gunakan pesan atau karakter kosong jika pesan kosong
-                    const messageToSend = pesan ? pesan : '‎';
-
+                    const pesan = text.slice(10);
                     const group = await sock.groupMetadata(from);
-                    await sock.sendMessage(from, {
-                        text: messageToSend,
-                        mentions: group.participants.map(a => a.id)
-                    });
+                    await sock.sendMessage(from, { text: pesan ? pesan : '‎', mentions: group.participants.map(a => a.id) });
                     return;
                 }
 
-                // Fungsi SSSTik Downloader (Free, No Key)
-                const getSsStikUrl = async (url) => {
-                    try {
-                        // Step 1: GET homepage buat ambil token 'tt'
-                        const homeRes = await axios.get('https://ssstik.io/en');
-                        const ttToken = homeRes.data.match(/tt:\'([\w\d]+)\'/)[1];  // Extract token
-
-                        // Step 2: POST ke endpoint
-                        const postRes = await axios.post('https://ssstik.io/abc?url=dl', {
-                            id: url,
-                            locale: 'en',
-                            tt: ttToken
-                        }, {
-                            headers: {
-                                'hx-current-url': 'https://ssstik.io/en',
-                                'hx-request': 'true',
-                                'hx-target': 'target',
-                                'hx-trigger': '_gcaptcha_pt',
-                                'origin': 'https://ssstik.io',
-                                'pragma': 'no-cache',
-                                'referer': 'https://ssstik.io/en',
-                                'content-type': 'application/x-www-form-urlencoded'
-                            }
-                        });
-
-                        // Parse HTML response buat dapet video URL (no WM)
-                        const videoMatch = postRes.data.match(/hdsrc="([^"]+)"/);
-                        return videoMatch ? videoMatch[1] : null;
-                    } catch (err) {
-                        throw new Error('SSSTik error: ' + err.message);
-                    }
-                };
-
-                // Di event messages.upsert, ganti handler TikTok jadi ini:
                 if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tiktok ')) {
                     const url = text.split(' ').slice(1).join(' ');
-                    if (!url.includes('tiktok')) return sock.sendMessage(from, { text: 'link TikTok-nya SALAAHHHHH!\n gini nih contoh yang bener: .tt https://vt.tiktok.com/abc' });
+                    if (!url.includes('tiktok')) return sock.sendMessage(from, { text: 'link TikTok manaaaa? gini nih contohnya: .tt https://vt.tiktok.com/abc' });
 
                     await sock.sendMessage(from, { text: 'Sabar yaaa, lagi diprosess... ⏳' });
                     try {
-                        // check access: rental required (single-tier)
                         const fullSenderForTt = msg.key.participant || msg.key.remoteJid;
                         const isGroup = from.endsWith('@g.us');
                         const groupId = from;
@@ -642,23 +441,22 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                         }
                         const res = await axios.get(`https://tikwm.com/api/?url=${url}`);
                         if (res.data.code !== 0) throw new Error('API error: ' + res.data.msg);
-
-                        const videoUrl = res.data.data.play;  // URL video no watermark HD
+                        
+                        const videoUrl = res.data.data.play;
                         const title = res.data.data.title || 'TikTok Video Gacor';
                         const author = res.data.data.author.unique_id || 'unknown';
 
-                        await sock.sendMessage(from, {
-                            video: { url: videoUrl },
-                            caption: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* ✅\n\n👤 Akun: @${author}\n📝 ${title}\n\nVT HD siap jadi SW — No Watermark! 🔥\nOriginal: ${url}`
+                        await sock.sendMessage(from, { 
+                            video: { url: videoUrl }, 
+                            caption: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* ✅\n\n👤 Akun: @${author}\n📝 ${title}\n\donee, VT HD siap jadi SW — No Watermark! 🔥\nOriginal: ${url}` 
                         });
                     } catch (err) {
-                        console.log('TikWM Error:', err.message);  // Buat debug di terminal
+                        console.log('TikWM Error:', err.message);
                         await sock.sendMessage(from, { text: `yaahhh gagalll😭\nError: ${err.message}\ncoba link lain atau tunggu bentar.` });
                     }
                     return;
                 }
 
-                // SEWA — promotional info and how to rent
                 if (text.toLowerCase() === '.sewa') {
                     const ops = loadOperators();
                     const opText = ops && ops.length ? ops.join(', ') : '6289528950624 - Sam @Sukabyone';
@@ -680,101 +478,66 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     return;
                 }
 
-                // OPERATOR COMMAND: .grant & .revoke (FIXED 100% NO SYNTAX ERROR)
                 if (text.toLowerCase().startsWith('.grant ') || text.toLowerCase().startsWith('.revoke ')) {
-                    if (!isOperator(msg.key.participant || msg.key.remoteJid)) {
-                        return sock.sendMessage(from, { text: 'Hanya operator yang boleh pakai perintah ini!' });
-                    }
+                    const fullSender = msg.key.participant || msg.key.remoteJid;
+                    if (!isOperator(fullSender)) return sock.sendMessage(from, { text: 'Hanya operator yang bisa menjalankan perintah ini.' });
 
-                    const args = text.trim().split(' ');
-                    const cmd = args[0].toLowerCase();
-
+                    const parts = text.trim().split(/\s+/);
+                    const cmd = parts[0].toLowerCase();
                     try {
                         if (cmd === '.grant') {
-                            const scope = args[1]?.toLowerCase();
-                            const target = args[2];
-                            const days = parseInt(args[3] || args[2]);
+                            const scope = parts[1];
+                            if (!scope) return sock.sendMessage(from, { text: 'Format .grant: .grant <private|group> ...' });
 
-                            if (!scope || !target || isNaN(days) || days <= 0) {
-                                return sock.sendMessage(from, { text: 'Format: .grant private/group <id/grup> <hari>' });
-                            }
-
-                            let id = scope === 'private' ? target.replace(/[^0-9]/g, '') : (from.endsWith('@g.us') ? from : target);
-                            if (id.startsWith('0')) id = '62' + id.slice(1);
-
-                            grantRental(scope, id, 'premium', days, msg.key.participant || msg.key.remoteJid);
-                            sock.sendMessage(from, { text: `✅ ${scope.toUpperCase()} ${id} berhasil disewa ${days} hari!` });
-                        }
-
-                        if (cmd === '.revoke') {
-                            const targetRaw = args[1]; // Ambil target mentah (id, jid, atau kosong)
-                            let keyToRevoke = targetRaw;
-
-                            // Jika target tidak ada, cek apakah ini di grup. Jika iya, targetnya adalah grup itu sendiri.
-                            if (!keyToRevoke && from.endsWith('@g.us')) {
-                                keyToRevoke = from; // Default revoke group current
-                            } else if (!keyToRevoke) {
-                                // Kalau di private chat tanpa argumen, gak jelas mau revoke siapa.
-                                return sock.sendMessage(from, { text: 'Format: .revoke <groupId> atau .revoke <idUser>' });
-                            }
-
-                            // --- NORMALISASI ID UNTUK PRIVATE ---
-                            if (!keyToRevoke.includes('@g.us')) { // Cek jika ini BUKAN Group JID
-                                // Hapus semua karakter non-angka dan pecah JID jika ada
-                                if (keyToRevoke.includes('@')) keyToRevoke = keyToRevoke.split('@')[0];
-                                keyToRevoke = String(keyToRevoke).replace(/[^0-9]/g, '');
-
-                                // Tambahkan 62 jika dimulai dengan 0 (Normalisasi seperti saat Grant)
-                                if (keyToRevoke.startsWith('0')) {
-                                    keyToRevoke = '62' + keyToRevoke.slice(1);
+                            if (scope === 'private') {
+                                const targetRaw = parts[2];
+                                const days = Number(parts[3]);
+                                if (!targetRaw || !days) return sock.sendMessage(from, { text: 'Format: .grant private <id_user> <days>' });
+                                let id = targetRaw.replace(/[^0-9]/g, '');
+                                if (id.startsWith('0')) id = id.replace(/^0/, '62');
+                                grantRental('private', id, 'rented', days, fullSender);
+                                await sock.sendMessage(from, { text: `Sukses: diberikan akses sewa untuk ${id} selama ${days} hari.` });
+                            } else if (scope === 'group') {
+                                let days = null;
+                                let groupId = null;
+                                if (from.endsWith('@g.us') && parts[2] && /^\d+$/.test(parts[2])) {
+                                    days = Number(parts[2]);
+                                    groupId = from;
+                                } else if (parts[2] && parts[3] && /^\d+$/.test(parts[3])) {
+                                    groupId = parts[2];
+                                    days = Number(parts[3]);
                                 }
+                                if (!groupId || !days) return sock.sendMessage(from, { text: 'Format: .grant group <days> (jalankan di grup) atau .grant group <groupId> <days>' });
+                                grantRental('group', groupId, 'rented', days, fullSender);
+                                await sock.sendMessage(from, { text: `Sukses: diberikan akses sewa untuk grup ${groupId} selama ${days} hari.` });
+                            } else {
+                                return sock.sendMessage(from, { text: 'Scope tidak dikenal. Gunakan "private" atau "group".' });
                             }
-
-                            // --- Eksekusi Revoke ---
-                            revokeRental(keyToRevoke);
-                            sock.sendMessage(from, { text: `❌ Rental untuk *${keyToRevoke}* berhasil dicabut!` });
+                        } else {
+                            const scope = parts[1];
+                            if (!scope) return sock.sendMessage(from, { text: 'Format .revoke: .revoke <private|group> <id?>' });
+                            if (scope === 'private') {
+                                const targetRaw = parts[2];
+                                if (!targetRaw) return sock.sendMessage(from, { text: 'Format: .revoke private <id_user>' });
+                                let id = targetRaw.replace(/[^0-9]/g, '');
+                                if (id.startsWith('0')) id = id.replace(/^0/, '62');
+                                revokeRental(id);
+                                await sock.sendMessage(from, { text: `Sukses: rental untuk ${id} dicabut.` });
+                            } else if (scope === 'group') {
+                                let groupId = null;
+                                if (from.endsWith('@g.us') && !parts[2]) groupId = from;
+                                else if (parts[2]) groupId = parts[2];
+                                if (!groupId) return sock.sendMessage(from, { text: 'Format: .revoke group <groupId> (atau jalankan di grup tanpa argumen)' });
+                                revokeRental(groupId);
+                                await sock.sendMessage(from, { text: `Sukses: rental untuk grup ${groupId} dicabut.` });
+                            } else {
+                                return sock.sendMessage(from, { text: 'Scope tidak dikenal. Gunakan "private" atau "group".' });
+                            }
                         }
                     } catch (e) {
-                        sock.sendMessage(from, { text: 'Error: ' + e.message });
+                        console.log('grant/revoke error:', e.message);
+                        await sock.sendMessage(from, { text: `Gagal menjalankan perintah: ${e.message}` });
                     }
-                    return;
-                }
-
-                // --- OPERATOR COMMAND: .UPDATE / .UP (Otomatisasi Git Pull & PM2 Restart) ---
-                if (text.toLowerCase() === '.update' || text.toLowerCase() === '.up') {
-                    // Cek Operator
-                    if (!isOperator(msg.key.participant || msg.key.remoteJid)) {
-                        return sock.sendMessage(from, { text: '🚨 Hanya operator yang boleh pakai perintah ini!' });
-                    }
-
-                    // 1. Kirim notif bahwa proses update dimulai
-                    await sock.sendMessage(from, { text: '🚀 Proses update bot dimulai! \n\n~ Menarik Kode Terbaru\n~ Mengaktifkan Kode Baru\n\nMohon tunggu sebentar...' });
-
-                    // 2. Eksekusi Skrip Update
-                    // Pastikan kamu sudah membuat file update.sh dan memberinya izin eksekusi (+x)
-                    exec('./update.sh', async (error, stdout, stderr) => {
-                        if (error) {
-                            console.error(`Exec Error (.update): ${error.message}`);
-                            return sock.sendMessage(from, {
-                                text: `❌ GAGAL UPDATE (Exec Error):\n\`\`\`\n${error.message}\n\`\`\``
-                            });
-                        }
-
-                        // Output dari skrip kita kirimkan.
-                        // Bagian logs dari PM2 akan ada di stdout.
-                        let outputText = `✅ UPDATE BOT SELESAI!\n\n--- Output Konsol ---\n\`\`\`\n${stdout}\n\`\`\``;
-
-                        // Jika ada stderr, tambahkan sebagai peringatan
-                        if (stderr) {
-                            outputText += `\n\n⚠️ Peringatan (Stderr):\n\`\`\`\n${stderr}\n\`\`\``;
-                        }
-
-                        await sock.sendMessage(from, { text: outputText });
-
-                        // Note: Karena PM2 restart sudah dijalankan di dalam skrip, bot seharusnya sekarang
-                        // sudah menjalankan kode terbaru.
-                    });
-
                     return;
                 }
 
@@ -798,21 +561,18 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     await sock.sendMessage(from, { text: 'Sabar yaaa, lagi ku buat stikernyaaa... 🔥' });
 
                     try {
-                        // Download buffer gambar
                         const stream = await downloadContentFromMessage(imgMsg, 'image');
                         let buffer = Buffer.from([]);
                         for await (const chunk of stream) {
                             buffer = Buffer.concat([buffer, chunk]);
                         }
 
-                        // Convert ke WebP stiker pake Sharp (resize 512x512, quality 80)
                         const sharp = require('sharp');
                         const stickerBuffer = await sharp(buffer)
                             .resize(512, 512, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
                             .webp({ quality: 80 })
                             .toBuffer();
 
-                        // Kirim stiker final
                         await sock.sendMessage(from, { sticker: stickerBuffer });
 
                     } catch (err) {
@@ -859,7 +619,6 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     const fullSender = msg.key.participant || msg.key.remoteJid;
                     if (!hasAccessForCommand('.kick', true, fullSender, from)) return sock.sendMessage(from, { text: 'Fitur ini membutuhkan paket sewa. Ketik .sewa untuk info.' });
 
-                    // get targets
                     let targets = [];
                     const ext = msg.message?.extendedTextMessage;
                     if (ext?.contextInfo?.mentionedJid && ext.contextInfo.mentionedJid.length) {
@@ -913,7 +672,7 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                         } else {
                             // could be direct id or mention
                             if (arg1.includes('@') || (ext?.contextInfo?.mentionedJid && ext.contextInfo.mentionedJid.length)) {
-                                // if mention present, use that
+                                // if mention present, use
                                 if (ext?.contextInfo?.mentionedJid && ext.contextInfo.mentionedJid.length) {
                                     scope = 'private';
                                     target = ext.contextInfo.mentionedJid[0];
