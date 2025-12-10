@@ -38,7 +38,7 @@ module.exports = (sock) => {
                      `#TopUpMurah #DiamondMurah #TopUpFF`
         },
         {
-            time: '0 18 * * *', // 18:00 sore
+            time: '15 18 * * *', // 18:15 sore
             photo: path.join(FOLDER, 'promo_sewa.jpg'),
             caption: `🤖 *SEWA BOT WHATSAPP PREMIUM CUMA 10K/BULAN!*\n\n` +
                      `Fitur gacor:\n` +
