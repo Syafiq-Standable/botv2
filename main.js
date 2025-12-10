@@ -22,38 +22,38 @@ async function connectToWhatsApp() {
     const FOLDER = path.join(__dirname, 'data');
 
     const promos = [
-        { time: '30 7 * * *', photo: 'promo_3d.jpg', caption: `🔥 *JASA 3D FREE FIRE MURAH!*\n\n` +
+        { time: '30 8 * * *', photo: 'promo_3d.jpg', caption: `🔥 *JASA 3D FREE FIRE MURAH!*\n\n` +
                      `• 3D Solo       : 50rb\n` +
                      `• 3D Couple     : 70rb\n` +
                      `• 3D Squad     : 100rb-150rb\n\n` +
                      `Hasil Super HD! + Anti Pasaran!! \n` +
                      `Minat? Chat sekarang:\nwa.me/6289528950624\n\n` +
                      `#3DFreeFire #3DFF #Jasa3D` },
-        { time: '0 12 * * *', photo: 'promo_topup.jpg', caption: `💎 *TOPUP GAME TERMURAH SE-NUSANTARA!*\n\n` +
+        { time: '30 8 * * *', photo: 'promo_topup.jpg', caption: `💎 *TOPUP GAME TERMURAH SE-NUSANTARA!*\n` +
                      `🔥 *Free Fire*\n` +
                      `• 70 Diamond   : Rp10.000\n` +
-                     `• 140 Diamond  : Rp20.000\n\n` +
+                     `• 140 Diamond  : Rp20.000\n` +
                      `⚡ *Mobile Legends*\n` +
                      `• 86 Diamond   : Rp22.000\n` +
                      `• 172 Diamond  : Rp42.000\n` +
-                     `• Weekly Pass  : Rp25.000 (unlimited 30 hari)\n\n` +
+                     `• Weekly Pass  : Rp25.000 (unlimited 30 hari)\n` +
                      `🎮 *Lainnya*\n` +
                      `• Roblox 400 Robux     : Rp18.000\n` +
                      `• PUBG 60 UC           : Rp16.000\n` +
                      `• Genshin 60 Crystals  : Rp24.000\n\n` +
                      `\nKeterangan lebih lanjut langsung chat:\nwa.me/6289528950624\n\n` +
                      `#TopUpMurah #DiamondMurah #TopUpFF` },
-        { time: '00 19 * * *', photo: 'promo_sewa.jpg', caption: `🤖 *SEWA BOT WHATSAPP PREMIUM CUMA 10K/BULAN!*\n\n` +
+        { time: '30 8 * * *', photo: 'promo_sewa.jpg', caption: `🤖 *SEWA BOT WHATSAPP PREMIUM CUMA 10K/BULAN!*\n` +
                      `Fitur gacor:\n` +
                      `• Tagall / Hidetag\n` +
                      `• Downloader (TT, IG, YT)\n` +
                      `• Stiker otomatis\n` +
                      `• Anti link + kick otomatis\n` +
-                     `• Play lagu, open/close grup, dll\n\n` +
+                     `• Play lagu, open/close grup, dll\n` +
                      `Bot on 24 jam • Gacor • Zero DC\n` +
-                     `Langsung sewa:\nwa.me/6289528950624\n\n` +
+                     `Langsung sewa:\nwa.me/6289528950624\n` +
                      `#SewaBot #BotWA #BotPremium` },
-        { time: '30 20 * * *', photo: 'promo_3d.jpg', caption: `🌙 *MALAM GACOR — PROMO 3D SPESIAL!*\n\n` +
+        { time: '15 19 * * *', photo: 'promo_3d.jpg', caption: `🌙 *MALAM GACOR — PROMO 3D SPESIAL!*\n` +
                      `Order 3D malam ini diskon 20rb untuk semua tipe!\n` +
                      `Dikerjakan langsung! Garansi 1 Jam Selesai!\n` +
                      `Langsung chat sebelum kehabisan slot:\nwa.me/6289528950624\n\n` +
