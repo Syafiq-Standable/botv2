@@ -353,18 +353,6 @@ async function connectToWhatsApp() {
                 const from = msg.key.remoteJid;
                 const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || '').trim();
 
-                if (text.startsWith(".jualan")) return bakulan.jualMenu(sock, from);
-                if (text.startsWith(".ordermasuk")) return bakulan.addOrder(sock, from, text);
-                if (text === ".cekorder") return bakulan.cekOrder(sock, from);
-                if (text.startsWith(".done")) return bakulan.markDone(sock, from, text);
-                if (text.startsWith(".editorder")) return bakulan.editOrder(sock, from, text);
-                if (text.startsWith(".hapusorder")) return bakulan.deleteOrder(sock, from, text);
-                if (text.startsWith(".refund")) return bakulan.refundOrder(sock, from, text);
-                if (text.startsWith(".rekapbulan")) return bakulan.rekapBulan(sock, from, text);
-
-                // Update user record (count, name, firstSeen)
-                await updateUserRecord(msg);
-
                 // ====================== SISTEM BAN PER GRUP (DI DALAM messages.upsert) ======================
                 // Auto kick banned user kalau kirim pesan
                 if (from.endsWith('@g.us')) {
@@ -440,6 +428,18 @@ async function connectToWhatsApp() {
                 }
                 // ====================== END SISTEM BAN PER GRUP ======================
                 
+                if (text.startsWith(".jualan")) return bakulan.jualMenu(sock, from);
+                if (text.startsWith(".ordermasuk")) return bakulan.addOrder(sock, from, text);
+                if (text === ".cekorder") return bakulan.cekOrder(sock, from);
+                if (text.startsWith(".done")) return bakulan.markDone(sock, from, text);
+                if (text.startsWith(".editorder")) return bakulan.editOrder(sock, from, text);
+                if (text.startsWith(".hapusorder")) return bakulan.deleteOrder(sock, from, text);
+                if (text.startsWith(".refund")) return bakulan.refundOrder(sock, from, text);
+                if (text.startsWith(".rekapbulan")) return bakulan.rekapBulan(sock, from, text);
+
+                // Update user record (count, name, firstSeen)
+                await updateUserRecord(msg);
+
                 // MENU / HELP
                 if (text.toLowerCase() === '.menu' || text.toLowerCase() === '.help') {
                     await sock.sendMessage(from, {
