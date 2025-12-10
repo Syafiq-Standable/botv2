@@ -30,20 +30,26 @@ async function connectToWhatsApp() {
                      `Minat? Chat sekarang:\nwa.me/6289528950624\n\n` +
                      `#3DFreeFire #3DFF #Jasa3D` },
         { time: '30 8 * * *', photo: 'promo_topup.jpg', caption: `💎 *TOPUP GAME TERMURAH SE-NUSANTARA!*\n` +
-                     `🔥 *Free Fire*\n` +
-                     `• 70 Diamond           : Rp7.951\n` +
-                     `• 140 Diamond          : Rp15.502\n` +
-                     `🪪 Weekly Membership   : Rp26.127\n` +
-                     `⚡ *Mobile Legends*\n` +
-                     `• 3 Diamond            : Rp1.217\n` +
-                     `• 1050 Diamond          : Rp262.196\n` +
-                     `🪪 Weekly Pass         : Rp26.985\n` +
-                     `🎮 *Lainnya*\n` +
-                     `• Roblox 200 Robux     : Rp101.000\n` +
-                     `• PUBG 120 UC          : Rp29.917\n` +
-                     `• Genshin 60 Crystals  : Rp12.211\n\n` +
-                     `\nKeterangan lebih lanjut langsung chat:\n wa.me/6289528950624\n` +
-                     `#TopUpMurah #SamSukabyone #DiamondMurah` },
+                     `💎 TOPUP GAME TERMURAH SE-NUSANTARA!
+                     
+🔥 Free Fire
+* 70 Diamond            : Rp7.951
+* 140 Diamond           : Rp15.502
+🪪 Weekly Membership	: Rp26.127
+
+⚡ Mobile Legends
+* 3 Diamond             : Rp1.217
+* 1050 Diamond          : Rp262.196
+🪪 Weekly Pass		    : Rp26.985
+
+🎮 Game Lainnya
+* Roblox 200 Robux     : Rp101.000
+* PUBG 120 UC          : Rp29.917
+* Genshin 60 Crystals  : Rp12.211
+
+Keterangan lebih lanjut langsung chat:
+wa.me/6289528950624
+#TopUpMurah #SamSukabyone #DiamondMurah` },
         { time: '30 8 * * *', photo: 'promo_sewa.jpg', caption: `🤖 *SEWA BOT WHATSAPP PREMIUM CUMA 10K/BULAN!*\n` +
                      `Fitur gacor:\n` +
                      `• Tagall / Hidetag\n` +
