@@ -16,6 +16,11 @@ async function connectToWhatsApp() {
         version: [2, 3000, 1027934701] // versi stabil biar gak error aneh
     });
 
+    promo(sock);     // promosi harian otomatis
+    welcome(sock);   // welcome + setwelcome
+    // Scheduler pengingat order belum selesai
+    try { bakulan.startOrderReminderScheduler(sock); } catch (e) { console.log('Order reminder scheduler error:', e.message); }
+    
     // ====================== SISTEM BAN PER GRUP ======================
     const BANNED_DB = path.join(__dirname, 'data', 'banned.json');
 
@@ -450,7 +455,7 @@ async function connectToWhatsApp() {
                 if (text.startsWith(".editorder")) return bakulan.editOrder(sock, from, text);
                 if (text.startsWith(".hapusorder")) return bakulan.deleteOrder(sock, from, text);
                 if (text.startsWith(".refund")) return bakulan.refundOrder(sock, from, text);
-                if (text.startsWith(".rekapbulan")) return bakulan.rekapBulan(sock, from, text);
+                if (text.startsWith(".rekap")) return bakulan.rekap(sock, from, text);
 
                 // Update user record (count, name, firstSeen)
                 await updateUserRecord(msg);
