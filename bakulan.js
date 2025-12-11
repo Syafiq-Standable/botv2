@@ -1993,7 +1993,7 @@ async function addOwner(sock, from, text, msg) {
 }
 
 // ===============================
-// EXPORT MODULE
+// EKSPOR SEMUA FUNGSI
 // ===============================
 module.exports = {
     // Core functions
@@ -2001,7 +2001,7 @@ module.exports = {
     isOperator,
     checkOwner,
     checkOperator,
-    
+
     // Database functions
     loadOrders,
     saveOrders,
@@ -2009,27 +2009,19 @@ module.exports = {
     saveStats,
     loadOperators,
     loadOwners,
-    
+
     // Utility functions
     generateOrderId,
     formatCurrency,
     formatDate,
     validatePhone,
     updateStats,
-    
-    // Owner commands
-    showOwners,
-    addOwner,
-    deleteOwner,
-    checkOwnerStatus,
-    
-    // Operator commands
+
+    // Command functions
     showOperators,
     addOperator,
     deleteOperator,
-    checkOperatorStatus,
-    
-    // Bakulan commands (tambahkan semua yang sudah ada)
+    checkOperatorStatus,    
     jualMenu,
     addOrder,
     viewOrders,
@@ -2044,8 +2036,9 @@ module.exports = {
     systemCleanup,
     editOrder,
     changeStatus,
-    deleteOrderCommand, // hati2 dengan nama
+    deleteOrderCommand, // nama diubah
     showTopProducts,
-    showChart
-    // ... tambahkan semua fungsi lain yang sudah ada
+    showChart,
+    showOwners,
+    addOwner
 };
