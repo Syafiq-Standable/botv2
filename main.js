@@ -982,7 +982,7 @@ wa.me/6289528950624 - Sam @Sukabyone
                 }
 
                 // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
-                if (text.toLowerCase().includes('.stiker') || text.toLowerCase().includes('.sticker') || text.toLowerCase().includes('.s')) {
+                if (text.toLowerCase().includes('.stiker') || text.toLowerCase().includes('.sticker') || text.toLowerCase().includes('.s ')) {
                     let imgMsg = null;
 
                     // Cara 1: Kirim gambar + caption !stiker langsung
