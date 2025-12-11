@@ -1140,115 +1140,46 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     }
                 }
 
-                // Di handler utama
+                // INSTAGRAM DOWNLOADER
                 if (text.toLowerCase().startsWith('.ig') || text.toLowerCase().startsWith('.instagram')) {
-                    const args = text.split(' ');
-
-                    if (args.length < 2) {
-                        return sock.sendMessage(from, {
-                            text: '❌ *Format salah!*\n\nContoh:\n.ig https://instagram.com/p/xxx\n.instagram https://instagram.com/reel/xxx'
-                        }, { quoted: msg });
-                    }
-
-                    const url = args[1].trim();
-
-                    // Validasi URL
-                    if (!url.startsWith('http')) {
-                        return sock.sendMessage(from, {
-                            text: '❌ *URL tidak valid!*\nPastikan URL diawali dengan http:// atau https://'
-                        }, { quoted: msg });
-                    }
-
-                    if (!url.includes('instagram.com')) {
-                        return sock.sendMessage(from, {
-                            text: '❌ *Bukan link Instagram!*\nHanya mendukung link dari Instagram.com'
-                        }, { quoted: msg });
-                    }
-
-                    // Kirim pesan sedang memproses
-                    const processingMsg = await sock.sendMessage(from, {
-                        text: '⏳ *Sedang memproses...*\nMohon tunggu 10-15 detik.'
-                    }, { quoted: msg });
-
-                    try {
-                        // Panggil fungsi downloader
-                        const result = await instagramDownloader(url);
-
-                        if (!result.success) {
-                            return sock.sendMessage(from, {
-                                text: `❌ *Gagal mendownload!*\n\n*Alasan:* ${result.message}\n\n*Tips:*\n1. Pastikan post/reel tidak di-private\n2. Coba gunakan link yang berbeda\n3. Coba lagi nanti\n4. Pastikan link benar (bukan link profile)`
-                            }, { quoted: msg });
+                    if (text.toLowerCase().startsWith('.ig') || text.toLowerCase().startsWith('.instagram')) {
+                        const args = text.split(' ');
+                        if (args.length < 2) {
+                            return sock.sendMessage(from, { text: '❌ Format: .ig <url-instagram>' }, { quoted: msg });
                         }
 
-                        // Buat caption
-                        let caption = `✅ *BERHASIL DIDOWNLOAD!*\n\n`;
-                        caption += `📦 *Sumber:* ${result.source || 'Instagram'}\n`;
-                        caption += `📁 *Tipe:* ${result.type.toUpperCase()}\n`;
+                        const url = args[1].trim();
+                        const processingMsg = await sock.sendMessage(from, { text: '⏳ Mengunduh...' }, { quoted: msg });
 
-                        if (result.type === 'video') {
-                            caption += `⏱ *Video berhasil diambil*\n\n`;
-                            caption += `⏬ *Sedang mengirim video...*`;
-                        } else {
-                            caption += `🖼 *Gambar berhasil diambil*\n\n`;
-                            caption += `⏬ *Sedang mengirim gambar...*`;
-                        }
-
-                        // Kirim caption info
-                        await sock.sendMessage(from, { text: caption }, { quoted: msg });
-
-                        // Kirim media
                         try {
-                            if (result.type === 'video') {
-                                // Untuk video, gunakan buffer dulu
-                                const videoResponse = await axios.get(result.url, {
-                                    responseType: 'arraybuffer',
-                                    timeout: 30000
-                                });
+                            // Panggil API lokal Anda
+                            const apiUrl = `http://localhost:3000/igdl?url=${encodeURIComponent(url)}`;
+                            const response = await axios.get(apiUrl, { timeout: 30000 });
 
-                                await sock.sendMessage(from, {
-                                    video: videoResponse.data,
-                                    caption: `🎬 Instagram Video\n\n📥 Downloaded via Bot`,
-                                    mimetype: 'video/mp4'
-                                });
+                            // Asumsi API mengembalikan JSON dengan field 'url' untuk video
+                            if (response.data && response.data.url) {
+                                const videoUrl = response.data.url;
 
-                            } else if (result.type === 'photo') {
-                                // Untuk gambar
+                                // Hapus pesan "processing"
+                                await sock.sendMessage(from, { delete: processingMsg.key });
+
+                                // Kirim video ke WhatsApp
                                 await sock.sendMessage(from, {
-                                    image: { url: result.url },
-                                    caption: `📷 Instagram Photo\n\n📥 Downloaded via Bot`
+                                    video: { url: videoUrl },
+                                    caption: '✅ Berhasil diunduh via Instagram API'
                                 });
+                            } else {
+                                throw new Error('Link download tidak ditemukan di respons API.');
                             }
 
-                            console.log(`Successfully sent ${result.type} from ${url}`);
-
-                        } catch (sendError) {
-                            console.error('Error sending media:', sendError.message);
-
-                            // Jika gagal kirim media, kirim link download saja
+                        } catch (error) {
+                            console.error('API Error:', error);
                             await sock.sendMessage(from, {
-                                text: `📥 *Link Download:*\n${result.url}\n\n*Catatan:* Media terlalu besar, silahkan download manual via link di atas.`
-                            });
+                                text: `❌ Gagal. Pastikan server API lokal berjalan (node index.js).\nDetail: ${error.message}`
+                            }, { quoted: msg });
                         }
-
-                    } catch (error) {
-                        console.error('Instagram handler error:', error);
-                        await sock.sendMessage(from, {
-                            text: `❌ *ERROR SISTEM!*\n\n${error.message}\n\nSilahkan coba beberapa menit lagi atau gunakan link yang berbeda.`
-                        }, { quoted: msg });
+                        return;
                     }
-
-                    // Hapus pesan "sedang memproses"
-                    try {
-                        if (processingMsg && processingMsg.key) {
-                            await sock.sendMessage(from, {
-                                delete: processingMsg.key
-                            });
-                        }
-                    } catch (e) {
-                        // Ignore delete error
-                    }
-
-                    return;
                 }
 
                 // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
