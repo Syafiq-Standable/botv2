@@ -22,15 +22,18 @@ async function connectToWhatsApp() {
     const FOLDER = path.join(__dirname, 'data');
 
     const promos = [
-        { time: '30 8 * * *', photo: 'promo_3d.jpg', caption: `🔥 *JASA 3D FREE FIRE MURAH!*\n` +
-                     `• 3D Solo       : 50rb\n` +
-                     `• 3D Couple     : 70rb\n` +
-                     `• 3D Squad     : 100rb-150rb\n\n` +
-                     `Hasil Super HD! + Anti Pasaran!! \n` +
-                     `Minat? Chat sekarang:\nwa.me/6289528950624\n\n` +
-                     `#3DFreeFire #3DFF #Jasa3D` },
-        { time: '30 8 * * *', photo: 'promo_topup.jpg', caption:
-                     `𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ
+        {
+            time: '30 8 * * *', photo: 'promo_3d.jpg', caption: `🔥 *JASA 3D FREE FIRE MURAH!*\n` +
+                `• 3D Solo       : 50rb\n` +
+                `• 3D Couple     : 70rb\n` +
+                `• 3D Squad     : 100rb-150rb\n\n` +
+                `Hasil Super HD! + Anti Pasaran!! \n` +
+                `Minat? Chat sekarang:\nwa.me/6289528950624\n\n` +
+                `#3DFreeFire #3DFF #Jasa3D`
+        },
+        {
+            time: '30 8 * * *', photo: 'promo_topup.jpg', caption:
+                `𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ
 💎 TOPUP GAME MURAHHH!
 
 🔥 Free Fire
@@ -51,21 +54,25 @@ async function connectToWhatsApp() {
 Keterangan lebih lanjut langsung chat:
 wa.me/6289528950624
 #TopUpMurah #SamSukabyone #DiamondMurah` },
-        { time: '30 8 * * *', photo: 'promo_sewa.jpg', caption: `🤖 *SEWA BOT WHATSAPP PREMIUM CUMA 10K/BULAN!*\n` +
-                     `Fitur gacor:\n` +
-                     `• Tagall / Hidetag\n` +
-                     `• Downloader (TT, IG, YT)\n` +
-                     `• Stiker otomatis\n` +
-                     `• Anti link + kick otomatis\n` +
-                     `• Play lagu, open/close grup, dll\n` +
-                     `Bot on 24 jam • Gacor • Zero DC\n` +
-                     `Langsung sewa:\nwa.me/6289528950624\n` +
-                     `#SewaBot #BotWA #BotPremium` },
-        { time: '15 19 * * *', photo: 'promo_3d.jpg', caption: `🌙 *MALAM GACOR — PROMO 3D SPESIAL!*\n` +
-                     `Order 3D malam ini diskon 20rb untuk semua tipe!\n` +
-                     `Dikerjakan langsung! Garansi 1 Jam Selesai!\n` +
-                     `Langsung chat sebelum kehabisan slot:\nwa.me/6289528950624\n\n` +
-                     `#3DMalam #PromoMalam` }
+        {
+            time: '30 8 * * *', photo: 'promo_sewa.jpg', caption: `🤖 *SEWA BOT WHATSAPP PREMIUM CUMA 10K/BULAN!*\n` +
+                `Fitur gacor:\n` +
+                `• Tagall / Hidetag\n` +
+                `• Downloader (TT, IG, YT)\n` +
+                `• Stiker otomatis\n` +
+                `• Anti link + kick otomatis\n` +
+                `• Play lagu, open/close grup, dll\n` +
+                `Bot on 24 jam • Gacor • Zero DC\n` +
+                `Langsung sewa:\nwa.me/6289528950624\n` +
+                `#SewaBot #BotWA #BotPremium`
+        },
+        {
+            time: '15 19 * * *', photo: 'promo_3d.jpg', caption: `🌙 *MALAM GACOR — PROMO 3D SPESIAL!*\n` +
+                `Order 3D malam ini diskon 20rb untuk semua tipe!\n` +
+                `Dikerjakan langsung! Garansi 1 Jam Selesai!\n` +
+                `Langsung chat sebelum kehabisan slot:\nwa.me/6289528950624\n\n` +
+                `#3DMalam #PromoMalam`
+        }
     ];
 
     promos.forEach(p => {
@@ -730,26 +737,21 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                 }
 
                 // HIDETAG — TAG SEMUA TAPI DISEMBUNYIKAN, GANTI PESAN
-                if (text.toLowerCase().startsWith('.hidetag ') || text.toLowerCase().startsWith('.h ')) {
+                if (text.toLowerCase().startsWith('.hidetag ') || text.toLowerCase().startsWith('.h ') || text.toLowerCase() === '.hidetag' || text.toLowerCase() === '.h') {
                     if (!from.endsWith('@g.us')) return sock.sendMessage(from, { text: 'bisa dipake nyaa cuma di group' });
 
                     const fullSender = msg.key.participant || msg.key.remoteJid;
                     if (!hasAccessForCommand('.hidetag', true, fullSender, from)) return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk grup yang menyewa bot. Ketik .sewa untuk info.' });
 
-                    // Tentukan panjang potongan (slice length) berdasarkan command yang dipakai
-                    let sliceLength;
-                    if (text.toLowerCase().startsWith('.hidetag ')) {
-                        sliceLength = 9; // Untuk '.hidetag ' (9 karakter)
-                    } else if (text.toLowerCase().startsWith('.h ') + 'ㅤ') {
-                        sliceLength = 3; // Untuk '.h ' (3 karakter)
-                    } else {
-                        // Ini sebenarnya gak akan kena karena sudah dicek di 'if' awal, tapi buat jaga-jaga
-                        return;
+                    // Ambil pesan setelah command
+                    let pesan = '';
+                    if (text.toLowerCase().startsWith('.hidetag ')) {   
+                        pesan = text.slice(9).trim();
+                    } else if (text.toLowerCase().startsWith('.h ')) {
+                        pesan = text.slice(3).trim();
                     }
+                    // Untuk '.hidetag' atau '.h' tanpa spasi dan tanpa pesan, pesan tetap string kosong
 
-                    const pesan = text.slice(sliceLength).trim(); // Potong teks dan hapus spasi di awal/akhir
-
-                    // Gunakan pesan atau karakter kosong jika pesan kosong
                     const messageToSend = pesan ? pesan : '‎';
 
                     const group = await sock.groupMetadata(from);
