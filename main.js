@@ -129,13 +129,12 @@ wa.me/6289528950624
         }
 
         // .setwelcome
-        const setwelcomeMatch = rawText.match(/^\.setwelcome\s+(.+)/i);
-        if (setwelcomeMatch && from.endsWith('@g.us')) {
+        if (text.startsWith('.setwelcome ') && from.endsWith('@g.us')) {
             const group = await sock.groupMetadata(from);
             const isAdmin = group.participants.find(p => p.id === msg.key.participant)?.admin;
             if (!isAdmin) return;
 
-            const newMsg = setwelcomeMatch[1];
+            const newMsg = text.slice(12);
             const welcomes = loadWelcome();
             welcomes[from] = newMsg;
             saveWelcome(welcomes);
