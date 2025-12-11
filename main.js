@@ -513,95 +513,95 @@ wa.me/6289528950624
 
                 // .jualan - Show menu
                 if (text === '.jualan' || text === '.bakulan') {
-                    return await bakulan.jualMenu(sock, from, msg);
+                     await bakulan.jualMenu(sock, from, msg);
                 }
 
                 if (text === '.owners') {
-                    return await bakulan.showOwners(sock, from, msg);
+                     await bakulan.showOwners(sock, from, msg);
                 }
 
                 if (text.startsWith('.addowner')) {
-                    return await bakulan.addOwner(sock, from, text, msg);
+                     await bakulan.addOwner(sock, from, text, msg);
                 }
 
                 // .order|... - Add new order
                 if (text.startsWith('.order|')) {
-                    return await bakulan.addOrder(sock, from, text);
+                     await bakulan.addOrder(sock, from, text);
                 }
 
                 // .orders - View all orders (paginated)
                 if (text.startsWith('.orders')) {
-                    return await bakulan.viewOrders(sock, from, text);
+                     await bakulan.viewOrders(sock, from, text);
                 }
 
                 // .order ID - View single order
                 if (text.match(/^\.order\s+\w+/i)) {
-                    return await bakulan.viewOrder(sock, from, text);
+                     await bakulan.viewOrder(sock, from, text);
                 }
 
                 // .done ID - Mark as done
                 if (text.match(/^\.done\s+\w+/i)) {
-                    return await bakulan.markDone(sock, from, text);
+                     await bakulan.markDone(sock, from, text);
                 }
 
                 // .search|... - Search orders
                 if (text.startsWith('.search')) {
-                    return await bakulan.searchOrders(sock, from, text);
+                     await bakulan.searchOrders(sock, from, text);
                 }
 
                 // .today - Today's orders
                 if (text === '.today') {
-                    return await bakulan.todayOrders(sock, from, msg);
+                     await bakulan.todayOrders(sock, from, msg);
                 }
 
                 // .pending - Pending orders
                 if (text === '.pending') {
-                    return await bakulan.pendingOrders(sock, from, msg);
+                     await bakulan.pendingOrders(sock, from, msg);
                 }
 
                 // .stats - Statistics
                 if (text === '.stats') {
-                    return await bakulan.showStats(sock, from);
+                     await bakulan.showStats(sock, from);
                 }
 
                 // .report YYYY-MM - Monthly report
                 if (text.startsWith('.report')) {
-                    return await bakulan.monthlyReport(sock, from, text);
+                     await bakulan.monthlyReport(sock, from, text);
                 }
 
                 // .export - Export data
                 if (text === '.export') {
-                    return await bakulan.exportData(sock, from);
+                     await bakulan.exportData(sock, from);
                 }
 
                 // .cleanup - Cleanup old data
                 if (text === '.cleanup') {
-                    return await bakulan.systemCleanup(sock, from);
+                     await bakulan.systemCleanup(sock, from);
                 }
 
                 // .edit ID|field|value - Edit order
                 if (text.startsWith('.edit')) {
-                    return await bakulan.editOrder(sock, from, text);
+                     await bakulan.editOrder(sock, from, text);
                 }
 
                 // .status ID|status - Change status
                 if (text.startsWith('.status')) {
-                    return await bakulan.changeStatus(sock, from, text);
+                     await bakulan.changeStatus(sock, from, text);
                 }
 
                 // .delete ID - Delete order
                 if (text.startsWith('.delete')) {
-                    return await bakulan.deleteOrder(sock, from, text);
+                     await bakulan.deleteOrder(sock, from, text);
                 }
 
                 // .top - Top products
                 if (text === '.top') {
-                    return await bakulan.showTopProducts(sock, from);
+                     await bakulan.showTopProducts(sock, from);
                 }
 
                 // .chart - Show chart
                 if (text === '.chart') {
-                    return await bakulan.showChart(sock, from);
+                     await bakulan.showChart(sock, from);
                 }
 
                 // ====================== SISTEM BAN PER GRUP (DI DALAM messages.upsert) ======================
