@@ -1781,8 +1781,9 @@ ${sortedProducts.length > 0 ?
 };
 
 // ===============================
-// EXPORT MODULE
+// EKSPOR SEMUA FUNGSI LANGSUNG
 // ===============================
+
 module.exports = {
     // Core functions
     isOwner,
@@ -1805,6 +1806,28 @@ module.exports = {
     validatePhone,
     updateStats,
     
-    // Commands
-    commands
-};
+    // Command functions (ekspor langsung)
+    showOperators,
+    addOperator,
+    deleteOperator,
+    checkOperatorStatus,
+    jualMenu,
+    addOrder,
+    viewOrders,
+    viewOrder,
+    markDone,
+    searchOrders,
+    todayOrders,
+    pendingOrders,
+    showStats,
+    monthlyReport,
+    exportData,
+    systemCleanup,
+    editOrder,
+    changeStatus,
+    deleteOrder: deleteOrderCommand, // rename karena bentrok dengan function deleteOrder
+    showTopProducts,
+    showChart,
+    showOwners,
+    addOwner
+};  
