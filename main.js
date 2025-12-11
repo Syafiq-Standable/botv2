@@ -35,23 +35,23 @@ async function connectToWhatsApp() {
         },
         {
             time: '30 8 * * *', photo: 'promo_topup.jpg', caption:
-                `𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ
+`𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ
 💎 TOPUP GAME MURAHHH!
 
 🔥 Free Fire
-* 70 Diamond            : Rp7.951
-* 140 Diamond           : Rp15.502
-🪪 Weekly Membership	: Rp26.127
+70 Diamond              : Rp7.951
+140 Diamond             : Rp15.502
+🪪 Weekly Membership    : Rp26.127
 
 ⚡ Mobile Legends
-* 3 Diamond             : Rp1.217
-* 1050 Diamond          : Rp262.196
-🪪 Weekly Pass		    : Rp26.985
+3 Diamond               : Rp1.217
+1050 Diamond            : Rp262.196
+🪪 Weekly Pass          : Rp26.985
 
 🎮 Game Lainnya
-* Roblox 200 Robux     : Rp101.000
-* PUBG 120 UC          : Rp29.917
-* Genshin 60 Crystals  : Rp12.211
+Roblox 1500 Robux       : Rp215.438
+PUBG 120 UC             : Rp29.917
+Genshin 60 Crystals     : Rp12.211
 
 Keterangan lebih lanjut langsung chat:
 wa.me/6289528950624
