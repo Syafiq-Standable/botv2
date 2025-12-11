@@ -798,11 +798,21 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                 };
 
                 // Di event messages.upsert, ganti handler TikTok jadi ini:
-                if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tiktok ')) {
+                if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tiktok ') || text.toLowerCase() === '.tt' || text.toLowerCase() === '.tiktok') {
+                    // Cek apakah hanya command tanpa URL
+                    const isCommandOnly = text.toLowerCase() === '.tt' || text.toLowerCase() === '.tiktok';
+
+                    if (isCommandOnly) {
+                        return sock.sendMessage(from, {
+                            text: 'apa? bisa gaa?\ngini loh caranyaa ".tt https://vt.tiktok.com/abc" \ngitu aja gabisa'
+                        }, { quoted: msg });
+                    }
+
                     const url = text.split(' ').slice(1).join(' ');
-                    if (!url.includes('tiktok')) return sock.sendMessage(from, { text: 'link TikTok-nya SALAAHHHHH!\n gini nih contoh yang bener: .tt https://vt.tiktok.com/abc' });
+                    if (!url.includes('tiktok')) return sock.sendMessage(from, { text: 'link TikTok-nya SALAAHHHHH!\ngini nih contoh yang bener: .tt https://vt.tiktok.com/abc' });
 
                     await sock.sendMessage(from, { text: 'Sabar yaaa, lagi diprosess... ⏳' });
+
                     try {
                         // check access: rental required (single-tier)
                         const fullSenderForTt = msg.key.participant || msg.key.remoteJid;
@@ -820,7 +830,7 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
 
                         await sock.sendMessage(from, {
                             video: { url: videoUrl },
-                            caption: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* ✅\n\n👤 Akun: @${author}\n📝 ${title}\n\nVT HD siap jadi SW — No Watermark! 🔥\nOriginal: ${url}`
+                            caption: `✅ TikTok Video Downloaded!\n\n📌 Title: ${title}\n👤 Author: ${author}\n\n_Downloaded by SAM BOT🔥_`
                         });
                     } catch (err) {
                         console.log('TikWM Error:', err.message);  // Buat debug di terminal
