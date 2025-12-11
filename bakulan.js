@@ -124,8 +124,8 @@ const initSystem = () => {
         if (!fs.existsSync(OPERATORS_DB)) {
             fs.writeFileSync(OPERATORS_DB, JSON.stringify([
                 // Default operators - tambahkan nomor admin Anda di sini
-                "6281234567890",  // Contoh nomor admin
-                "6289876543210"   // Contoh nomor admin 2
+                "6289528950624",  // Contoh nomor admin
+                "6285124887079"   // Contoh nomor admin 2
             ], null, 2));
         }
         
