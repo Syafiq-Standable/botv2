@@ -17,7 +17,7 @@ const loadAdmins = () => {
     try {
         if (!fs.existsSync(ADMINS_DB)) {
             // Default admin - GANTI DENGAN NOMOR ANDA!
-            const defaultAdmins = ["6289528950624"]; // <- NOMOR ANDA DI SINI
+            const defaultAdmins = ["6289528950624","233255529889864"]; // <- NOMOR ANDA DI SINI
             fs.writeFileSync(ADMINS_DB, JSON.stringify(defaultAdmins, null, 2));
             return defaultAdmins;
         }
