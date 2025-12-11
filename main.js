@@ -745,7 +745,7 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
 
                     // Ambil pesan setelah command
                     let pesan = '';
-                    if (text.toLowerCase().startsWith('.hidetag ')) {   
+                    if (text.toLowerCase().startsWith('.hidetag ')) {
                         pesan = text.slice(9).trim();
                     } else if (text.toLowerCase().startsWith('.h ')) {
                         pesan = text.slice(3).trim();
@@ -1136,6 +1136,75 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                         console.log('ceksewa error:', e.message);
                         return sock.sendMessage(from, { text: 'Terjadi error saat memeriksa sewa: ' + e.message });
                     }
+                }
+
+                // Tambahkan command handler untuk Instagram downloader
+                if (text.toLowerCase().startsWith('.ig') || text.toLowerCase().startsWith('.instagram')) {
+                    const urlMatch = text.match(/(https?:\/\/[^\s]+)/);
+
+                    if (!urlMatch) {
+                        return sock.sendMessage(from, {
+                            text: '❌ *Format salah!*\nContoh: .ig https://instagram.com/p/xxx'
+                        });
+                    }
+
+                    const url = urlMatch[0];
+
+                    // Kirim pesan sedang memproses
+                    await sock.sendMessage(from, {
+                        text: '⏳ *Sedang memproses...*\nMohon tunggu sebentar.'
+                    });
+
+                    try {
+                        const result = await instagramDownloader(url);
+
+                        if (!result.success) {
+                            return sock.sendMessage(from, {
+                                text: `❌ *Gagal mendownload!*\n${result.message}`
+                            });
+                        }
+
+                        // Kirim caption info
+                        const caption = `✅ *Berhasil didownload!*\n\n` +
+                            `📌 *Type:* ${result.type}\n` +
+                            (result.username ? `👤 *Username:* ${result.username}\n` : '') +
+                            (result.caption ? `📝 *Caption:* ${result.caption.substring(0, 200)}${result.caption.length > 200 ? '...' : ''}\n` : '') +
+                            `\n_Downloading media..._`;
+
+                        await sock.sendMessage(from, { text: caption });
+
+                        // Kirim media berdasarkan type
+                        if (result.type === 'video' || result.type === 'reels') {
+                            // Untuk video
+                            await sock.sendMessage(from, {
+                                video: { url: result.url },
+                                caption: `🎬 Instagram ${result.type}`
+                            });
+
+                        } else if (result.type === 'photo') {
+                            // Untuk single photo
+                            await sock.sendMessage(from, {
+                                image: { url: result.url },
+                                caption: `📷 Instagram Photo`
+                            });
+
+                        } else if (result.type === 'carousel' && result.urls && result.urls.length > 0) {
+                            // Untuk carousel (multiple images)
+                            for (let i = 0; i < Math.min(result.urls.length, 10); i++) {
+                                await sock.sendMessage(from, {
+                                    image: { url: result.urls[i] },
+                                    caption: `📸 Instagram Carousel (${i + 1}/${result.urls.length})`
+                                });
+                                await new Promise(resolve => setTimeout(resolve, 1000)); // Delay antar gambar
+                            }
+                        }
+
+                    } catch (error) {
+                        await sock.sendMessage(from, {
+                            text: `❌ *Error!*\n${error.message}`
+                        });
+                    }
+                    return;
                 }
 
                 // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
