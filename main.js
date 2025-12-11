@@ -560,104 +560,11 @@ wa.me/6289528950624
                 }
                 // ====================== END SISTEM BAN PER GRUP ======================
 
-                const msg = m.messages[0];
-                if (!msg.message || msg.key.fromMe) return; {
-
-                const from = msg.key.remoteJid;
-                const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || '').trim();
-
-                // ===============================
-                // BAKULAN SYSTEM COMMANDS
-                // ===============================
-
-                // .jualan - Show menu
-                if (text === '.jualan' || text === '.menu') {
-                    return await bakulan.jualMenu(sock, from);
-                }
-
-                // .order|... - Add new order
-                if (text.startsWith('.order|')) {
-                    return await bakulan.addOrder(sock, from, text);
-                }
-
-                // .orders - View all orders (paginated)
-                if (text.startsWith('.orders')) {
-                    return await bakulan.viewOrders(sock, from, text);
-                }
-
-                // .order ID - View single order
-                if (text.match(/^\.order\s+\w+/i)) {
-                    return await bakulan.viewOrder(sock, from, text);
-                }
-
-                // .done ID - Mark as done
-                if (text.match(/^\.done\s+\w+/i)) {
-                    return await bakulan.markDone(sock, from, text);
-                }
-
-                // .search|... - Search orders
-                if (text.startsWith('.search')) {
-                    return await bakulan.searchOrders(sock, from, text);
-                }
-
-                // .today - Today's orders
-                if (text === '.today') {
-                    return await bakulan.todayOrders(sock, from);
-                }
-
-                // .pending - Pending orders
-                if (text === '.pending') {
-                    return await bakulan.pendingOrders(sock, from);
-                }
-
-                // .stats - Statistics
-                if (text === '.stats') {
-                    return await bakulan.showStats(sock, from);
-                }
-
-                // .report YYYY-MM - Monthly report
-                if (text.startsWith('.report')) {
-                    return await bakulan.monthlyReport(sock, from, text);
-                }
-
-                // .export - Export data
-                if (text === '.export') {
-                    return await bakulan.exportData(sock, from);
-                }
-
-                // .cleanup - Cleanup old data
-                if (text === '.cleanup') {
-                    return await bakulan.systemCleanup(sock, from);
-                }
-
-                // .edit ID|field|value - Edit order
-                if (text.startsWith('.edit')) {
-                    return await bakulan.editOrder(sock, from, text);
-                }
-
-                // .status ID|status - Change status
-                if (text.startsWith('.status')) {
-                    return await bakulan.changeStatus(sock, from, text);
-                }
-
-                // .delete ID - Delete order
-                if (text.startsWith('.delete')) {
-                    return await bakulan.deleteOrder(sock, from, text);
-                }
-
-                // .top - Top products
-                if (text === '.top') {
-                    return await bakulan.showTopProducts(sock, from);
-                }
-
-                // .chart - Show chart
-                if (text === '.chart') {
-                    return await bakulan.showChart(sock, from);
-                }
+                
 
                 // Update user record (count, name, firstSeen)
                 await updateUserRecord(msg);
-            }
+
                 // MENU / HELP
                 if (text.toLowerCase() === '.menu' || text.toLowerCase() === '.help') {
                     await sock.sendMessage(from, {
