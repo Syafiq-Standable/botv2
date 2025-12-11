@@ -111,7 +111,7 @@ wa.me/6289528950624
         }
     });
 
-     // Auto kick banned user pas join grup (DI LUAR messages.upsert)
+    // Auto kick banned user pas join grup (DI LUAR messages.upsert)
     sock.ev.on('group-participants.update', async (update) => {
         const { id, participants, action } = update;
         if (action !== 'add') return;
@@ -485,97 +485,97 @@ wa.me/6289528950624
                 const from = msg.key.remoteJid;
                 const text = (msg.message?.conversation || msg.message?.extendedTextMessage?.text || msg.message?.imageMessage?.caption || '').trim();
 
-                    
-if (!msg.message || msg.key.fromMe) return;
 
-// ===============================
-// BAKULAN SYSTEM COMMANDS
-// ===============================
+                if (!msg.message || msg.key.fromMe) return;
 
-// .jualan - Show menu
-if (text === '.jualan' || text === '.bakulan') {
-    return await bakulan.jualMenu(sock, from);
-}
+                // ===============================
+                // BAKULAN SYSTEM COMMANDS
+                // ===============================
 
-// .order|... - Add new order
-if (text.startsWith('.order|')) {
-    return await bakulan.addOrder(sock, from, text);
-}
+                // .jualan - Show menu
+                if (text === '.jualan' || text === '.bakulan') {
+                    return await bakulan.jualMenu(sock, from);
+                }
 
-// .orders - View all orders (paginated)
-if (text.startsWith('.orders')) {
-    return await bakulan.viewOrders(sock, from, text);
-}
+                // .order|... - Add new order
+                if (text.startsWith('.order|')) {
+                    return await bakulan.addOrder(sock, from, text);
+                }
 
-// .order ID - View single order
-if (text.match(/^\.order\s+\w+/i)) {
-    return await bakulan.viewOrder(sock, from, text);
-}
+                // .orders - View all orders (paginated)
+                if (text.startsWith('.orders')) {
+                    return await bakulan.viewOrders(sock, from, text);
+                }
 
-// .done ID - Mark as done
-if (text.match(/^\.done\s+\w+/i)) {
-    return await bakulan.markDone(sock, from, text);
-}
+                // .order ID - View single order
+                if (text.match(/^\.order\s+\w+/i)) {
+                    return await bakulan.viewOrder(sock, from, text);
+                }
 
-// .search|... - Search orders
-if (text.startsWith('.search')) {
-    return await bakulan.searchOrders(sock, from, text);
-}
+                // .done ID - Mark as done
+                if (text.match(/^\.done\s+\w+/i)) {
+                    return await bakulan.markDone(sock, from, text);
+                }
 
-// .today - Today's orders
-if (text === '.today') {
-    return await bakulan.todayOrders(sock, from);
-}
+                // .search|... - Search orders
+                if (text.startsWith('.search')) {
+                    return await bakulan.searchOrders(sock, from, text);
+                }
 
-// .pending - Pending orders
-if (text === '.pending') {
-    return await bakulan.pendingOrders(sock, from);
-}
+                // .today - Today's orders
+                if (text === '.today') {
+                    return await bakulan.todayOrders(sock, from);
+                }
 
-// .stats - Statistics
-if (text === '.stats') {
-    return await bakulan.showStats(sock, from);
-}
+                // .pending - Pending orders
+                if (text === '.pending') {
+                    return await bakulan.pendingOrders(sock, from);
+                }
 
-// .report YYYY-MM - Monthly report
-if (text.startsWith('.report')) {
-    return await bakulan.monthlyReport(sock, from, text);
-}
+                // .stats - Statistics
+                if (text === '.stats') {
+                    return await bakulan.showStats(sock, from);
+                }
 
-// .export - Export data
-if (text === '.export') {
-    return await bakulan.exportData(sock, from);
-}
+                // .report YYYY-MM - Monthly report
+                if (text.startsWith('.report')) {
+                    return await bakulan.monthlyReport(sock, from, text);
+                }
 
-// .cleanup - Cleanup old data
-if (text === '.cleanup') {
-    return await bakulan.systemCleanup(sock, from);
-}
+                // .export - Export data
+                if (text === '.export') {
+                    return await bakulan.exportData(sock, from);
+                }
 
-// .edit ID|field|value - Edit order
-if (text.startsWith('.edit')) {
-    return await bakulan.editOrder(sock, from, text);
-}
+                // .cleanup - Cleanup old data
+                if (text === '.cleanup') {
+                    return await bakulan.systemCleanup(sock, from);
+                }
 
-// .status ID|status - Change status
-if (text.startsWith('.status')) {
-    return await bakulan.changeStatus(sock, from, text);
-}
+                // .edit ID|field|value - Edit order
+                if (text.startsWith('.edit')) {
+                    return await bakulan.editOrder(sock, from, text);
+                }
 
-// .delete ID - Delete order
-if (text.startsWith('.delete')) {
-    return await bakulan.deleteOrder(sock, from, text);
-}
+                // .status ID|status - Change status
+                if (text.startsWith('.status')) {
+                    return await bakulan.changeStatus(sock, from, text);
+                }
 
-// .top - Top products
-if (text === '.top') {
-    return await bakulan.showTopProducts(sock, from);
-}
+                // .delete ID - Delete order
+                if (text.startsWith('.delete')) {
+                    return await bakulan.deleteOrder(sock, from, text);
+                }
 
-// .chart - Show chart
-if (text === '.chart') {
-    return await bakulan.showChart(sock, from);
-}
+                // .top - Top products
+                if (text === '.top') {
+                    return await bakulan.showTopProducts(sock, from);
+                }
+
+                // .chart - Show chart
+                if (text === '.chart') {
+                    return await bakulan.showChart(sock, from);
+                }
 
                 // ====================== SISTEM BAN PER GRUP (DI DALAM messages.upsert) ======================
                 // Auto kick banned user kalau kirim pesan
@@ -652,7 +652,7 @@ if (text === '.chart') {
                 }
                 // ====================== END SISTEM BAN PER GRUP ======================
 
-                
+
 
                 // Update user record (count, name, firstSeen)
                 await updateUserRecord(msg);
@@ -1044,23 +1044,46 @@ wa.me/6289528950624 - Sam @Sukabyone
                 }
 
                 // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
-                if (text.toLowerCase().includes('.stiker') || text.toLowerCase().includes('.sticker') || text.toLowerCase().includes('.s ')) {
+                if (
+                    text.toLowerCase().includes('.stiker') ||
+                    text.toLowerCase().includes('.sticker') ||
+                    text.toLowerCase().includes('.s ')
+                ) {
+
                     let imgMsg = null;
 
-                    // Cara 1: Kirim gambar + caption !stiker langsung
-                    if (msg.message?.imageMessage && (msg.message.imageMessage.caption || '').toLowerCase().includes('.stiker') || text.toLowerCase().includes('.sticker') || text.toLowerCase().includes('.s')) {
+                    // Cara 1: Kirim gambar + caption .stiker
+                    if (
+                        msg.message?.imageMessage &&
+                        (msg.message.imageMessage.caption || '').toLowerCase().includes('.stiker')
+                    ) {
                         imgMsg = msg.message.imageMessage;
                     }
-                    // Cara 2: Reply gambar + !stiker
-                    else if (msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage) {
+
+                    // Cara 2: Kirim gambar + caption .sticker
+                    else if (
+                        msg.message?.imageMessage &&
+                        (msg.message.imageMessage.caption || '').toLowerCase().includes('.sticker')
+                    ) {
+                        imgMsg = msg.message.imageMessage;
+                    }
+
+                    // Cara 3: Reply foto + ketik .stiker / .sticker / .s
+                    else if (
+                        msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage
+                    ) {
                         imgMsg = msg.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage;
                     }
 
                     if (!imgMsg) {
-                        return sock.sendMessage(from, { text: 'Cara pakai:\n• Kirim foto + caption *.stiker*\n• Atau reply foto + ketik *.stiker*\n\nSupport JPG/PNG/GIF kecil!' });
+                        return sock.sendMessage(from, {
+                            text: 'Cara pakai:\n• Kirim foto + caption *.stiker*\n• Atau reply foto + ketik *.stiker*\n\nSupport JPG/PNG/GIF kecil!'
+                        });
                     }
 
-                    await sock.sendMessage(from, { text: 'Sabar yaaa, lagi ku buat stikernyaaa... 🔥' });
+                    await sock.sendMessage(from, {
+                        text: 'Sabar yaaa, lagi ku buat stikernya... 🔥'
+                    });
 
                     try {
                         // Download buffer gambar
