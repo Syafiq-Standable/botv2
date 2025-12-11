@@ -31,7 +31,7 @@ async function connectToWhatsApp() {
                      `#3DFreeFire #3DFF #Jasa3D` },
         { time: '30 8 * * *', photo: 'promo_topup.jpg', caption:
                      `𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ
-                     💎 TOPUP GAME MURAHHH!
+💎 TOPUP GAME MURAHHH!
 
 🔥 Free Fire
 * 70 Diamond            : Rp7.951
@@ -740,7 +740,7 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     let sliceLength;
                     if (text.toLowerCase().startsWith('.hidetag ')) {
                         sliceLength = 9; // Untuk '.hidetag ' (9 karakter)
-                    } else if (text.toLowerCase().startsWith('.h ')) {
+                    } else if (text.toLowerCase().startsWith('.h ') + 'ㅤ') {
                         sliceLength = 3; // Untuk '.h ' (3 karakter)
                     } else {
                         // Ini sebenarnya gak akan kena karena sudah dicek di 'if' awal, tapi buat jaga-jaga
