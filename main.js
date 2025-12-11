@@ -1156,48 +1156,56 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                             console.log('[DEBUG] Request ke API:', apiUrl);
 
                             const response = await axios.get(apiUrl, { timeout: 30000 });
-                            console.log('[DEBUG] Respons API lengkap:', JSON.stringify(response.data, null, 2));
+                            console.log('[DEBUG] Respons API:', JSON.stringify(response.data, null, 2));
 
-                            // PERBAIKAN DI SINI: Akses struktur JSON yang benar
-                            if (response.data &&
-                                response.data.url &&
-                                response.data.url.status === true &&
-                                response.data.url.data &&
-                                response.data.url.data[0] &&
-                                response.data.url.data[0].url) {
+                            // CARA 1: Akses yang lebih aman dengan optional chaining
+                            const videoData = response.data?.url?.data?.[0];
 
-                                const videoUrl = response.data.url.data[0].url;
-                                console.log('[DEBUG] Link video ditemukan:', videoUrl);
+                            if (videoData && videoData.url) {
+                                const videoUrl = videoData.url;
+                                console.log('[DEBUG] Link video (String):', videoUrl);
+                                console.log('[DEBUG] Tipe videoUrl:', typeof videoUrl); // Harusnya "string"
 
                                 // Hapus pesan "sedang memproses"
-                                await sock.sendMessage(from, { delete: processingMsg.key });
+                                if (processingMsg?.key) {
+                                    await sock.sendMessage(from, { delete: processingMsg.key });
+                                }
 
-                                // Kirim video ke WhatsApp
+                                // KIRIM VIDEO - Cara yang benar
                                 await sock.sendMessage(from, {
-                                    video: { url: videoUrl },
+                                    video: { url: videoUrl }, // Pastikan videoUrl adalah STRING
                                     caption: '✅ Instagram Reel berhasil diunduh',
                                     mimetype: 'video/mp4'
                                 });
 
                             } else {
-                                throw new Error('Struktur respons API tidak sesuai ekspektasi');
+                                // Debug: Tampilkan struktur jika tidak sesuai
+                                console.error('[ERROR] Struktur data tidak sesuai:', response.data);
+                                throw new Error('Link download tidak ditemukan dalam respons API');
                             }
 
                         } catch (error) {
-                            console.error('[ERROR] Detail:', error.message);
-                            await sock.sendMessage(from, {
-                                text: `❌ Gagal memproses video. Error: ${error.message}`
-                            }, { quoted: msg });
+                            console.error('[ERROR] Detail:', error.message, error.stack);
+
+                            let errorMsg = '❌ Gagal mengunduh video. ';
+                            if (error.message.includes('path') && error.message.includes('Object')) {
+                                errorMsg += 'Terjadi kesalahan: URL video bukan string. Cek log server.';
+                            } else {
+                                errorMsg += `Detail: ${error.message}`;
+                            }
+
+                            await sock.sendMessage(from, { text: errorMsg }, { quoted: msg });
                         }
                     }
-
-                    // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
-                    // Error handling for the event handler
                 }
-            } catch (e) {
-                console.log('messages.upsert error:', e.message);
+
+                // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
+                // Error handling for the event handler
             }
-        });
+        } catch (e) {
+            console.log('messages.upsert error:', e.message);
+        }
+    });
 }
 
 connectToWhatsApp();
