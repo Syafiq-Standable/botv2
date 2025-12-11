@@ -1,5 +1,5 @@
 // =============================
-//  BAKULAN SYSTEM PRO (Order Manager) — Advanced Version
+//  BAKULAN SYSTEM PRO (Order Manager) — Operator Version
 // =============================
 
 const fs = require('fs');
@@ -8,9 +8,103 @@ const path = require('path');
 const DATA_DIR = path.join(__dirname, 'data');
 const ORDERS_DB = path.join(DATA_DIR, 'orders.json');
 const STATS_DB = path.join(DATA_DIR, 'stats.json');
+const OPERATORS_DB = path.join(DATA_DIR, 'operators.json');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 
-// Initialize system
+// =============================
+//  OPERATOR MANAGEMENT FUNCTIONS
+// =============================
+
+const loadOperators = () => {
+    try {
+        if (!fs.existsSync(OPERATORS_DB)) return [];
+        const raw = fs.readFileSync(OPERATORS_DB, 'utf8');
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        console.log('Operators DB load error:', e.message);
+        return [];
+    }
+};
+
+const isOperator = (fullJid, sock = null) => {
+    if (!fullJid) return false;
+    try {
+        const list = loadOperators();
+        const numeric = fullJid.split('@')[0];
+
+        // Allow bot's own account to act as operator
+        if (sock?.user) {
+            try {
+                const myId = sock.user.id || sock.user.jid || '';
+                if (myId) {
+                    const myNumeric = myId.split(':')[0] || myId.split('@')[0];
+                    if (fullJid.includes(myNumeric)) return true;
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+
+        // Check against operator list
+        for (const op of list) {
+            if (!op) continue;
+            const opStr = String(op).trim();
+            
+            // Direct numeric match
+            if (opStr === numeric) return true;
+            
+            // JID pattern matches
+            if (fullJid.includes(opStr)) return true;
+            if (fullJid.endsWith(`${opStr}@s.whatsapp.net`)) return true;
+            if (fullJid.endsWith(`${opStr}@c.us`)) return true;
+            if (fullJid.endsWith(`${opStr}@g.us`)) return true;
+            
+            // Match without country code
+            if (opStr.startsWith('62') && numeric.startsWith('0')) {
+                if (`62${numeric.substring(1)}` === opStr) return true;
+            }
+            if (opStr.startsWith('0') && numeric.startsWith('62')) {
+                if (`0${numeric.substring(2)}` === opStr) return true;
+            }
+        }
+        
+        // Check if sender is in group (optional: allow group admins)
+        if (fullJid.endsWith('@g.us')) {
+            // Uncomment jika ingin admin grup juga bisa akses
+            // try {
+            //     const group = await sock.groupMetadata(fullJid);
+            //     const sender = msg.key.participant || msg.key.remoteJid;
+            //     const participant = group.participants.find(p => p.id === sender);
+            //     if (participant?.admin === 'admin' || participant?.admin === 'superadmin') {
+            //         return true;
+            //     }
+            // } catch (e) {
+            //     // ignore
+            // }
+        }
+    } catch (e) {
+        console.log('isOperator check error:', e.message);
+        return false;
+    }
+    return false;
+};
+
+// Operator check middleware
+const checkOperator = (sock, from, msg = null) => {
+    const sender = msg?.key?.participant || from;
+    if (!isOperator(sender, sock)) {
+        return {
+            allowed: false,
+            message: '⛔ *AKSES DITOLAK!*\n\nFitur ini hanya untuk operator yang terdaftar.\nHubungi admin untuk mendapatkan akses.'
+        };
+    }
+    return { allowed: true };
+};
+
+// =============================
+//  INIT SYSTEM (with operator check)
+// =============================
+
 const initSystem = () => {
     try {
         if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -27,8 +121,15 @@ const initSystem = () => {
                 method_stats: {}
             }, null, 2));
         }
+        if (!fs.existsSync(OPERATORS_DB)) {
+            fs.writeFileSync(OPERATORS_DB, JSON.stringify([
+                // Default operators - tambahkan nomor admin Anda di sini
+                "6281234567890",  // Contoh nomor admin
+                "6289876543210"   // Contoh nomor admin 2
+            ], null, 2));
+        }
         
-        console.log('✅ Sistem bakulan initialized');
+        console.log('✅ Sistem bakulan initialized dengan operator protection');
     } catch (e) {
         console.error('❌ Gagal initialize sistem:', e.message);
     }
@@ -202,13 +303,208 @@ const updateStats = (order, action = 'add') => {
 
 module.exports = {
 
+     // ===============================
+    // OPERATOR MANAGEMENT COMMANDS
     // ===============================
-    // ENHANCED MENU SYSTEM
+    
+    // Show operator list (admin only)
+    async showOperators(sock, from, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+        
+        const operators = loadOperators();
+        const operatorCount = operators.length;
+        
+        let message = `👑 *DAFTAR OPERATOR* (${operatorCount} orang)\n\n`;
+        
+        if (operatorCount === 0) {
+            message += 'Belum ada operator yang terdaftar.\n';
+            message += 'Tambahkan dengan: `.addop 6281234567890`';
+        } else {
+            operators.forEach((op, index) => {
+                const formattedNumber = op.startsWith('62') ? 
+                    `+${op}` : op.startsWith('0') ? 
+                    `+62${op.substring(1)}` : op;
+                message += `${index + 1}. ${formattedNumber}\n`;
+            });
+        }
+        
+        message += '\n━━━━━━━━━━━━━━━━━━━━\n';
+        message += '📋 *PERINTAH OPERATOR:*\n';
+        message += '• `.addop 628xxx` ➜ Tambah operator\n';
+        message += '• `.delop 628xxx` ➜ Hapus operator\n';
+        message += '• `.isop 628xxx` ➜ Cek status operator';
+        
+        return sock.sendMessage(from, { text: message });
+    },
+    
+    // Add operator (admin only)
+    async addOperator(sock, from, text, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+        
+        const match = text.match(/\.addop\s+(\d+)/i);
+        if (!match) {
+            return sock.sendMessage(from, { 
+                text: 'Format: `.addop 6281234567890`\nContoh: `.addop 6281234567890`' 
+            });
+        }
+        
+        const newOp = match[1].trim();
+        let operators = loadOperators();
+        
+        // Format nomor (pastikan 62)
+        let formattedOp = newOp;
+        if (formattedOp.startsWith('0')) {
+            formattedOp = '62' + formattedOp.substring(1);
+        } else if (!formattedOp.startsWith('62')) {
+            formattedOp = '62' + formattedOp;
+        }
+        
+        // Cek jika sudah ada
+        if (operators.includes(formattedOp)) {
+            return sock.sendMessage(from, { 
+                text: `ℹ️ Nomor ${formattedOp} sudah terdaftar sebagai operator.` 
+            });
+        }
+        
+        operators.push(formattedOp);
+        
+        try {
+            fs.writeFileSync(OPERATORS_DB, JSON.stringify(operators, null, 2));
+            
+            // Test if new operator can access
+            const testJid = `${formattedOp}@s.whatsapp.net`;
+            const canAccess = isOperator(testJid, sock);
+            
+            return sock.sendMessage(from, {
+                text: `✅ *OPERATOR DITAMBAHKAN!*\n\n` +
+                      `📱 Nomor: ${formattedOp}\n` +
+                      `🔐 Status: ${canAccess ? '✅ Dapat akses' : '❌ Gagal verifikasi'}\n` +
+                      `👥 Total operator: ${operators.length}\n\n` +
+                      `Operator baru dapat langsung menggunakan semua fitur bakulan.`
+            });
+        } catch (e) {
+            console.error('Error adding operator:', e);
+            return sock.sendMessage(from, { 
+                text: `❌ Gagal menambahkan operator: ${e.message}` 
+            });
+        }
+    },
+    
+    // Delete operator (admin only)
+    async deleteOperator(sock, from, text, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+        
+        const match = text.match(/\.delop\s+(\d+)/i);
+        if (!match) {
+            return sock.sendMessage(from, { 
+                text: 'Format: `.delop 6281234567890`\nContoh: `.delop 6281234567890`' 
+            });
+        }
+        
+        const targetOp = match[1].trim();
+        let operators = loadOperators();
+        
+        // Format nomor
+        let formattedOp = targetOp;
+        if (formattedOp.startsWith('0')) {
+            formattedOp = '62' + formattedOp.substring(1);
+        } else if (!formattedOp.startsWith('62')) {
+            formattedOp = '62' + formattedOp;
+        }
+        
+        // Cek jika ada
+        const index = operators.indexOf(formattedOp);
+        if (index === -1) {
+            return sock.sendMessage(from, { 
+                text: `❌ Nomor ${formattedOp} tidak ditemukan dalam daftar operator.` 
+            });
+        }
+        
+        // Prevent removing last operator
+        if (operators.length <= 1) {
+            return sock.sendMessage(from, { 
+                text: '⚠️ Tidak dapat menghapus operator terakhir!' 
+            });
+        }
+        
+        const removedOp = operators.splice(index, 1)[0];
+        
+        try {
+            fs.writeFileSync(OPERATORS_DB, JSON.stringify(operators, null, 2));
+            
+            return sock.sendMessage(from, {
+                text: `🗑️ *OPERATOR DIHAPUS!*\n\n` +
+                      `📱 Nomor: ${removedOp}\n` +
+                      `👥 Total operator: ${operators.length}\n\n` +
+                      `Operator ini tidak lagi dapat mengakses sistem bakulan.`
+            });
+        } catch (e) {
+            console.error('Error deleting operator:', e);
+            return sock.sendMessage(from, { 
+                text: `❌ Gagal menghapus operator: ${e.message}` 
+            });
+        }
+    },
+    
+    // Check operator status
+    async checkOperatorStatus(sock, from, text, msg) {
+        const match = text.match(/\.isop(?:\s+(\d+))?/i);
+        const targetNumber = match ? match[1] : null;
+        
+        // Untuk cek diri sendiri, tidak perlu operator
+        if (!targetNumber) {
+            const sender = msg?.key?.participant || from;
+            const isOp = isOperator(sender, sock);
+            
+            return sock.sendMessage(from, {
+                text: `🔍 *STATUS OPERATOR*\n\n` +
+                      `👤 Anda: ${sender.split('@')[0]}\n` +
+                      `🔐 Status: ${isOp ? '✅ TERDAFTAR' : '❌ BUKAN OPERATOR'}\n\n` +
+                      `${isOp ? 
+                        'Anda dapat menggunakan semua fitur bakulan.' :
+                        'Hanya operator yang dapat mengakses sistem bakulan.\nHubungi admin untuk mendapatkan akses.'}`
+            });
+        }
+        
+        // Untuk cek orang lain, perlu operator
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+        
+        // Format nomor
+        let formattedOp = targetNumber.trim();
+        if (formattedOp.startsWith('0')) {
+            formattedOp = '62' + formattedOp.substring(1);
+        } else if (!formattedOp.startsWith('62')) {
+            formattedOp = '62' + formattedOp;
+        }
+        
+        const testJid = `${formattedOp}@s.whatsapp.net`;
+        const isOp = isOperator(testJid, sock);
+        const operators = loadOperators();
+        
+        return sock.sendMessage(from, {
+            text: `🔍 *STATUS OPERATOR*\n\n` +
+                  `📱 Nomor: ${formattedOp}\n` +
+                  `🔐 Status: ${isOp ? '✅ TERDAFTAR' : '❌ BUKAN OPERATOR'}\n` +
+                  `📋 Dalam database: ${operators.includes(formattedOp) ? '✅ Ya' : '❌ Tidak'}\n\n` +
+                  `Total operator: ${operators.length}`
+        });
+    },
+
     // ===============================
-    async jualMenu(sock, from) {
+    // ENHANCED MENU SYSTEM (Operator Only)
+    // ===============================
+    async jualMenu(sock, from, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+        
         const stats = loadStats();
         const menu = `
 📦 *BAKULAN SYSTEM PRO* 📦
+🔐 *Operator Mode Only*
 
 📊 *STATISTIK SISTEM:*
 • Total Order: ${stats.total_orders}
@@ -244,6 +540,13 @@ module.exports = {
 • \`.top\` ➜ Produk terlaris
 • \`.chart\` ➜ Chart sederhana
 
+👑 *PERINTAH OPERATOR:*
+• \`.operators\` ➜ Daftar operator
+• \`.addop 628xxx\` ➜ Tambah operator
+• \`.delop 628xxx\` ➜ Hapus operator
+• \`.isop\` ➜ Cek status Anda
+• \`.isop 628xxx\` ➜ Cek operator lain
+
 💾 *PERINTAH SYSTEM:*
 • \`.backup\` ➜ Buat backup data
 • \`.export\` ➜ Export data ke CSV
@@ -259,12 +562,11 @@ module.exports = {
 • \`refunded\` - Refund
 
 📞 *KONTAK SUPPORT:*
-Ada masalah? Hubungi admin!
+Ada masalah? Hubungi admin utama!
         `.trim();
 
         return sock.sendMessage(from, { text: menu });
     },
-
     // ===============================
     // ENHANCED ADD ORDER
     // ===============================
@@ -362,9 +664,9 @@ ${catatan ? `📌 Catatan: ${catatan}\n` : ''}
     // ===============================
     // ENHANCED VIEW ORDERS (PAGINATED)
     // ===============================
-    async viewOrders(sock, from, text) {
-        const orders = loadOrders();
-        const orderList = Object.values(orders);
+    async addOrder(sock, from, text, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
         
         if (orderList.length === 0) {
             return sock.sendMessage(from, { text: '📭 Tidak ada order yang tercatat.' });
