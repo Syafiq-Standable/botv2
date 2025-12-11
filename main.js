@@ -35,7 +35,7 @@ async function connectToWhatsApp() {
         },
         {
             time: '30 8 * * *', photo: 'promo_topup.jpg', caption:
-`𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ
+                `𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ
 💎 TOPUP GAME MURAHHH!
 
 🔥 Free Fire
@@ -129,12 +129,13 @@ wa.me/6289528950624
         }
 
         // .setwelcome
-        if (text.startsWith('.setwelcome ') && from.endsWith('@g.us')) {
+        const setwelcomeMatch = rawText.match(/^\.setwelcome\s+(.+)/i);
+        if (setwelcomeMatch && from.endsWith('@g.us')) {
             const group = await sock.groupMetadata(from);
             const isAdmin = group.participants.find(p => p.id === msg.key.participant)?.admin;
             if (!isAdmin) return;
 
-            const newMsg = text.slice(12);
+            const newMsg = setwelcomeMatch[1];
             const welcomes = loadWelcome();
             welcomes[from] = newMsg;
             saveWelcome(welcomes);
@@ -586,23 +587,44 @@ wa.me/6289528950624
                 // MENU / HELP
                 if (text.toLowerCase() === '.menu' || text.toLowerCase() === '.help') {
                     await sock.sendMessage(from, {
-                        text: `*𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ* 🔥\n
-Berikut daftar perintah yang tersedia:
-.menu / .help - Menampilkan daftar menu ini.
-.profile - Lihat profil dan statistik pemakaian.
-.sewa - Info lengkap sewa bot.
-.ceksewa - Cek status kedaluwarsa sewamu.
-.cekidgroup - Menampilkan ID grup ini.
-\n*Perintah Khusus Admin Untuk Grup:*
-.tagall - tag semua anggota grup.
-.hidetag [pesan] - tag semua orang dengan pesan.
-.promote @user - Jadikan Admin grup.
-.demote @user - Cabut status Admin grup.
-.closegroup - Tutup grup.
-.opengroup - Buka grup.
-.kick @user - Mengeluarkan anggota dari grup.\n\n
-🥳 Berminat menggunakan semua fitur ini tanpa batas?
-Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
+                        text: `📌 *𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ 🔥*
+• .menu / .help - Tampilkan menu
+• .ping - Cek status & latency
+• .profile [@user] - Lihat profil
+• .stiker - Buat stiker dari gambar
+• .cekidgroup - Lihat ID grup
+
+📥 *DOWNLOADER:*
+• .tt [link] - Download TikTok
+• .ig [link] - Download Instagram
+
+👥 *ADMIN GRUP:*
+• .tagall - Tag semua anggota
+• .hidetag [pesan] - Tag tanpa notif
+• .promote/demote [@user] - Atur admin
+• .kick/ban/unban [@user] - Kelola member
+• .close/opengroup - Buka/tutup grup
+
+🛒 *JUALAN & ORDER:*
+• .jualan - Menu jualan
+• .ordermasuk [detail] - Tambah order
+• .cekorder - Lihat order
+• .done/hapus/edit/refund [id] - Kelola order
+• .rekapbulan [bulan] - Rekap bulanan
+
+🔐 *SEWA & AKSES:*
+• .sewa - Info sewa bot
+• .ceksewa - Cek status sewa
+
+🔗 *LAINNYA:*
+• .join [link] - Join grup
+• .setwelcome [pesan] - Atur welcome
+
+────────────────────
+📞 *KONTAK OWNER:*
+wa.me/6289528950624 - Sam @Sukabyone
+
+💎 *Note:* Beberapa fitur membutuhkan sewa bot. Ketik .sewa untuk info lengkap!`
                     });
                     return;
                 }
