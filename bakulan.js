@@ -359,7 +359,7 @@ const updateStats = (order, action = 'add') => {
     
     saveStats(stats);
 };
-
+const operatorCommands = {
      // ===============================
     // OPERATOR MANAGEMENT COMMANDS
     // ===============================
