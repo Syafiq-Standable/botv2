@@ -8,6 +8,7 @@ const bakulan = require('./bakulan');
 const promo = require('./promo');
 const welcome = require('./welcome');
 const cron = require('node-cron');
+const instagramDownloader = require('./instagram-downloader');
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
