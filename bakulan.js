@@ -1,235 +1,417 @@
-// =============================
-//  BAKULAN SYSTEM PRO (Order Manager) — Operator Version
-// =============================
-
 const fs = require('fs');
 const path = require('path');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const ORDERS_DB = path.join(DATA_DIR, 'orders.json');
 const STATS_DB = path.join(DATA_DIR, 'stats.json');
-const OPERATORS_DB = path.join(DATA_DIR, 'operators.json');
+const OPERATORS_DB = path.join(__dirname, 'data', 'operators.json');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
-const OWNERS_DB = path.join(DATA_DIR, 'owners.json');
+const OWNERS_DB = path.join(__dirname, 'data', 'owners.json');
 
-// Load admins (super users)
-const loadOwners = () => {
-    try {
-        if (!fs.existsSync(OWNERS_DB)) {
-            // Default admin - GANTI DENGAN NOMOR ANDA!
-            const defaultAdmins = ["6289528950624"]; // <- NOMOR ANDA DI SINI
-            fs.writeFileSync(OWNERS_DB, JSON.stringify(defaultAdmins, null, 2));
-            return defaultAdmins;
-        }
-        const raw = fs.readFileSync(OWNERS_DB, 'utf8');
-        return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-        console.log('Admins DB load error:', e.message);
-        return [];
-    }
-};
+// Ensure data directory exists
+if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+}
 
-// Check if user is admin
-const isOwner = (fullJid, sock = null) => {
-    if (!fullJid) return false;
+// ===============================
+// OWNER MANAGEMENT COMMANDS
+// ===============================
 
-    const admins = loadOwners();
-    const numeric = fullJid.split('@')[0];
+// Show owner list (owner only)
+async function showOwners(sock, from, msg) {
+    const check = checkOwner(sock, from, msg);
+    if (!check.allowed) return sock.sendMessage(from, { text: check.message });
 
-    // Bot sendiri selalu admin
-    if (sock?.user) {
-        try {
-            const myId = sock.user.id || sock.user.jid || '';
-            if (myId) {
-                const myNumeric = myId.split(':')[0] || myId.split('@')[0];
-                if (fullJid.includes(myNumeric)) return true;
-            }
-        } catch (e) {
-            // ignore
-        }
+    const owners = loadOwners();
+    const ownerCount = owners.length;
+
+    let message = `👑 *DAFTAR OWNER* (${ownerCount} orang)\n\n`;
+
+    if (ownerCount === 0) {
+        message += 'Belum ada owner yang terdaftar.\n';
+        message += 'Tambahkan dengan: `.addowner 6281234567890`';
+    } else {
+        owners.forEach((owner, index) => {
+            const formattedNumber = owner.startsWith('62') ?
+                `+${owner}` : owner.startsWith('0') ?
+                    `+62${owner.substring(1)}` : owner;
+            message += `${index + 1}. ${formattedNumber}\n`;
+        });
     }
 
-    // Check admin list
-    for (const admin of admins) {
-        if (!admin) continue;
-        const adminStr = String(admin).trim();
+    message += '\n━━━━━━━━━━━━━━━━━━━━\n';
+    message += '📋 *PERINTAH OWNER:*\n';
+    message += '• `.addowner 628xxx` ➜ Tambah owner\n';
+    message += '• `.delowner 628xxx` ➜ Hapus owner\n';
+    message += '• `.isowner 628xxx` ➜ Cek status owner';
 
-        if (adminStr === numeric) return true;
-        if (fullJid.includes(adminStr)) return true;
-        if (fullJid.endsWith(`${adminStr}@s.whatsapp.net`)) return true;
+    return sock.sendMessage(from, { text: message });
+}
 
-        // Match with/without country code
-        if (adminStr.startsWith('62') && numeric.startsWith('0')) {
-            if (`62${numeric.substring(1)}` === adminStr) return true;
-        }
-        if (adminStr.startsWith('0') && numeric.startsWith('62')) {
-            if (`0${numeric.substring(2)}` === adminStr) return true;
-        }
+// Add owner (owner only)
+async function addOwner(sock, from, text, msg) {
+    const check = checkOwner(sock, from, msg);
+    if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
+    const match = text.match(/\.addowner\s+(\d+)/i);
+    if (!match) {
+        return sock.sendMessage(from, {
+            text: 'Format: `.addowner 6281234567890`\nContoh: `.addowner 6281234567890`'
+        });
     }
 
-    return false;
-};
+    const newOwner = match[1].trim();
+    let owners = loadOwners();
 
-// Admin check middleware
-const checkOwner = (sock, from, msg = null) => {
-    const sender = msg?.key?.participant || from;
-    if (!isOwner(sender, sock)) {
-        return {
-            allowed: false,
-            message: '⛔ *AKSES OPERATOR DITOLAK!*\n\nHanya owner utama yang bisa mengelola operator.\nHubungi super admin untuk request akses.'
-        };
+    // Format nomor (pastikan 62)
+    let formattedOwner = newOwner;
+    if (formattedOwner.startsWith('0')) {
+        formattedOwner = '62' + formattedOwner.substring(1);
+    } else if (!formattedOwner.startsWith('62')) {
+        formattedOwner = '62' + formattedOwner;
     }
-    return { allowed: true };
-};
 
-// =============================
-//  OPERATOR MANAGEMENT FUNCTIONS
-// =============================
-
-const loadOperators = () => {
-    try {
-        if (!fs.existsSync(OPERATORS_DB)) return [];
-        const raw = fs.readFileSync(OPERATORS_DB, 'utf8');
-        return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-        console.log('Operators DB load error:', e.message);
-        return [];
+    // Cek jika sudah ada
+    if (owners.includes(formattedOwner)) {
+        return sock.sendMessage(from, {
+            text: `ℹ️ Nomor ${formattedOwner} sudah terdaftar sebagai owner.`
+        });
     }
-};
 
-const isOperator = (fullJid, sock = null) => {
-    if (!fullJid) return false;
-
-    // ✅ CHECK 1: Admins are automatically operators
-    if (isOwner(fullJid, sock)) return true;
+    owners.push(formattedOwner);
 
     try {
-        const list = loadOperators();
-        console.log('🔍 Checking operator for:', fullJid);
-        console.log('📋 Operator list:', list);
+        fs.writeFileSync(OWNERS_DB, JSON.stringify(owners, null, 2));
 
-        // Ekstrak nomor dari berbagai format JID
-        let numeric;
-
-        // Handle @lid format
-        if (fullJid.includes('@lid')) {
-            numeric = fullJid.split('@')[0];
-            console.log('📱 Extracted from @lid:', numeric);
-        } else {
-            numeric = fullJid.split('@')[0];
+        // Also add to operators if not already there
+        const operators = loadOperators();
+        if (!operators.includes(formattedOwner)) {
+            operators.push(formattedOwner);
+            fs.writeFileSync(OPERATORS_DB, JSON.stringify(operators, null, 2));
         }
 
-        // ✅ CHECK 2: Allow bot's own account to act as operator
-        if (sock?.user) {
-            try {
-                const myId = sock.user.id || sock.user.jid || '';
-                if (myId) {
-                    const myNumeric = myId.split(':')[0] || myId.split('@')[0];
-                    if (fullJid.includes(myNumeric)) {
-                        console.log('🤖 Bot account detected');
-                        return true;
-                    }
-                }
-            } catch (e) {
-                // ignore
-            }
-        }
-
-        console.log('🔢 Checking number:', numeric, 'against list');
-
-        // ✅ CHECK 3: Check against operator list
-        for (const op of list) {
-            if (!op) continue;
-            const opStr = String(op).trim();
-            console.log('   Comparing with:', opStr);
-
-            // Direct numeric match
-            if (opStr === numeric) {
-                console.log('✅ Direct match found!');
-                return true;
-            }
-
-            // JID pattern matches
-            if (fullJid.includes(opStr)) {
-                console.log('✅ JID includes match');
-                return true;
-            }
-
-            // Special @lid format match
-            if (fullJid === `${opStr}@lid`) {
-                console.log('✅ @lid format match');
-                return true;
-            }
-
-            if (fullJid.endsWith(`${opStr}@s.whatsapp.net`)) return true;
-            if (fullJid.endsWith(`${opStr}@c.us`)) return true;
-            if (fullJid.endsWith(`${opStr}@g.us`)) return true;
-
-            // Match without country code
-            if (opStr.startsWith('62') && numeric.startsWith('0')) {
-                if (`62${numeric.substring(1)}` === opStr) return true;
-            }
-            if (opStr.startsWith('0') && numeric.startsWith('62')) {
-                if (`0${numeric.substring(2)}` === opStr) return true;
-            }
-        }
-
+        return sock.sendMessage(from, {
+            text: `✅ *OWNER DITAMBAHKAN!*\n\n` +
+                `📱 Nomor: ${formattedOwner}\n` +
+                `👥 Total owner: ${owners.length}\n\n` +
+                `Owner baru juga otomatis menjadi operator.`
+        });
     } catch (e) {
-        console.log('isOperator check error:', e.message);
-        return false;
+        console.error('Error adding owner:', e);
+        return sock.sendMessage(from, {
+            text: `❌ Gagal menambahkan owner: ${e.message}`
+        });
+    }
+}
+
+// Delete owner (owner only)
+async function deleteOwner(sock, from, text, msg) {
+    const check = checkOwner(sock, from, msg);
+    if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
+    const match = text.match(/\.delowner\s+(\d+)/i);
+    if (!match) {
+        return sock.sendMessage(from, {
+            text: 'Format: `.delowner 6281234567890`\nContoh: `.delowner 6281234567890`'
+        });
     }
 
-    console.log('❌ No match found');
-    return false;
-};
+    const targetOwner = match[1].trim();
+    let owners = loadOwners();
 
-// Operator check middleware
-const checkOperator = (sock, from, msg = null) => {
-    const sender = msg?.key?.participant || from;
-    if (!isOperator(sender, sock)) {
-        return {
-            allowed: false,
-            message: '⛔ *AKSES DITOLAK!*\n\nFitur ini hanya untuk operator yang terdaftar.\nHubungi admin untuk mendapatkan akses.'
-        };
+    // Format nomor
+    let formattedOwner = targetOwner;
+    if (formattedOwner.startsWith('0')) {
+        formattedOwner = '62' + formattedOwner.substring(1);
+    } else if (!formattedOwner.startsWith('62')) {
+        formattedOwner = '62' + formattedOwner;
     }
-    return { allowed: true };
-};
 
-// =============================
-//  INIT SYSTEM (with operator check)
-// =============================
+    // Cek jika ada
+    const index = owners.indexOf(formattedOwner);
+    if (index === -1) {
+        return sock.sendMessage(from, {
+            text: `❌ Nomor ${formattedOwner} tidak ditemukan dalam daftar owner.`
+        });
+    }
 
-const initSystem = () => {
+    // Prevent removing last owner
+    if (owners.length <= 1) {
+        return sock.sendMessage(from, {
+            text: '⚠️ Tidak dapat menghapus owner terakhir!'
+        });
+    }
+
+    const removedOwner = owners.splice(index, 1)[0];
+
     try {
-        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-        if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+        fs.writeFileSync(OWNERS_DB, JSON.stringify(owners, null, 2));
 
-        // Initialize files if not exist
-        if (!fs.existsSync(ORDERS_DB)) fs.writeFileSync(ORDERS_DB, '{}');
-        if (!fs.existsSync(STATS_DB)) {
-            fs.writeFileSync(STATS_DB, JSON.stringify({
-                total_orders: 0,
-                total_revenue: 0,
-                monthly_stats: {},
-                product_stats: {},
-                method_stats: {}
-            }, null, 2));
-        }
-        if (!fs.existsSync(OPERATORS_DB)) {
-            fs.writeFileSync(OPERATORS_DB, JSON.stringify([
-                // Default operators - tambahkan nomor admin Anda di sini
-                "233255529889864",
-                "6289528950624",  // Contoh nomor admin
-                "6285124887079"   // Contoh nomor admin 2
-            ], null, 2));
-        }
-
-        console.log('✅ Sistem bakulan initialized dengan operator protection');
+        return sock.sendMessage(from, {
+            text: `🗑️ *OWNER DIHAPUS!*\n\n` +
+                `📱 Nomor: ${removedOwner}\n` +
+                `👥 Total owner: ${owners.length}\n\n` +
+                `Owner ini tidak lagi memiliki akses super admin.`
+        });
     } catch (e) {
-        console.error('❌ Gagal initialize sistem:', e.message);
+        console.error('Error deleting owner:', e);
+        return sock.sendMessage(from, {
+            text: `❌ Gagal menghapus owner: ${e.message}`
+        });
     }
-};
-initSystem();
+}
+
+// Check owner status
+async function checkOwnerStatus(sock, from, text, msg) {
+    const match = text.match(/\.isowner(?:\s+(\d+))?/i);
+    const targetNumber = match ? match[1] : null;
+
+    // Untuk cek diri sendiri
+    if (!targetNumber) {
+        const sender = msg?.key?.participant || from;
+        const isOwn = isOwner(sender, sock);
+
+        return sock.sendMessage(from, {
+            text: `🔍 *STATUS OWNER*\n\n` +
+                `👤 Anda: ${sender.split('@')[0]}\n` +
+                `👑 Status: ${isOwn ? '✅ OWNER' : '❌ BUKAN OWNER'}\n\n` +
+                `${isOwn ?
+                    'Anda memiliki akses penuh ke semua fitur termasuk manajemen owner dan operator.' :
+                    'Hanya owner yang dapat mengelola sistem secara penuh.'}`
+        });
+    }
+
+    // Untuk cek orang lain, perlu owner
+    const check = checkOwner(sock, from, msg);
+    if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
+    // Format nomor
+    let formattedOwner = targetNumber.trim();
+    if (formattedOwner.startsWith('0')) {
+        formattedOwner = '62' + formattedOwner.substring(1);
+    } else if (!formattedOwner.startsWith('62')) {
+        formattedOwner = '62' + formattedOwner;
+    }
+
+    const testJid = `${formattedOwner}@s.whatsapp.net`;
+    const isOwn = isOwner(testJid, sock);
+    const owners = loadOwners();
+
+    return sock.sendMessage(from, {
+        text: `🔍 *STATUS OWNER*\n\n` +
+            `📱 Nomor: ${formattedOwner}\n` +
+            `👑 Status: ${isOwn ? '✅ OWNER' : '❌ BUKAN OWNER'}\n` +
+            `📋 Dalam database: ${owners.includes(formattedOwner) ? '✅ Ya' : '❌ Tidak'}\n\n` +
+            `Total owner: ${owners.length}`
+    });
+}
+
+// ===============================
+// OPERATOR MANAGEMENT COMMANDS
+// ===============================
+
+// Show operator list (owner or operator)
+async function showOperators(sock, from, msg) {
+    const check = checkOperator(sock, from, msg);
+    if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
+    const operators = loadOperators();
+    const owners = loadOwners();
+    const operatorCount = operators.length;
+    const ownerCount = owners.length;
+
+    let message = `👷 *DAFTAR OPERATOR* (${operatorCount} orang)\n\n`;
+
+    if (operatorCount === 0) {
+        message += 'Belum ada operator yang terdaftar.\n';
+        message += 'Tambahkan dengan: `.addop 6281234567890`';
+    } else {
+        operators.forEach((op, index) => {
+            const formattedNumber = op.startsWith('62') ?
+                `+${op}` : op.startsWith('0') ?
+                    `+62${op.substring(1)}` : op;
+            const isOwn = owners.includes(op);
+            message += `${index + 1}. ${formattedNumber} ${isOwn ? '👑' : ''}\n`;
+        });
+    }
+
+    message += `\n👑 Owner: ${ownerCount} orang\n`;
+    message += `👷 Operator non-owner: ${operatorCount - ownerCount} orang\n`;
+
+    message += '\n━━━━━━━━━━━━━━━━━━━━\n';
+    message += '📋 *PERINTAH OPERATOR:*\n';
+    message += '• `.addop 628xxx` ➜ Tambah operator\n';
+    message += '• `.delop 628xxx` ➜ Hapus operator\n';
+    message += '• `.isop` ➜ Cek status Anda\n';
+    message += '• `.isop 628xxx` ➜ Cek operator lain\n\n';
+
+    message += '👑 *PERINTAH OWNER ONLY:*\n';
+    message += '• `.owners` ➜ Lihat daftar owner\n';
+    message += '• `.addowner 628xxx` ➜ Tambah owner\n';
+    message += '• `.delowner 628xxx` ➜ Hapus owner';
+
+    return sock.sendMessage(from, { text: message });
+}
+
+// Add operator (owner only)
+async function addOperator(sock, from, text, msg) {
+    const check = checkOwner(sock, from, msg);
+    if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
+    const match = text.match(/\.addop\s+(\d+)/i);
+    if (!match) {
+        return sock.sendMessage(from, {
+            text: 'Format: `.addop 6281234567890`\nContoh: `.addop 6281234567890`'
+        });
+    }
+
+    const newOp = match[1].trim();
+    let operators = loadOperators();
+
+    // Format nomor (pastikan 62)
+    let formattedOp = newOp;
+    if (formattedOp.startsWith('0')) {
+        formattedOp = '62' + formattedOp.substring(1);
+    } else if (!formattedOp.startsWith('62')) {
+        formattedOp = '62' + formattedOp;
+    }
+
+    // Cek jika sudah ada
+    if (operators.includes(formattedOp)) {
+        return sock.sendMessage(from, {
+            text: `ℹ️ Nomor ${formattedOp} sudah terdaftar sebagai operator.`
+        });
+    }
+
+    operators.push(formattedOp);
+
+    try {
+        fs.writeFileSync(OPERATORS_DB, JSON.stringify(operators, null, 2));
+
+        return sock.sendMessage(from, {
+            text: `✅ *OPERATOR DITAMBAHKAN!*\n\n` +
+                `📱 Nomor: ${formattedOp}\n` +
+                `👥 Total operator: ${operators.length}\n\n` +
+                `Operator baru dapat menggunakan semua fitur bakulan kecuali manajemen owner.`
+        });
+    } catch (e) {
+        console.error('Error adding operator:', e);
+        return sock.sendMessage(from, {
+            text: `❌ Gagal menambahkan operator: ${e.message}`
+        });
+    }
+}
+
+// Delete operator (owner only)
+async function deleteOperator(sock, from, text, msg) {
+    const check = checkOwner(sock, from, msg);
+    if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
+    const match = text.match(/\.delop\s+(\d+)/i);
+    if (!match) {
+        return sock.sendMessage(from, {
+            text: 'Format: `.delop 6281234567890`\nContoh: `.delop 6281234567890`'
+        });
+    }
+
+    const targetOp = match[1].trim();
+    let operators = loadOperators();
+    let owners = loadOwners();
+
+    // Format nomor
+    let formattedOp = targetOp;
+    if (formattedOp.startsWith('0')) {
+        formattedOp = '62' + formattedOp.substring(1);
+    } else if (!formattedOp.startsWith('62')) {
+        formattedOp = '62' + formattedOp;
+    }
+
+    // Cek jika ada
+    const index = operators.indexOf(formattedOp);
+    if (index === -1) {
+        return sock.sendMessage(from, {
+            text: `❌ Nomor ${formattedOp} tidak ditemukan dalam daftar operator.`
+        });
+    }
+
+    // Prevent removing owners from operators
+    if (owners.includes(formattedOp)) {
+        return sock.sendMessage(from, {
+            text: `⚠️ Tidak dapat menghapus owner dari daftar operator!\nGunakan \`.delowner\` untuk menghapus owner.`
+        });
+    }
+
+    const removedOp = operators.splice(index, 1)[0];
+
+    try {
+        fs.writeFileSync(OPERATORS_DB, JSON.stringify(operators, null, 2));
+
+        return sock.sendMessage(from, {
+            text: `🗑️ *OPERATOR DIHAPUS!*\n\n` +
+                `📱 Nomor: ${removedOp}\n` +
+                `👥 Total operator: ${operators.length}\n\n` +
+                `Operator ini tidak lagi dapat mengakses sistem bakulan.`
+        });
+    } catch (e) {
+        console.error('Error deleting operator:', e);
+        return sock.sendMessage(from, {
+            text: `❌ Gagal menghapus operator: ${e.message}`
+        });
+    }
+}
+
+// Check operator status
+async function checkOperatorStatus(sock, from, text, msg) {
+    const match = text.match(/\.isop(?:\s+(\d+))?/i);
+    const targetNumber = match ? match[1] : null;
+
+    // Untuk cek diri sendiri
+    if (!targetNumber) {
+        const sender = msg?.key?.participant || from;
+        const isOwn = isOwner(sender, sock);
+        const isOp = isOperator(sender, sock);
+
+        return sock.sendMessage(from, {
+            text: `🔍 *STATUS ANDA*\n\n` +
+                `👤 Anda: ${sender.split('@')[0]}\n` +
+                `👑 Owner: ${isOwn ? '✅ YA' : '❌ TIDAK'}\n` +
+                `👷 Operator: ${isOp ? '✅ YA' : '❌ TIDAK'}\n\n` +
+                `${isOwn ?
+                    'Anda memiliki akses penuh ke semua fitur termasuk manajemen owner dan operator.' :
+                    isOp ?
+                        'Anda dapat menggunakan semua fitur bakulan kecuali manajemen owner.' :
+                        'Anda tidak memiliki akses ke sistem bakulan.\nHubungi admin untuk mendapatkan akses.'}`
+        });
+    }
+
+    // Untuk cek orang lain, perlu operator
+    const check = checkOperator(sock, from, msg);
+    if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
+    // Format nomor
+    let formattedOp = targetNumber.trim();
+    if (formattedOp.startsWith('0')) {
+        formattedOp = '62' + formattedOp.substring(1);
+    } else if (!formattedOp.startsWith('62')) {
+        formattedOp = '62' + formattedOp;
+    }
+
+    const testJid = `${formattedOp}@s.whatsapp.net`;
+    const isOwn = isOwner(testJid, sock);
+    const isOp = isOperator(testJid, sock);
+    const operators = loadOperators();
+    const owners = loadOwners();
+
+    return sock.sendMessage(from, {
+        text: `🔍 *STATUS OPERATOR*\n\n` +
+            `📱 Nomor: ${formattedOp}\n` +
+            `👑 Owner: ${isOwn ? '✅ YA' : '❌ TIDAK'}\n` +
+            `👷 Operator: ${isOp ? '✅ YA' : '❌ TIDAK'}\n` +
+            `📋 Dalam database: ${operators.includes(formattedOp) ? '✅ Ya' : '❌ Tidak'}\n\n` +
+            `Total operator: ${operators.length}\n` +
+            `Total owner: ${owners.length}`
+    });
+}
 
 // =============================
 //  DATABASE FUNCTIONS

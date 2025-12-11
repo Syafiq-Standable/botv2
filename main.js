@@ -34,7 +34,7 @@ async function connectToWhatsApp() {
                 `#3DFreeFire #3DFF #Jasa3D`
         },
         {
-            time: '30 8 * * *', photo: 'promo_topup.jpg', caption:
+            time: '31 8 * * *', photo: 'promo_topup.jpg', caption:
                 `𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ
 💎 TOPUP GAME MURAHHH!
 
@@ -57,7 +57,7 @@ Keterangan lebih lanjut langsung chat:
 wa.me/6289528950624
 #TopUpMurah #SamSukabyone #DiamondMurah` },
         {
-            time: '30 8 * * *', photo: 'promo_sewa.jpg', caption: `🤖 *SEWA BOT WHATSAPP PREMIUM CUMA 10K/BULAN!*\n` +
+            time: '32 8 * * *', photo: 'promo_sewa.jpg', caption: `🤖 *SEWA BOT WHATSAPP PREMIUM CUMA 10K/BULAN!*\n` +
                 `Fitur gacor:\n` +
                 `• Tagall / Hidetag\n` +
                 `• Downloader (TT, IG, YT)\n` +
