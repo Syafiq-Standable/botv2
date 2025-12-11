@@ -1,7 +1,6 @@
 // instagram-downloader.js
 const axios = require('axios');
 const cheerio = require('cheerio');
-const FormData = require('form-data');
 
 async function downloadInstagram(url) {
     try {
@@ -9,148 +8,125 @@ async function downloadInstagram(url) {
             return { success: false, message: 'URL harus dari Instagram' };
         }
 
-        const headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        };
-
-        const response = await axios.get(url, { headers });
-        const html = response.data;
-        const $ = cheerio.load(html);
-        
-        let videoUrl = null;
-        let imageUrls = [];
-        let isVideo = false;
-        let isReels = false;
-        let isCarousel = false;
-        let caption = '';
-        let username = '';
-
-        // Method 1: Cari dari meta tags
-        $('meta[property="og:video"]').each((i, elem) => {
-            const content = $(elem).attr('content');
-            if (content && content.includes('.mp4')) {
-                videoUrl = content;
-                isVideo = true;
-            }
-        });
-
-        $('meta[property="og:image"]').each((i, elem) => {
-            const content = $(elem).attr('content');
-            if (content && !imageUrls.includes(content)) {
-                imageUrls.push(content);
-            }
-        });
-
-        // Method 2: Cari dari window._sharedData
-        const sharedDataMatch = html.match(/window\._sharedData\s*=\s*({.+?});/);
-        if (sharedDataMatch) {
-            try {
-                const sharedData = JSON.parse(sharedDataMatch[1]);
-                const postData = sharedData.entry_data?.PostPage?.[0]?.graphql?.shortcode_media;
-                
-                if (postData) {
-                    username = postData.owner?.username || '';
-                    caption = postData.edge_media_to_caption?.edges?.[0]?.node?.text || '';
-                    
-                    if (postData.is_video) {
-                        videoUrl = postData.video_url;
-                        isVideo = true;
-                        if (url.includes('/reel/') || url.includes('/reels/')) {
-                            isReels = true;
-                        }
-                    } else if (postData.__typename === 'GraphSidecar') {
-                        isCarousel = true;
-                        const edges = postData.edge_sidecar_to_children?.edges || [];
-                        edges.forEach(edge => {
-                            const node = edge.node;
-                            if (node.is_video && node.video_url) {
-                                imageUrls.push(node.video_url);
-                            } else if (node.display_url) {
-                                imageUrls.push(node.display_url);
-                            }
+        // API yang masih aktif (per Desember 2024)
+        const apis = [
+            {
+                name: 'youtube4kdownloader',
+                url: 'https://www.youtube4kdownloader.com/api/convert',
+                method: 'POST',
+                data: { url: url },
+                getLink: (data) => data.url || data.downloadUrl
+            },
+            {
+                name: 'snapsave',
+                url: 'https://snapsave.app/action.php',
+                method: 'POST',
+                data: { url: url },
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                getLink: (data) => {
+                    if (data.data && data.data.length > 0) {
+                        // Ambil kualitas tertinggi
+                        const sorted = data.data.sort((a, b) => {
+                            const qualityA = parseInt(a.quality) || 0;
+                            const qualityB = parseInt(b.quality) || 0;
+                            return qualityB - qualityA;
                         });
-                    } else if (postData.display_url) {
-                        imageUrls = [postData.display_url];
+                        return sorted[0].url;
                     }
+                    return null;
                 }
-            } catch (e) {
-                console.error('Error parsing sharedData:', e.message);
+            },
+            {
+                name: 'savefrom',
+                url: `https://api.savefrom.net/service/convert`,
+                method: 'GET',
+                params: {
+                    url: url,
+                    sf_url: url,
+                    sf_datatype: 'JSON'
+                },
+                getLink: (data) => {
+                    if (data.url) return data.url;
+                    if (data.urls && data.urls.length > 0) {
+                        return data.urls[0].url;
+                    }
+                    return null;
+                }
+            },
+            {
+                name: 'instadownloader',
+                url: 'https://instadownloader.co/api/ajaxSearch',
+                method: 'POST',
+                data: `q=${encodeURIComponent(url)}&t=media&lang=en`,
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                getLink: (data) => {
+                    if (data.data && data.data.length > 0) {
+                        const item = data.data[0];
+                        return item.video || item.src;
+                    }
+                    return null;
+                }
             }
-        }
+        ];
 
-        // Method 3: Cari dari additionalData
-        const additionalDataMatch = html.match(/window\.__additionalDataLoaded\s*\([^,]+,\s*({.+?})\);/);
-        if (additionalDataMatch && !videoUrl && imageUrls.length === 0) {
+        // Coba semua API satu per satu
+        for (const api of apis) {
             try {
-                const additionalData = JSON.parse(additionalDataMatch[1]);
-                const graphql = additionalData.graphql;
-                if (graphql) {
-                    const shortcodeMedia = graphql.shortcode_media;
-                    if (shortcodeMedia) {
-                        username = shortcodeMedia.owner?.username || '';
-                        caption = shortcodeMedia.edge_media_to_caption?.edges?.[0]?.node?.text || '';
-                        
-                        if (shortcodeMedia.is_video) {
-                            videoUrl = shortcodeMedia.video_url;
-                            isVideo = true;
-                            if (url.includes('/reel/') || url.includes('/reels/')) {
-                                isReels = true;
-                            }
-                        } else if (shortcodeMedia.__typename === 'GraphSidecar') {
-                            isCarousel = true;
-                            const edges = shortcodeMedia.edge_sidecar_to_children?.edges || [];
-                            edges.forEach(edge => {
-                                const node = edge.node;
-                                if (node.is_video && node.video_url) {
-                                    imageUrls.push(node.video_url);
-                                } else if (node.display_url) {
-                                    imageUrls.push(node.display_url);
-                                }
-                            });
-                        } else if (shortcodeMedia.display_url) {
-                            imageUrls = [shortcodeMedia.display_url];
-                        }
+                console.log(`Trying API: ${api.name}`);
+                
+                let response;
+                if (api.method === 'POST') {
+                    response = await axios.post(api.url, api.data, {
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'Accept': 'application/json, text/plain, */*',
+                            'Accept-Language': 'en-US,en;q=0.9',
+                            'Origin': 'https://snapsave.app',
+                            'Referer': 'https://snapsave.app/',
+                            ...api.headers
+                        },
+                        timeout: 15000
+                    });
+                } else {
+                    response = await axios.get(api.url, {
+                        params: api.params,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'Accept': 'application/json, text/plain, */*',
+                            ...api.headers
+                        },
+                        timeout: 15000
+                    });
+                }
+
+                if (response.data) {
+                    const downloadUrl = api.getLink(response.data);
+                    if (downloadUrl) {
+                        console.log(`Success with API: ${api.name}`);
+                        return {
+                            success: true,
+                            url: downloadUrl,
+                            type: 'video',
+                            source: api.name
+                        };
                     }
                 }
-            } catch (e) {
-                console.error('Error parsing additionalData:', e.message);
+                
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Delay antar request
+            } catch (apiError) {
+                console.log(`API ${api.name} failed:`, apiError.message);
+                continue;
             }
         }
 
-        // Filter URLs
-        imageUrls = imageUrls.filter(url => url && url.includes('instagram'));
+        // Jika semua API gagal, coba metode scraping langsung
+        return await scrapeInstagramDirect(url);
 
-        if (videoUrl) {
-            return {
-                success: true,
-                type: isReels ? 'reels' : 'video',
-                url: videoUrl,
-                thumbnail: imageUrls.length > 0 ? imageUrls[0] : null,
-                caption: caption || '',
-                username: username || '',
-                download_url: videoUrl
-            };
-        }
-
-        if (imageUrls.length > 0) {
-            return {
-                success: true,
-                type: isCarousel ? 'carousel' : 'photo',
-                urls: imageUrls,
-                thumbnail: imageUrls[0],
-                caption: caption || '',
-                username: username || '',
-                download_url: imageUrls[0],
-                count: imageUrls.length
-            };
-        }
-
-        return {
-            success: false,
-            message: 'Tidak dapat mengambil media dari URL tersebut'
-        };
-        
     } catch (error) {
         console.error('Instagram Download Error:', error.message);
         return {
@@ -160,104 +136,198 @@ async function downloadInstagram(url) {
     }
 }
 
-async function downloadInstagramAPI(url) {
+// Metode scraping langsung dari Instagram
+async function scrapeInstagramDirect(url) {
     try {
-        // Coba berbagai API publik
-        const apis = [
+        const headers = {
+            'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0'
+        };
+
+        const response = await axios.get(url, { headers, timeout: 10000 });
+        const html = response.data;
+        
+        // Cari URL video atau gambar
+        const patterns = [
+            /"video_url":"([^"]+\.mp4[^"]*)"/,
+            /"display_url":"([^"]+\.(jpg|jpeg|png|webp)[^"]*)"/,
+            /property="og:video" content="([^"]+)"/,
+            /property="og:image" content="([^"]+)"/,
+            /src="([^"]+\.mp4[^"]*)" type="video\/mp4"/,
+            /src="([^"]+\.(jpg|jpeg|png|webp)[^"]*)"/,
+            /https:\/\/[^"]*\.cdninstagram\.com[^"]*\.(mp4|jpg|jpeg|png)/g
+        ];
+
+        let mediaUrl = null;
+        let isVideo = false;
+
+        for (const pattern of patterns) {
+            const matches = html.match(pattern);
+            if (matches) {
+                if (Array.isArray(matches)) {
+                    for (const match of matches) {
+                        if (match && match.includes('http')) {
+                            const url = match.replace(/["']/g, '');
+                            if (url.includes('.mp4')) {
+                                mediaUrl = url;
+                                isVideo = true;
+                                break;
+                            } else if (url.includes('.jpg') || url.includes('.jpeg') || url.includes('.png')) {
+                                mediaUrl = url;
+                                isVideo = false;
+                                break;
+                            }
+                        }
+                    }
+                } else if (matches.includes('http')) {
+                    mediaUrl = matches.replace(/["']/g, '');
+                    isVideo = matches.includes('.mp4');
+                }
+                if (mediaUrl) break;
+            }
+        }
+
+        if (mediaUrl) {
+            // Clean URL
+            mediaUrl = mediaUrl.replace(/\\u0026/g, '&').replace(/\\\//g, '/');
+            
+            return {
+                success: true,
+                url: mediaUrl,
+                type: isVideo ? 'video' : 'photo',
+                source: 'direct_scrape'
+            };
+        }
+
+        return {
+            success: false,
+            message: 'Tidak dapat menemukan media'
+        };
+
+    } catch (error) {
+        return {
+            success: false,
+            message: `Scraping error: ${error.message}`
+        };
+    }
+}
+
+// API alternatif khusus untuk Indonesia
+async function downloadInstagramID(url) {
+    try {
+        // API Indonesia yang mungkin masih aktif
+        const indoAPIs = [
             {
-                url: 'https://api.vevioz.com/api/button/mp4',
+                name: 'instagram downloader id',
+                url: 'https://www.instagramdownloaderd.com/api/async',
                 method: 'POST',
-                data: { url: url }
+                data: `url=${encodeURIComponent(url)}`,
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                },
+                getLink: (data) => {
+                    try {
+                        const $ = cheerio.load(data);
+                        const downloadBtn = $('a.download-btn');
+                        if (downloadBtn.length > 0) {
+                            return downloadBtn.attr('href');
+                        }
+                    } catch (e) {
+                        return null;
+                    }
+                    return null;
+                }
             },
             {
-                url: 'https://api.snaptik.site/video',
+                name: 'saveig',
+                url: 'https://saveig.app/api/ajaxSearch',
                 method: 'POST',
-                data: { url: url }
-            },
-            {
-                url: `https://api.download-lagump3.com/api/convert?url=${encodeURIComponent(url)}`,
-                method: 'GET'
+                data: `q=${encodeURIComponent(url)}&t=media&lang=en`,
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                getLink: (data) => {
+                    if (data.data) {
+                        const html = data.data;
+                        const $ = cheerio.load(html);
+                        const downloadLink = $('a.download[href*=".mp4"]').attr('href') || 
+                                            $('a[href*="cdninstagram"]').attr('href');
+                        return downloadLink;
+                    }
+                    return null;
+                }
             }
         ];
 
-        for (const api of apis) {
+        for (const api of indoAPIs) {
             try {
-                let response;
-                if (api.method === 'POST') {
-                    const formData = new FormData();
-                    formData.append('url', url);
-                    
-                    response = await axios.post(api.url, formData, {
-                        headers: {
-                            ...formData.getHeaders(),
-                            'Accept': 'application/json',
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                        }
-                    });
-                } else {
-                    response = await axios.get(api.url, {
-                        headers: {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                        }
-                    });
-                }
+                console.log(`Trying Indo API: ${api.name}`);
+                
+                const response = await axios.post(api.url, api.data, {
+                    headers: api.headers,
+                    timeout: 10000
+                });
 
-                if (response.data) {
-                    // Parse response berdasarkan API
-                    let downloadUrl = null;
-                    
-                    if (api.url.includes('vevioz')) {
-                        if (response.data.url) downloadUrl = response.data.url;
-                    } else if (api.url.includes('snaptik')) {
-                        if (response.data.data && response.data.data.play) {
-                            downloadUrl = response.data.data.play;
-                        }
-                    } else if (api.url.includes('download-lagump3')) {
-                        if (response.data.url) downloadUrl = response.data.url;
-                    }
-
-                    if (downloadUrl) {
-                        return {
-                            success: true,
-                            url: downloadUrl,
-                            type: 'video',
-                            source: 'api'
-                        };
-                    }
+                const downloadUrl = api.getLink(response.data);
+                if (downloadUrl) {
+                    return {
+                        success: true,
+                        url: downloadUrl,
+                        type: 'video',
+                        source: api.name
+                    };
                 }
-            } catch (apiError) {
-                console.log(`API ${api.url} failed:`, apiError.message);
+            } catch (error) {
+                console.log(`Indo API ${api.name} failed:`, error.message);
                 continue;
             }
         }
 
         return {
             success: false,
-            message: 'Semua API gagal'
+            message: 'Semua API Indonesia gagal'
         };
-        
+
     } catch (error) {
         return {
             success: false,
-            message: `API Error: ${error.message}`
+            message: `API Indonesia error: ${error.message}`
         };
     }
 }
 
-// Fungsi utama
-async function instagramDownloader(url, useAPI = true) {
-    const directResult = await downloadInstagram(url);
+// Fungsi utama dengan fallback ke semua metode
+async function instagramDownloader(url) {
+    console.log(`Starting download for: ${url}`);
     
-    if (directResult.success) {
-        return directResult;
-    }
+    // Coba API utama dulu
+    const apiResult = await downloadInstagram(url);
+    if (apiResult.success) return apiResult;
     
-    if (useAPI) {
-        const apiResult = await downloadInstagramAPI(url);
-        return apiResult;
-    }
+    // Coba API Indonesia
+    const indoResult = await downloadInstagramID(url);
+    if (indoResult.success) return indoResult;
     
-    return directResult;
+    // Coba scraping langsung
+    const scrapeResult = await scrapeInstagramDirect(url);
+    if (scrapeResult.success) return scrapeResult;
+    
+    // Semua gagal
+    return {
+        success: false,
+        message: 'Gagal mendownload dari semua sumber. Coba gunakan link yang berbeda atau coba lagi nanti.'
+    };
 }
 
 module.exports = instagramDownloader;

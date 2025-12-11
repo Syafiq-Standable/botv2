@@ -8,7 +8,7 @@ const bakulan = require('./bakulan');
 const promo = require('./promo');
 const welcome = require('./welcome');
 const cron = require('node-cron');
-const instagramDownloader = require('./instagram-downloader');
+
 
 async function connectToWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth_info_baileys');
@@ -1139,72 +1139,114 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     }
                 }
 
-                // Tambahkan command handler untuk Instagram downloader
+                // Di handler utama
                 if (text.toLowerCase().startsWith('.ig') || text.toLowerCase().startsWith('.instagram')) {
-                    const urlMatch = text.match(/(https?:\/\/[^\s]+)/);
+                    const args = text.split(' ');
 
-                    if (!urlMatch) {
+                    if (args.length < 2) {
                         return sock.sendMessage(from, {
-                            text: '❌ *Format salah!*\nContoh: .ig https://instagram.com/p/xxx'
-                        });
+                            text: '❌ *Format salah!*\n\nContoh:\n.ig https://instagram.com/p/xxx\n.instagram https://instagram.com/reel/xxx'
+                        }, { quoted: msg });
                     }
 
-                    const url = urlMatch[0];
+                    const url = args[1].trim();
+
+                    // Validasi URL
+                    if (!url.startsWith('http')) {
+                        return sock.sendMessage(from, {
+                            text: '❌ *URL tidak valid!*\nPastikan URL diawali dengan http:// atau https://'
+                        }, { quoted: msg });
+                    }
+
+                    if (!url.includes('instagram.com')) {
+                        return sock.sendMessage(from, {
+                            text: '❌ *Bukan link Instagram!*\nHanya mendukung link dari Instagram.com'
+                        }, { quoted: msg });
+                    }
 
                     // Kirim pesan sedang memproses
-                    await sock.sendMessage(from, {
-                        text: '⏳ *Sedang memproses...*\nMohon tunggu sebentar.'
-                    });
+                    const processingMsg = await sock.sendMessage(from, {
+                        text: '⏳ *Sedang memproses...*\nMohon tunggu 10-15 detik.'
+                    }, { quoted: msg });
 
                     try {
+                        // Panggil fungsi downloader
                         const result = await instagramDownloader(url);
 
                         if (!result.success) {
                             return sock.sendMessage(from, {
-                                text: `❌ *Gagal mendownload!*\n${result.message}`
-                            });
+                                text: `❌ *Gagal mendownload!*\n\n*Alasan:* ${result.message}\n\n*Tips:*\n1. Pastikan post/reel tidak di-private\n2. Coba gunakan link yang berbeda\n3. Coba lagi nanti\n4. Pastikan link benar (bukan link profile)`
+                            }, { quoted: msg });
+                        }
+
+                        // Buat caption
+                        let caption = `✅ *BERHASIL DIDOWNLOAD!*\n\n`;
+                        caption += `📦 *Sumber:* ${result.source || 'Instagram'}\n`;
+                        caption += `📁 *Tipe:* ${result.type.toUpperCase()}\n`;
+
+                        if (result.type === 'video') {
+                            caption += `⏱ *Video berhasil diambil*\n\n`;
+                            caption += `⏬ *Sedang mengirim video...*`;
+                        } else {
+                            caption += `🖼 *Gambar berhasil diambil*\n\n`;
+                            caption += `⏬ *Sedang mengirim gambar...*`;
                         }
 
                         // Kirim caption info
-                        const caption = `✅ *Berhasil didownload!*\n\n` +
-                            `📌 *Type:* ${result.type}\n` +
-                            (result.username ? `👤 *Username:* ${result.username}\n` : '') +
-                            (result.caption ? `📝 *Caption:* ${result.caption.substring(0, 200)}${result.caption.length > 200 ? '...' : ''}\n` : '') +
-                            `\n_Downloading media..._`;
+                        await sock.sendMessage(from, { text: caption }, { quoted: msg });
 
-                        await sock.sendMessage(from, { text: caption });
-
-                        // Kirim media berdasarkan type
-                        if (result.type === 'video' || result.type === 'reels') {
-                            // Untuk video
-                            await sock.sendMessage(from, {
-                                video: { url: result.url },
-                                caption: `🎬 Instagram ${result.type}`
-                            });
-
-                        } else if (result.type === 'photo') {
-                            // Untuk single photo
-                            await sock.sendMessage(from, {
-                                image: { url: result.url },
-                                caption: `📷 Instagram Photo`
-                            });
-
-                        } else if (result.type === 'carousel' && result.urls && result.urls.length > 0) {
-                            // Untuk carousel (multiple images)
-                            for (let i = 0; i < Math.min(result.urls.length, 10); i++) {
-                                await sock.sendMessage(from, {
-                                    image: { url: result.urls[i] },
-                                    caption: `📸 Instagram Carousel (${i + 1}/${result.urls.length})`
+                        // Kirim media
+                        try {
+                            if (result.type === 'video') {
+                                // Untuk video, gunakan buffer dulu
+                                const videoResponse = await axios.get(result.url, {
+                                    responseType: 'arraybuffer',
+                                    timeout: 30000
                                 });
-                                await new Promise(resolve => setTimeout(resolve, 1000)); // Delay antar gambar
+
+                                await sock.sendMessage(from, {
+                                    video: videoResponse.data,
+                                    caption: `🎬 Instagram Video\n\n📥 Downloaded via Bot`,
+                                    mimetype: 'video/mp4'
+                                });
+
+                            } else if (result.type === 'photo') {
+                                // Untuk gambar
+                                await sock.sendMessage(from, {
+                                    image: { url: result.url },
+                                    caption: `📷 Instagram Photo\n\n📥 Downloaded via Bot`
+                                });
                             }
+
+                            console.log(`Successfully sent ${result.type} from ${url}`);
+
+                        } catch (sendError) {
+                            console.error('Error sending media:', sendError.message);
+
+                            // Jika gagal kirim media, kirim link download saja
+                            await sock.sendMessage(from, {
+                                text: `📥 *Link Download:*\n${result.url}\n\n*Catatan:* Media terlalu besar, silahkan download manual via link di atas.`
+                            });
                         }
 
                     } catch (error) {
+                        console.error('Instagram handler error:', error);
                         await sock.sendMessage(from, {
-                            text: `❌ *Error!*\n${error.message}`
-                        });
+                            text: `❌ *ERROR SISTEM!*\n\n${error.message}\n\nSilahkan coba beberapa menit lagi atau gunakan link yang berbeda.`
+                        }, { quoted: msg });
                     }
+
+                    // Hapus pesan "sedang memproses"
+                    try {
+                        if (processingMsg && processingMsg.key) {
+                            await sock.sendMessage(from, {
+                                delete: processingMsg.key
+                            });
+                        }
+                    } catch (e) {
+                        // Ignore delete error
+                    }
+
                     return;
                 }
 
