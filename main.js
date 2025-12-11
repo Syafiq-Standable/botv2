@@ -1043,47 +1043,40 @@ wa.me/6289528950624 - Sam @Sukabyone
                     return;
                 }
 
-                // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
-                if (
-                    text.toLowerCase().includes('.stiker') ||
-                    text.toLowerCase().includes('.sticker') ||
-                    text.toLowerCase().includes('.s')
-                ) {
+                // === STIKER COMMAND ===
+                // trigger: .s, .stiker, .sticker
+                const triggers = ['.s', '.stiker', '.sticker'];
+
+                const lowerText = text.toLowerCase();
+                const isTrigger = triggers.some(t => lowerText.includes(t));
+
+                if (isTrigger) {
 
                     let imgMsg = null;
 
-                    // Cara 1: Kirim gambar + caption .stiker
-                    if (
-                        msg.message?.imageMessage &&
-                        (msg.message.imageMessage.caption || '').toLowerCase().includes('.stiker')
-                    ) {
-                        imgMsg = msg.message.imageMessage;
+                    // === 1. Caption mengandung trigger → gunakan foto yang dikirim ===
+                    if (msg.message?.imageMessage) {
+                        const caption = (msg.message.imageMessage.caption || '').toLowerCase();
+                        const captionIsTrigger = triggers.some(t => caption.includes(t));
+
+                        if (captionIsTrigger) {
+                            imgMsg = msg.message.imageMessage;
+                        }
                     }
 
-                    // Cara 2: Kirim gambar + caption .sticker
-                    else if (
-                        msg.message?.imageMessage &&
-                        (msg.message.imageMessage.caption || '').toLowerCase().includes('.sticker')
-                    ) {
-                        imgMsg = msg.message.imageMessage;
-                    }
-
-                    // Cara 3: Reply foto + ketik .stiker / .sticker / .s
-                    else if (
-                        msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage
-                    ) {
+                    // === 2. Reply ke pesan foto + ketik .stiker/.s ===
+                    if (!imgMsg && msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage) {
                         imgMsg = msg.message.extendedTextMessage.contextInfo.quotedMessage.imageMessage;
                     }
 
+                    // === Jika tidak ada gambar ===
                     if (!imgMsg) {
                         return sock.sendMessage(from, {
-                            text: 'Cara pakai:\n• Kirim foto + caption *.stiker*\n• Atau reply foto + ketik *.stiker*\n\nSupport JPG/PNG/GIF kecil!'
+                            text: 'Cara pakai:\n• Kirim foto + caption *.stiker*\n• Atau reply foto + ketik *.stiker*\n\nSupport JPG/PNG/GIF!'
                         });
                     }
 
-                    await sock.sendMessage(from, {
-                        text: 'Sabar yaaa, lagi ku buat stikernya... 🔥'
-                    });
+                    await sock.sendMessage(from, { text: 'Oke bentar, lagi kubikin stikernya... 🔥' });
 
                     try {
                         // Download buffer gambar
