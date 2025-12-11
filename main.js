@@ -488,6 +488,25 @@ wa.me/6289528950624
 
                 if (!msg.message || msg.key.fromMe) return;
 
+                // .admins - Show admin list
+                if (text === '.admins') {
+                    return await bakulan.showAdmins(sock, from, msg);
+                }
+
+                // .addadmin - Add admin
+                if (text.startsWith('.addadmin')) {
+                    return await bakulan.addAdmin(sock, from, text, msg);
+                }
+
+                // .myadmin - Check admin status
+                if (text === '.myadmin') {
+                    const sender = msg.key.participant || from;
+                    const isAdmin = bakulan.isAdmin(sender, sock);
+                    return sock.sendMessage(from, {
+                        text: `🔐 Status Admin: ${isAdmin ? '✅ YA' : '❌ TIDAK'}`
+                    });
+                }
+
                 // ===============================
                 // BAKULAN SYSTEM COMMANDS
                 // ===============================

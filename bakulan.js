@@ -10,6 +10,77 @@ const ORDERS_DB = path.join(DATA_DIR, 'orders.json');
 const STATS_DB = path.join(DATA_DIR, 'stats.json');
 const OPERATORS_DB = path.join(DATA_DIR, 'operators.json');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
+const ADMINS_DB = path.join(DATA_DIR, 'admins.json');
+
+// Load admins (super users)
+const loadAdmins = () => {
+    try {
+        if (!fs.existsSync(ADMINS_DB)) {
+            // Default admin - GANTI DENGAN NOMOR ANDA!
+            const defaultAdmins = ["6289528950624"]; // <- NOMOR ANDA DI SINI
+            fs.writeFileSync(ADMINS_DB, JSON.stringify(defaultAdmins, null, 2));
+            return defaultAdmins;
+        }
+        const raw = fs.readFileSync(ADMINS_DB, 'utf8');
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        console.log('Admins DB load error:', e.message);
+        return [];
+    }
+};
+
+// Check if user is admin
+const isAdmin = (fullJid, sock = null) => {
+    if (!fullJid) return false;
+    
+    const admins = loadAdmins();
+    const numeric = fullJid.split('@')[0];
+    
+    // Bot sendiri selalu admin
+    if (sock?.user) {
+        try {
+            const myId = sock.user.id || sock.user.jid || '';
+            if (myId) {
+                const myNumeric = myId.split(':')[0] || myId.split('@')[0];
+                if (fullJid.includes(myNumeric)) return true;
+            }
+        } catch (e) {
+            // ignore
+        }
+    }
+    
+    // Check admin list
+    for (const admin of admins) {
+        if (!admin) continue;
+        const adminStr = String(admin).trim();
+        
+        if (adminStr === numeric) return true;
+        if (fullJid.includes(adminStr)) return true;
+        if (fullJid.endsWith(`${adminStr}@s.whatsapp.net`)) return true;
+        
+        // Match with/without country code
+        if (adminStr.startsWith('62') && numeric.startsWith('0')) {
+            if (`62${numeric.substring(1)}` === adminStr) return true;
+        }
+        if (adminStr.startsWith('0') && numeric.startsWith('62')) {
+            if (`0${numeric.substring(2)}` === adminStr) return true;
+        }
+    }
+    
+    return false;
+};
+
+// Admin check middleware
+const checkAdmin = (sock, from, msg = null) => {
+    const sender = msg?.key?.participant || from;
+    if (!isAdmin(sender, sock)) {
+        return {
+            allowed: false,
+            message: '⛔ *AKSES ADMIN DITOLAK!*\n\nHanya admin utama yang bisa mengelola operator.\nHubungi super admin untuk request akses.'
+        };
+    }
+    return { allowed: true };
+};
 
 // =============================
 //  OPERATOR MANAGEMENT FUNCTIONS
@@ -28,11 +99,15 @@ const loadOperators = () => {
 
 const isOperator = (fullJid, sock = null) => {
     if (!fullJid) return false;
+    
+    // ✅ CHECK 1: Admins are automatically operators
+    if (isAdmin(fullJid, sock)) return true;
+    
     try {
         const list = loadOperators();
         const numeric = fullJid.split('@')[0];
 
-        // Allow bot's own account to act as operator
+        // ✅ CHECK 2: Allow bot's own account to act as operator
         if (sock?.user) {
             try {
                 const myId = sock.user.id || sock.user.jid || '';
@@ -45,7 +120,7 @@ const isOperator = (fullJid, sock = null) => {
             }
         }
 
-        // Check against operator list
+        // ✅ CHECK 3: Check against operator list
         for (const op of list) {
             if (!op) continue;
             const opStr = String(op).trim();
@@ -68,24 +143,11 @@ const isOperator = (fullJid, sock = null) => {
             }
         }
         
-        // Check if sender is in group (optional: allow group admins)
-        if (fullJid.endsWith('@g.us')) {
-            // Uncomment jika ingin admin grup juga bisa akses
-            // try {
-            //     const group = await sock.groupMetadata(fullJid);
-            //     const sender = msg.key.participant || msg.key.remoteJid;
-            //     const participant = group.participants.find(p => p.id === sender);
-            //     if (participant?.admin === 'admin' || participant?.admin === 'superadmin') {
-            //         return true;
-            //     }
-            // } catch (e) {
-            //     // ignore
-            // }
-        }
     } catch (e) {
         console.log('isOperator check error:', e.message);
         return false;
     }
+    
     return false;
 };
 
@@ -571,7 +633,10 @@ Ada masalah? Hubungi admin utama!
     // ===============================
     // ENHANCED ADD ORDER
     // ===============================
-    async addOrder(sock, from, text) {
+    async addOrder(sock, from, text, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const parts = text.split("|").map(p => p.trim());
         
         if (parts.length < 6) {
@@ -719,7 +784,10 @@ ${catatan ? `📌 Catatan: ${catatan}\n` : ''}
     // ===============================
     // VIEW SINGLE ORDER
     // ===============================
-    async viewOrder(sock, from, text) {
+    async viewOrder(sock, from, text, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const match = text.match(/\.order\s+(\w+)/i);
         if (!match) {
             return sock.sendMessage(from, { text: 'Gunakan: `.order ID`\nContoh: `.order ORDABC123`' });
@@ -784,7 +852,10 @@ ${order.history ? order.history.slice(-3).map(h =>
     // ===============================
     // ENHANCED MARK DONE (with history)
     // ===============================
-    async markDone(sock, from, text) {
+    async markDone(sock, from, text, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+        
         const match = text.match(/\.done\s+(\w+)/i);
         if (!match) {
             return sock.sendMessage(from, { text: 'Gunakan: `.done ID`\nContoh: `.done ORDABC123`' });
@@ -868,7 +939,10 @@ ${order.history ? order.history.slice(-3).map(h =>
     // ===============================
     // SEARCH ORDERS
     // ===============================
-    async searchOrders(sock, from, text) {
+    async searchOrders(sock, from, text, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const match = text.match(/\.search\s+(.+)/i);
         if (!match) {
             return sock.sendMessage(from, { 
@@ -938,7 +1012,10 @@ ${order.history ? order.history.slice(-3).map(h =>
     // ===============================
     // VIEW TODAY'S ORDERS
     // ===============================
-    async todayOrders(sock, from) {
+    async todayOrders(sock, from, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const orders = loadOrders();
         const today = new Date().toISOString().split('T')[0];
         const todayOrders = [];
@@ -995,7 +1072,10 @@ ${order.history ? order.history.slice(-3).map(h =>
     // ===============================
     // VIEW PENDING ORDERS
     // ===============================
-    async pendingOrders(sock, from) {
+    async pendingOrders(sock, from, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const orders = loadOrders();
         const pending = Object.entries(orders)
             .filter(([_, order]) => ['pending', 'paid', 'process'].includes(order.status))
@@ -1036,7 +1116,10 @@ ${order.history ? order.history.slice(-3).map(h =>
     // ===============================
     // ADVANCED STATISTICS
     // ===============================
-    async showStats(sock, from) {
+    async showStats(sock, from, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const stats = loadStats();
         const orders = loadOrders();
         
@@ -1114,7 +1197,10 @@ ${Object.entries(stats.method_stats || {}).map(([method, count]) =>
     // ===============================
     // MONTHLY REPORT
     // ===============================
-    async monthlyReport(sock, from, text) {
+    async monthlyReport(sock, from, text, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const match = text.match(/\.report\s+(\d{4}-\d{2})/i);
         const month = match ? match[1] : new Date().toISOString().slice(0, 7);
         
@@ -1215,7 +1301,10 @@ ${totalRevenue > 0 ?
     // ===============================
     // EXPORT DATA
     // ===============================
-    async exportData(sock, from) {
+    async exportData(sock, from, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const orders = loadOrders();
         if (Object.keys(orders).length === 0) {
             return sock.sendMessage(from, { text: '📭 Tidak ada data untuk diexport' });
@@ -1272,7 +1361,10 @@ ${totalRevenue > 0 ?
     // ===============================
     // SYSTEM CLEANUP
     // ===============================
-    async systemCleanup(sock, from) {
+    async systemCleanup(sock, from, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const orders = loadOrders();
         const oldOrders = [];
         const now = new Date();
@@ -1317,7 +1409,10 @@ ${totalRevenue > 0 ?
     // ===============================
     // EDIT ORDER (ENHANCED)
     // ===============================
-    async editOrder(sock, from, text) {
+    async editOrder(sock, from, text, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const match = text.match(/\.edit\s+(\w+)\|(\w+)\|(.+)/i);
         if (!match) {
             return sock.sendMessage(from, {
@@ -1408,7 +1503,10 @@ ${totalRevenue > 0 ?
     // ===============================
     // CHANGE STATUS ONLY
     // ===============================
-    async changeStatus(sock, from, text) {
+    async changeStatus(sock, from, text, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const match = text.match(/\.status\s+(\w+)\|(\w+)/i);
         if (!match) {
             return sock.sendMessage(from, {
@@ -1486,7 +1584,10 @@ ${totalRevenue > 0 ?
     // ===============================
     // DELETE ORDER (ENHANCED)
     // ===============================
-    async deleteOrder(sock, from, text) {
+    async deleteOrder(sock, from, text, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const match = text.match(/\.delete\s+(\w+)/i);
         if (!match) {
             return sock.sendMessage(from, { 
@@ -1531,7 +1632,10 @@ ${totalRevenue > 0 ?
     // ===============================
     // SHOW TOP PRODUCTS
     // ===============================
-    async showTopProducts(sock, from) {
+    async showTopProducts(sock, from, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const stats = loadStats();
         const productStats = stats.product_stats || {};
         
@@ -1584,7 +1688,10 @@ ${sortedProducts.length > 0 ?
     // ===============================
     // SIMPLE CHART (TEXT-BASED)
     // ===============================
-    async showChart(sock, from) {
+    async showChart(sock, from, msg) {
+        const check = checkOperator(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+
         const stats = loadStats();
         const monthlyStats = stats.monthly_stats || {};
         
