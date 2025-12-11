@@ -804,7 +804,7 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
 
                     if (isCommandOnly) {
                         return sock.sendMessage(from, {
-                            text: 'apa? bisa gaa?\ngini loh caranyaa ".tt https://vt.tiktok.com/abc" \ngitu aja gabisa'
+                            text: 'apa? bisa gaa?\ngini loh caranyaa\n".tt https://vt.tiktok.com/abc" \n\ngitu aja gabisa'
                         }, { quoted: msg });
                     }
 
@@ -1155,7 +1155,7 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     if (text.toLowerCase().startsWith('.ig') || text.toLowerCase().startsWith('.instagram')) {
                         const args = text.split(' ');
                         if (args.length < 2) {
-                            return sock.sendMessage(from, { text: '❌ Format: .ig <url-instagram>' }, { quoted: msg });
+                            return sock.sendMessage(from, { text: 'bukann gituu! gini lohh\n".ig https://instagram.com/reel/..."\n\n' }, { quoted: msg });
                         }
 
                         const url = args[1].trim();
