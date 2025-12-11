@@ -754,7 +754,7 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     }
                     // Untuk '.hidetag' atau '.h' tanpa spasi dan tanpa pesan, pesan tetap string kosong
 
-                    const messageToSend = pesan ? pesan : '‎';
+                    const messageToSend = pesan ? pesan : '\n\n\n\n';
 
                     const group = await sock.groupMetadata(from);
                     await sock.sendMessage(from, {
@@ -1155,7 +1155,7 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     if (text.toLowerCase().startsWith('.ig') || text.toLowerCase().startsWith('.instagram')) {
                         const args = text.split(' ');
                         if (args.length < 2) {
-                            return sock.sendMessage(from, { text: 'bukann gituu! gini lohh\n".ig https://instagram.com/reel/..."\n\n' }, { quoted: msg });
+                            return sock.sendMessage(from, { text: 'linknya maneeeee?\n gini lohh\n".ig https://instagram.com/reel/..."' }, { quoted: msg });
                         }
 
                         const url = args[1].trim();
