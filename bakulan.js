@@ -724,7 +724,7 @@ ${catatan ? `📌 Catatan: ${catatan}\n` : ''}
     // ===============================
     // ENHANCED VIEW ORDERS (PAGINATED)
     // ===============================
-    async viewOrder(sock, from, text, msg) {
+    async viewOrders(sock, from, text, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
         
