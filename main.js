@@ -604,20 +604,9 @@ wa.me/6289528950624
 • .kick/ban/unban [@user] - Kelola member
 • .close/opengroup - Buka/tutup grup
 
-🛒 *JUALAN & ORDER:*
-• .jualan - Menu jualan
-• .ordermasuk [detail] - Tambah order
-• .cekorder - Lihat order
-• .done/hapus/edit/refund [id] - Kelola order
-• .rekapbulan [bulan] - Rekap bulanan
-
 🔐 *SEWA & AKSES:*
 • .sewa - Info sewa bot
 • .ceksewa - Cek status sewa
-
-🔗 *LAINNYA:*
-• .join [link] - Join grup
-• .setwelcome [pesan] - Atur welcome
 
 ────────────────────
 📞 *KONTAK OWNER:*
