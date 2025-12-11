@@ -57,15 +57,15 @@ module.exports = {
     // ===============================
     async jualMenu(sock, from) {
         const menu =
-`📦 *MENU SISTEM ORDER (PEMBAGI |)*
+            `📦 *MENU SISTEM ORDER (PEMBAGI |)*
 
-• .ordermasuk|nana|nominal|metode|nohp|catatan
+• .ordermasuk|nama|nominal|metode|nohp|catatan
   ➜ Input order baru
 
 • .cekorder
   ➜ Lihat semua order
 
-• .done|nana
+• .done|nama
   ➜ Tandai order selesai (semua order dengan nama tsb)
 
 • .editorder|ID|field|value
@@ -90,8 +90,8 @@ module.exports = {
         const p = text.split("|").map(x => x.trim());
 
         if (p.length < 6) {
-            return sock.sendMessage(from, { 
-                text: "Format: .ordermasuk|nana|nominal|metode|nohp|catatan"
+            return sock.sendMessage(from, {
+                text: "Format: .ordermasuk|nama|nominal|metode|nohp|catatan"
             });
         }
 
@@ -125,7 +125,7 @@ module.exports = {
 
         return sock.sendMessage(from, {
             text:
-`🟢 ORDER MASUK!  
+                `🟢 ORDER MASUK!  
 ID: ${id}
 Nama: ${nama}
 Nominal: Rp${nominal.toLocaleString('id-ID')}
@@ -148,8 +148,8 @@ Tanggal: ${orders[id].timestamp}`
         let out = "📦 *DAFTAR ORDER*\n\n";
 
         for (const o of Object.values(orders)) {
-            out += 
-`ID: ${o.id}
+            out +=
+                `ID: ${o.id}
 Nama: ${o.nama}
 Nominal: Rp${o.nominal.toLocaleString('id-ID')}
 Metode: ${o.metode}
@@ -168,28 +168,35 @@ Catatan: ${o.catatan}
     // ===============================
     async markDone(sock, from, text) {
         const p = text.split("|");
-        if (p.length < 2) return sock.sendMessage(from, { text: "Format: .done|nana" });
+        if (p.length < 2) return sock.sendMessage(from, { text: "Format: .done|ID\nContoh: .done|ORD001" });
 
-        const target = p[1].toLowerCase().trim();
-        const orders = loadOrders();
+        const targetId = p[1].trim().toUpperCase();
+        const orders = loadOrders(); // Asumsi: orders adalah array
 
-        let found = false;
-        for (const id in orders) {
-            if (orders[id].nama.toLowerCase() === target) {
-                orders[id].status = "selesai";
-                found = true;
+        // Cari order berdasarkan ID
+        const orderIndex = orders.findIndex(order => order.id === targetId);
+
+        if (orderIndex !== -1) {
+            orders[orderIndex].status = "selesai";
+            saveOrders(orders);
+
+            return sock.sendMessage(from, {
+                text: `✨ Order *${targetId}* (${orders[orderIndex].nama}) ditandai SELESAI ✅`
+            });
+        } else {
+            // Tampilkan ID yang tersedia
+            const availableIds = orders
+                .filter(o => o.status !== "selesai")
+                .map(o => `• ${o.id} - ${o.nama}`);
+
+            let reply = `❌ Order dengan ID "${targetId}" tidak ditemukan.`;
+            if (availableIds.length > 0) {
+                reply += `\n\nID yang tersedia:\n${availableIds.join('\n')}`;
             }
+
+            return sock.sendMessage(from, { text: reply });
         }
-
-        if (found) saveOrders(orders);
-
-        return sock.sendMessage(from, {
-            text: found
-                ? `✨ Semua order *${target}* ditandai SELESAI`
-                : `Nama "${target}" tidak ditemukan.`
-        });
     },
-
     // ===============================
     // EDIT ORDER (PAKE PIPE)
     // ===============================
