@@ -1997,18 +1997,14 @@ async function addOwner(sock, from, text, msg) {
 // ===============================
 module.exports = {
     // Core functions
-    isOwner,
-    isOperator,
-    checkOwner,
-    checkOperator,
+
 
     // Database functions
     loadOrders,
     saveOrders,
     loadStats,
     saveStats,
-    loadOperators,
-    loadOwners,
+  
 
     // Utility functions
     generateOrderId,
