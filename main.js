@@ -754,7 +754,7 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                     }
                     // Untuk '.hidetag' atau '.h' tanpa spasi dan tanpa pesan, pesan tetap string kosong
 
-                    const messageToSend = pesan ? pesan : '\n\n\n\n';
+                    const messageToSend = pesan ? pesan : '\n‎';
 
                     const group = await sock.groupMetadata(from);
                     await sock.sendMessage(from, {
