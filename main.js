@@ -551,12 +551,12 @@ wa.me/6289528950624
 
                 // .today - Today's orders
                 if (text === '.today') {
-                    return await bakulan.todayOrders(sock, from);
+                    return await bakulan.todayOrders(sock, from, msg);
                 }
 
                 // .pending - Pending orders
                 if (text === '.pending') {
-                    return await bakulan.pendingOrders(sock, from);
+                    return await bakulan.pendingOrders(sock, from, msg);
                 }
 
                 // .stats - Statistics

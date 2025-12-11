@@ -101,7 +101,7 @@ const isOperator = (fullJid, sock = null) => {
     if (!fullJid) return false;
     
     // ✅ CHECK 1: Admins are automatically operators
-      if (isOwner(fullJid, sock)) return true;
+    if (isOwner(fullJid, sock)) return true;
     
     try {
         const list = loadOperators();
@@ -359,11 +359,12 @@ const updateStats = (order, action = 'add') => {
     
     saveStats(stats);
 };
-module.exports = {
-     // ===============================
-    // OPERATOR MANAGEMENT COMMANDS
-    // ===============================
-    
+
+// ===============================
+// COMMAND FUNCTIONS (Fixed Structure)
+// ===============================
+
+const commands = {
     // Show operator list (admin only)
     async showOperators(sock, from, msg) {
         const check = checkOperator(sock, from, msg);
@@ -551,9 +552,7 @@ module.exports = {
         });
     },
 
-    // ===============================
     // ENHANCED MENU SYSTEM (Operator Only)
-    // ===============================
     async jualMenu(sock, from, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -624,9 +623,8 @@ Ada masalah? Hubungi admin utama!
 
         return sock.sendMessage(from, { text: menu });
     },
-    // ===============================
+    
     // ENHANCED ADD ORDER
-    // ===============================
     async addOrder(sock, from, text, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -721,12 +719,13 @@ ${catatan ? `📌 Catatan: ${catatan}\n` : ''}
         }
     },
 
-    // ===============================
     // ENHANCED VIEW ORDERS (PAGINATED)
-    // ===============================
     async viewOrders(sock, from, text, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+        
+        const orders = loadOrders();
+        const orderList = Object.entries(orders).map(([id, order]) => ({ id, ...order }));
         
         if (orderList.length === 0) {
             return sock.sendMessage(from, { text: '📭 Tidak ada order yang tercatat.' });
@@ -775,9 +774,7 @@ ${catatan ? `📌 Catatan: ${catatan}\n` : ''}
         return sock.sendMessage(from, { text: message });
     },
 
-    // ===============================
     // VIEW SINGLE ORDER
-    // ===============================
     async viewOrder(sock, from, text, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -843,9 +840,7 @@ ${order.history ? order.history.slice(-3).map(h =>
         return sock.sendMessage(from, { text: message });
     },
 
-    // ===============================
     // ENHANCED MARK DONE (with history)
-    // ===============================
     async markDone(sock, from, text, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -930,9 +925,7 @@ ${order.history ? order.history.slice(-3).map(h =>
         }
     },
 
-    // ===============================
     // SEARCH ORDERS
-    // ===============================
     async searchOrders(sock, from, text, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -1003,9 +996,7 @@ ${order.history ? order.history.slice(-3).map(h =>
         return sock.sendMessage(from, { text: message });
     },
 
-    // ===============================
     // VIEW TODAY'S ORDERS
-    // ===============================
     async todayOrders(sock, from, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -1063,9 +1054,7 @@ ${order.history ? order.history.slice(-3).map(h =>
         return sock.sendMessage(from, { text: message });
     },
 
-    // ===============================
     // VIEW PENDING ORDERS
-    // ===============================
     async pendingOrders(sock, from, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -1107,9 +1096,7 @@ ${order.history ? order.history.slice(-3).map(h =>
         return sock.sendMessage(from, { text: message });
     },
 
-    // ===============================
     // ADVANCED STATISTICS
-    // ===============================
     async showStats(sock, from, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -1188,9 +1175,7 @@ ${Object.entries(stats.method_stats || {}).map(([method, count]) =>
         return sock.sendMessage(from, { text: message });
     },
 
-    // ===============================
     // MONTHLY REPORT
-    // ===============================
     async monthlyReport(sock, from, text, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -1283,7 +1268,7 @@ ${monthOrders
 ━━━━━━━━━━━━━━━━━━━━
 💡 *REKOMENDASI:*
 ${totalRevenue > 0 ? 
-    `• Fokus pada produk: ${topProducts[0]?.[0] || '-'}\n` +
+    `• Fokus pada produk: *${topProducts[0]?.[0] || '-'}\n` +
     `• Tingkatkan konversi dari status "pending"\n` +
     `• Metode populer: ${Object.entries(methodCount).sort((a,b) => b[1]-a[1])[0]?.[0] || '-'}`
     : 'Belum ada data yang cukup untuk rekomendasi'}
@@ -1292,9 +1277,7 @@ ${totalRevenue > 0 ?
         return sock.sendMessage(from, { text: message });
     },
 
-    // ===============================
     // EXPORT DATA
-    // ===============================
     async exportData(sock, from, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -1352,9 +1335,7 @@ ${totalRevenue > 0 ?
         return true;
     },
 
-    // ===============================
     // SYSTEM CLEANUP
-    // ===============================
     async systemCleanup(sock, from, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -1400,9 +1381,7 @@ ${totalRevenue > 0 ?
         });
     },
 
-    // ===============================
     // EDIT ORDER (ENHANCED)
-    // ===============================
     async editOrder(sock, from, text, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -1494,9 +1473,7 @@ ${totalRevenue > 0 ?
         }
     },
 
-    // ===============================
     // CHANGE STATUS ONLY
-    // ===============================
     async changeStatus(sock, from, text, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -1575,9 +1552,7 @@ ${totalRevenue > 0 ?
         }
     },
 
-    // ===============================
     // DELETE ORDER (ENHANCED)
-    // ===============================
     async deleteOrder(sock, from, text, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -1623,9 +1598,7 @@ ${totalRevenue > 0 ?
         }
     },
 
-    // ===============================
     // SHOW TOP PRODUCTS
-    // ===============================
     async showTopProducts(sock, from, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -1679,9 +1652,7 @@ ${sortedProducts.length > 0 ?
         return sock.sendMessage(from, { text: message });
     },
 
-    // ===============================
     // SIMPLE CHART (TEXT-BASED)
-    // ===============================
     async showChart(sock, from, msg) {
         const check = checkOperator(sock, from, msg);
         if (!check.allowed) return sock.sendMessage(from, { text: check.message });
@@ -1735,5 +1706,105 @@ ${sortedProducts.length > 0 ?
         }
         
         return sock.sendMessage(from, { text: message });
+    },
+
+    // OWNER COMMANDS
+    async showOwners(sock, from, msg) {
+        const check = checkOwner(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+        
+        const owners = loadOwners();
+        const ownerCount = owners.length;
+        
+        let message = `👑 *DAFTAR OWNER* (${ownerCount} orang)\n\n`;
+        
+        if (ownerCount === 0) {
+            message += 'Belum ada owner yang terdaftar.\n';
+            message += 'Tambahkan dengan: `.addowner 6281234567890`';
+        } else {
+            owners.forEach((owner, index) => {
+                const formattedNumber = owner.startsWith('62') ? 
+                    `+${owner}` : owner.startsWith('0') ? 
+                    `+62${owner.substring(1)}` : owner;
+                message += `${index + 1}. ${formattedNumber}\n`;
+            });
+        }
+        
+        return sock.sendMessage(from, { text: message });
+    },
+
+    async addOwner(sock, from, text, msg) {
+        const check = checkOwner(sock, from, msg);
+        if (!check.allowed) return sock.sendMessage(from, { text: check.message });
+        
+        const match = text.match(/\.addowner\s+(\d+)/i);
+        if (!match) {
+            return sock.sendMessage(from, { 
+                text: 'Format: `.addowner 6281234567890`\nContoh: `.addowner 6281234567890`' 
+            });
+        }
+        
+        const newOwner = match[1].trim();
+        let owners = loadOwners();
+        
+        // Format nomor (pastikan 62)
+        let formattedOwner = newOwner;
+        if (formattedOwner.startsWith('0')) {
+            formattedOwner = '62' + formattedOwner.substring(1);
+        } else if (!formattedOwner.startsWith('62')) {
+            formattedOwner = '62' + formattedOwner;
+        }
+        
+        // Cek jika sudah ada
+        if (owners.includes(formattedOwner)) {
+            return sock.sendMessage(from, { 
+                text: `ℹ️ Nomor ${formattedOwner} sudah terdaftar sebagai owner.` 
+            });
+        }
+        
+        owners.push(formattedOwner);
+        
+        try {
+            fs.writeFileSync(OWNERS_DB, JSON.stringify(owners, null, 2));
+            return sock.sendMessage(from, {
+                text: `✅ *OWNER DITAMBAHKAN!*\n\n` +
+                      `📱 Nomor: ${formattedOwner}\n` +
+                      `👥 Total owner: ${owners.length}`
+            });
+        } catch (e) {
+            console.error('Error adding owner:', e);
+            return sock.sendMessage(from, { 
+                text: `❌ Gagal menambahkan owner: ${e.message}` 
+            });
+        }
     }
+};
+
+// ===============================
+// EXPORT MODULE
+// ===============================
+module.exports = {
+    // Core functions
+    isOwner,
+    isOperator,
+    checkOwner,
+    checkOperator,
+    
+    // Database functions
+    loadOrders,
+    saveOrders,
+    loadStats,
+    saveStats,
+    loadOperators,
+    loadOwners,
+    
+    // Utility functions
+    generateOrderId,
+    formatCurrency,
+    formatDate,
+    validatePhone,
+    updateStats,
+    
+    // Commands
+    commands
 };
