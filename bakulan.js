@@ -10,18 +10,18 @@ const ORDERS_DB = path.join(DATA_DIR, 'orders.json');
 const STATS_DB = path.join(DATA_DIR, 'stats.json');
 const OPERATORS_DB = path.join(DATA_DIR, 'operators.json');
 const BACKUP_DIR = path.join(DATA_DIR, 'backups');
-const ADMINS_DB = path.join(DATA_DIR, 'admins.json');
+const OWNERS_DB = path.join(DATA_DIR, 'owners.json');
 
 // Load admins (super users)
-const loadAdmins = () => {
+const loadOwners = () => {
     try {
-        if (!fs.existsSync(ADMINS_DB)) {
+        if (!fs.existsSync(OWNERS_DB)) {
             // Default admin - GANTI DENGAN NOMOR ANDA!
-            const defaultAdmins = ["6289528950624","233255529889864"]; // <- NOMOR ANDA DI SINI
-            fs.writeFileSync(ADMINS_DB, JSON.stringify(defaultAdmins, null, 2));
+            const defaultAdmins = ["6289528950624"]; // <- NOMOR ANDA DI SINI
+            fs.writeFileSync(OWNERS_DB, JSON.stringify(defaultAdmins, null, 2));
             return defaultAdmins;
         }
-        const raw = fs.readFileSync(ADMINS_DB, 'utf8');
+        const raw = fs.readFileSync(OWNERS_DB, 'utf8');
         return raw ? JSON.parse(raw) : [];
     } catch (e) {
         console.log('Admins DB load error:', e.message);
@@ -30,10 +30,10 @@ const loadAdmins = () => {
 };
 
 // Check if user is admin
-const isAdmin = (fullJid, sock = null) => {
+const isOwner = (fullJid, sock = null) => {
     if (!fullJid) return false;
     
-    const admins = loadAdmins();
+    const admins = loadOwners();
     const numeric = fullJid.split('@')[0];
     
     // Bot sendiri selalu admin
@@ -71,12 +71,12 @@ const isAdmin = (fullJid, sock = null) => {
 };
 
 // Admin check middleware
-const checkAdmin = (sock, from, msg = null) => {
+const checkOwner = (sock, from, msg = null) => {
     const sender = msg?.key?.participant || from;
-    if (!isAdmin(sender, sock)) {
+    if (!isOwner(sender, sock)) {
         return {
             allowed: false,
-            message: '⛔ *AKSES ADMIN DITOLAK!*\n\nHanya admin utama yang bisa mengelola operator.\nHubungi super admin untuk request akses.'
+            message: '⛔ *AKSES OPERATOR DITOLAK!*\n\nHanya owner utama yang bisa mengelola operator.\nHubungi super admin untuk request akses.'
         };
     }
     return { allowed: true };
@@ -101,7 +101,7 @@ const isOperator = (fullJid, sock = null) => {
     if (!fullJid) return false;
     
     // ✅ CHECK 1: Admins are automatically operators
-    if (isAdmin(fullJid, sock)) return true;
+      if (isOwner(fullJid, sock)) return true;
     
     try {
         const list = loadOperators();
