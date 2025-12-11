@@ -360,12 +360,6 @@ const updateStats = (order, action = 'add') => {
     saveStats(stats);
 };
 
-// =============================
-//  EXPORT MODULE
-// =============================
-
-module.exports = {
-
      // ===============================
     // OPERATOR MANAGEMENT COMMANDS
     // ===============================
@@ -1742,4 +1736,42 @@ ${sortedProducts.length > 0 ?
         
         return sock.sendMessage(from, { text: message });
     }
+};
+
+module.exports = {
+    // ========== CORE FUNCTIONS ==========
+    jualMenu,
+    addOrder,
+    viewOrders,        // ← PASTIKAN INI ADA
+    viewOrder,
+    markDone,
+    searchOrders,
+    todayOrders,
+    pendingOrders,
+    showStats,
+    monthlyReport,
+    exportData,
+    systemCleanup,
+    editOrder,
+    changeStatus,
+    deleteOrder,
+    showTopProducts,
+    showChart,
+    
+    // ========== UTILITY FUNCTIONS ==========
+    loadOrders,        // Export jika diperlukan
+    saveOrders,        // Export jika diperlukan
+    loadOperators,     // ← INI YANG ERROR
+    loadOwners,        // Export jika pakai owners
+    isOperator,        // Export jika diperlukan
+    isOwner,           // Export jika diperlukan
+    
+    // ========== MANAGEMENT FUNCTIONS ==========
+    showOperators,
+    addOperator,
+    deleteOperator,
+    checkOperatorStatus,
+    showOwners,
+    addOwner,
+    deleteOwner
 };
