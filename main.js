@@ -1152,43 +1152,52 @@ Hubungi Owner: wa.me/6289528950624 - Sam @Sukabyone`
                         const processingMsg = await sock.sendMessage(from, { text: '⏳ Mengunduh...' }, { quoted: msg });
 
                         try {
-                            // Panggil API lokal Anda
                             const apiUrl = `http://localhost:3000/igdl?url=${encodeURIComponent(url)}`;
+                            console.log('[DEBUG] Request ke API:', apiUrl);
+
                             const response = await axios.get(apiUrl, { timeout: 30000 });
+                            console.log('[DEBUG] Respons API lengkap:', JSON.stringify(response.data, null, 2));
 
-                            // Asumsi API mengembalikan JSON dengan field 'url' untuk video
-                            if (response.data && response.data.url) {
-                                const videoUrl = response.data.url;
+                            // PERBAIKAN DI SINI: Akses struktur JSON yang benar
+                            if (response.data &&
+                                response.data.url &&
+                                response.data.url.status === true &&
+                                response.data.url.data &&
+                                response.data.url.data[0] &&
+                                response.data.url.data[0].url) {
 
-                                // Hapus pesan "processing"
+                                const videoUrl = response.data.url.data[0].url;
+                                console.log('[DEBUG] Link video ditemukan:', videoUrl);
+
+                                // Hapus pesan "sedang memproses"
                                 await sock.sendMessage(from, { delete: processingMsg.key });
 
                                 // Kirim video ke WhatsApp
                                 await sock.sendMessage(from, {
                                     video: { url: videoUrl },
-                                    caption: '✅ Berhasil diunduh via Instagram API'
+                                    caption: '✅ Instagram Reel berhasil diunduh',
+                                    mimetype: 'video/mp4'
                                 });
+
                             } else {
-                                throw new Error('Link download tidak ditemukan di respons API.');
+                                throw new Error('Struktur respons API tidak sesuai ekspektasi');
                             }
 
                         } catch (error) {
-                            console.error('API Error:', error);
+                            console.error('[ERROR] Detail:', error.message);
                             await sock.sendMessage(from, {
-                                text: `❌ Gagal. Pastikan server API lokal berjalan (node index.js).\nDetail: ${error.message}`
+                                text: `❌ Gagal memproses video. Error: ${error.message}`
                             }, { quoted: msg });
                         }
-                        return;
                     }
-                }
 
-                // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
-                // Error handling for the event handler
+                    // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
+                    // Error handling for the event handler
+                }
+            } catch (e) {
+                console.log('messages.upsert error:', e.message);
             }
-        } catch (e) {
-            console.log('messages.upsert error:', e.message);
-        }
-    });
+        });
 }
 
 connectToWhatsApp();
