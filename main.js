@@ -1047,7 +1047,7 @@ wa.me/6289528950624 - Sam @Sukabyone
                 if (
                     text.toLowerCase().includes('.stiker') ||
                     text.toLowerCase().includes('.sticker') ||
-                    text.toLowerCase().includes('.s ')
+                    text.toLowerCase().includes('.s')
                 ) {
 
                     let imgMsg = null;
