@@ -493,7 +493,7 @@ if (!msg.message || msg.key.fromMe) return;
 // ===============================
 
 // .jualan - Show menu
-if (text === '.jualan' || text === '.menu') {
+if (text === '.jualan' || text === '.bakulan') {
     return await bakulan.jualMenu(sock, from);
 }
 
