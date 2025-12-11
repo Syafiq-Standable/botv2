@@ -604,16 +604,6 @@ wa.me/6289528950624
                     return await bakulan.showChart(sock, from);
                 }
 
-                if (text === '.jualan' || text === '.menu') {
-                    const sender = msg.key.participant || from;
-                    console.log('[DEBUG] Sender JID:', sender);
-                    console.log('[DEBUG] Sender numeric:', sender.split('@')[0]);
-                    console.log('[DEBUG] Operators:', bakulan.loadOperators());
-                    console.log('[DEBUG] Admins:', bakulan.loadAdmins());
-
-                    return await bakulan.jualMenu(sock, from, msg);
-                };
-
                 // ====================== SISTEM BAN PER GRUP (DI DALAM messages.upsert) ======================
                 // Auto kick banned user kalau kirim pesan
                 if (from.endsWith('@g.us')) {
