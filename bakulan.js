@@ -1,328 +1,1335 @@
 // =============================
-//  BAKULAN SYSTEM (Order Manager) — versi PIPE |
+//  BAKULAN SYSTEM PRO (Order Manager) — Advanced Version
 // =============================
 
 const fs = require('fs');
 const path = require('path');
 
-const ORDERS_DB = path.join(__dirname, 'data', 'orders.json');
+const DATA_DIR = path.join(__dirname, 'data');
+const ORDERS_DB = path.join(DATA_DIR, 'orders.json');
+const STATS_DB = path.join(DATA_DIR, 'stats.json');
+const BACKUP_DIR = path.join(DATA_DIR, 'backups');
 
-// Ensure folder exists
-try {
-    const dir = path.join(__dirname, 'data');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-} catch (e) {
-    console.log("Gagal membuat folder data:", e.message);
-}
+// Initialize system
+const initSystem = () => {
+    try {
+        if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+        if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+        
+        // Initialize files if not exist
+        if (!fs.existsSync(ORDERS_DB)) fs.writeFileSync(ORDERS_DB, '{}');
+        if (!fs.existsSync(STATS_DB)) {
+            fs.writeFileSync(STATS_DB, JSON.stringify({
+                total_orders: 0,
+                total_revenue: 0,
+                monthly_stats: {},
+                product_stats: {},
+                method_stats: {}
+            }, null, 2));
+        }
+        
+        console.log('✅ Sistem bakulan initialized');
+    } catch (e) {
+        console.error('❌ Gagal initialize sistem:', e.message);
+    }
+};
+initSystem();
 
-// Load Orders
+// =============================
+//  DATABASE FUNCTIONS
+// =============================
+
 const loadOrders = () => {
     try {
-        if (!fs.existsSync(ORDERS_DB)) return {};
-        return JSON.parse(fs.readFileSync(ORDERS_DB, 'utf8'));
+        const data = fs.readFileSync(ORDERS_DB, 'utf8');
+        return JSON.parse(data);
     } catch {
-        return {}; // auto repair kalau file corrupt
+        return {};
     }
 };
 
-// Save Orders
 const saveOrders = (data) => {
-    fs.writeFileSync(ORDERS_DB, JSON.stringify(data, null, 2), 'utf8');
+    try {
+        // Create backup before saving
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupFile = path.join(BACKUP_DIR, `orders_backup_${timestamp}.json`);
+        if (fs.existsSync(ORDERS_DB)) {
+            fs.copyFileSync(ORDERS_DB, backupFile);
+        }
+        
+        fs.writeFileSync(ORDERS_DB, JSON.stringify(data, null, 2), 'utf8');
+        return true;
+    } catch (e) {
+        console.error('❌ Gagal save orders:', e.message);
+        return false;
+    }
 };
 
-// Generate unique ID
-const generateOrderId = (nama = "usr") => {
-    const clean = String(nama || "usr").replace(/[^a-zA-Z]/g, "").toLowerCase();
-    const prefix = clean.slice(0, 3) || "usr";
-    const random = Math.floor(100 + Math.random() * 900);
-    return prefix + random;
+const loadStats = () => {
+    try {
+        const data = fs.readFileSync(STATS_DB, 'utf8');
+        return JSON.parse(data);
+    } catch {
+        return {
+            total_orders: 0,
+            total_revenue: 0,
+            monthly_stats: {},
+            product_stats: {},
+            method_stats: {}
+        };
+    }
 };
 
-// Timestamp
-const nowTime = () => {
-    const n = new Date();
-    return n.toLocaleString("id-ID", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit"
+const saveStats = (stats) => {
+    try {
+        fs.writeFileSync(STATS_DB, JSON.stringify(stats, null, 2), 'utf8');
+        return true;
+    } catch (e) {
+        console.error('❌ Gagal save stats:', e.message);
+        return false;
+    }
+};
+
+// =============================
+//  UTILITY FUNCTIONS
+// =============================
+
+const generateOrderId = (prefix = "ORD") => {
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+    return `${prefix}${timestamp.slice(-4)}${random}`;
+};
+
+const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0
+    }).format(amount);
+};
+
+const formatDate = (date = new Date(), format = 'id-ID') => {
+    if (!(date instanceof Date)) date = new Date(date);
+    return date.toLocaleDateString(format, {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
     });
 };
+
+const parseDate = (dateStr) => {
+    // Support multiple date formats
+    const formats = [
+        'YYYY-MM-DD',
+        'DD/MM/YYYY',
+        'MM-DD-YYYY'
+    ];
+    
+    for (const format of formats) {
+        try {
+            // Basic parsing logic
+            if (format === 'YYYY-MM-DD' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                return new Date(dateStr + 'T00:00:00');
+            }
+            if (format === 'DD/MM/YYYY' && /^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+                const [day, month, year] = dateStr.split('/');
+                return new Date(`${year}-${month}-${day}T00:00:00`);
+            }
+        } catch (e) {
+            continue;
+        }
+    }
+    return new Date();
+};
+
+const validatePhone = (phone) => {
+    // Clean phone number
+    const clean = phone.replace(/[^0-9]/g, '');
+    
+    // Indonesian phone validation
+    if (clean.startsWith('0')) {
+        return '62' + clean.substring(1);
+    } else if (clean.startsWith('62')) {
+        return clean;
+    } else if (clean.startsWith('8')) {
+        return '62' + clean;
+    }
+    return clean;
+};
+
+// =============================
+//  STATISTICS FUNCTIONS
+// =============================
+
+const updateStats = (order, action = 'add') => {
+    const stats = loadStats();
+    const month = new Date().toISOString().slice(0, 7); // YYYY-MM
+    
+    if (action === 'add') {
+        stats.total_orders++;
+        stats.total_revenue += order.nominal || 0;
+        
+        // Monthly stats
+        if (!stats.monthly_stats[month]) {
+            stats.monthly_stats[month] = { orders: 0, revenue: 0 };
+        }
+        stats.monthly_stats[month].orders++;
+        stats.monthly_stats[month].revenue += order.nominal || 0;
+        
+        // Product stats (extract product from catatan if available)
+        const product = order.produk || order.catatan?.split(' ')[0] || 'lainnya';
+        if (!stats.product_stats[product]) stats.product_stats[product] = 0;
+        stats.product_stats[product]++;
+        
+        // Payment method stats
+        if (order.metode) {
+            if (!stats.method_stats[order.metode]) stats.method_stats[order.metode] = 0;
+            stats.method_stats[order.metode]++;
+        }
+    } else if (action === 'remove' && order) {
+        stats.total_orders = Math.max(0, stats.total_orders - 1);
+        stats.total_revenue = Math.max(0, stats.total_revenue - (order.nominal || 0));
+    }
+    
+    saveStats(stats);
+};
+
+// =============================
+//  EXPORT MODULE
+// =============================
 
 module.exports = {
 
     // ===============================
-    // MENU JUALAN (PAKE PIPE)
+    // ENHANCED MENU SYSTEM
     // ===============================
     async jualMenu(sock, from) {
-        const menu =
-            `📦 *MENU SISTEM ORDER (PEMBAGI |)*
+        const stats = loadStats();
+        const menu = `
+📦 *BAKULAN SYSTEM PRO* 📦
 
-• .ordermasuk|nama|nominal|metode|nohp|catatan
-  ➜ Input order baru
+📊 *STATISTIK SISTEM:*
+• Total Order: ${stats.total_orders}
+• Total Revenue: ${formatCurrency(stats.total_revenue)}
+• Bulan Ini: ${formatCurrency(stats.monthly_stats[new Date().toISOString().slice(0,7)]?.revenue || 0)}
 
-• .cekorder
-  ➜ Lihat semua order
+━━━━━━━━━━━━━━━━━━━━
+⚡ *PERINTAH ORDER:*
+• \`.order|nama|nominal|metode|nohp|produk\`
+  ➜ Tambah order baru
+• \`.orderplus|nama|nominal|metode|nohp|produk|catatan|status\`
+  ➜ Order dengan detail lengkap
 
-• .done|nama
-  ➜ Tandai order selesai (semua order dengan nama tsb)
+🔍 *PERINTAH LIHAT:*
+• \`.orders\` ➜ Semua order (paginated)
+• \`.order|ID\` ➜ Detail order spesifik
+• \`.search|kata_kunci\` ➜ Cari order
+• \`.today\` ➜ Order hari ini
+• \`.pending\` ➜ Order belum selesai
 
-• .editorder|ID|field|value
-  ➜ Edit field tertentu
+⚙️ *PERINTAH UBAH:*
+• \`.done|ID\` ➜ Tandai selesai
+• \`.edit|ID|field|value\` ➜ Edit field
+• \`.status|ID|status_baru\` ➜ Ubah status
 
-• .hapusorder|ID
-  ➜ Hapus order
+🗑️ *PERINTAH HAPUS:*
+• \`.delete|ID\` ➜ Hapus order
+• \`.cancel|ID\` ➜ Batalkan order
 
-• .refund|ID
-  ➜ Tandai sebagai refund
+📈 *PERINTAH ANALYTICS:*
+• \`.stats\` ➜ Statistik lengkap
+• \`.report|YYYY-MM\` ➜ Laporan bulanan
+• \`.top\` ➜ Produk terlaris
+• \`.chart\` ➜ Chart sederhana
 
-• .rekapbulan|YYYY-MM
-  ➜ Rekap pemasukan bulanan (contoh: .rekapbulan|2025-12)`;
+💾 *PERINTAH SYSTEM:*
+• \`.backup\` ➜ Buat backup data
+• \`.export\` ➜ Export data ke CSV
+• \`.cleanup\` ➜ Bersihkan data lama
+
+━━━━━━━━━━━━━━━━━━━━
+📌 *STATUS ORDER:*
+• \`pending\` - Menunggu pembayaran
+• \`paid\` - Sudah bayar
+• \`process\` - Sedang diproses
+• \`completed\` - Selesai
+• \`cancelled\` - Dibatalkan
+• \`refunded\` - Refund
+
+📞 *KONTAK SUPPORT:*
+Ada masalah? Hubungi admin!
+        `.trim();
 
         return sock.sendMessage(from, { text: menu });
     },
 
     // ===============================
-    // ADD ORDER (PAKE PIPE)
+    // ENHANCED ADD ORDER
     // ===============================
     async addOrder(sock, from, text) {
-        const p = text.split("|").map(x => x.trim());
-
-        if (p.length < 6) {
+        const parts = text.split("|").map(p => p.trim());
+        
+        if (parts.length < 6) {
             return sock.sendMessage(from, {
-                text: "Format: .ordermasuk|nama|nominal|metode|nohp|catatan"
+                text: `📋 *FORMAT ORDER*\n\n` +
+                      `Gunakan: \`.order|nama|nominal|metode|nohp|produk\`\n` +
+                      `Contoh: \`.order|Budi|50000|Dana|08123456789|Topup ML\`\n\n` +
+                      `Untuk detail lengkap:\n` +
+                      `\`.orderplus|nama|nominal|metode|nohp|produk|catatan|status\``
             });
         }
 
-        const nama = p[1];
-        const nominal = Number(p[2]);
-        const metode = p[3];
-        const nohp = p[4].replace(/[^0-9]/g, "");
-        const last4 = nohp.slice(-4);
-        const catatan = p[5] || "-";
-
-        if (!nama || isNaN(nominal) || nominal <= 0) {
-            return sock.sendMessage(from, { text: "Nama tidak boleh kosong dan nominal harus angka valid." });
+        const [, nama, nominalStr, metode, nohp, produk] = parts;
+        const catatan = parts[6] || '';
+        const status = parts[7] || 'pending';
+        
+        // Validate inputs
+        const nominal = parseInt(nominalStr);
+        if (!nama || nama.length < 2) {
+            return sock.sendMessage(from, { text: '❌ Nama harus minimal 2 karakter' });
+        }
+        
+        if (isNaN(nominal) || nominal < 1000) {
+            return sock.sendMessage(from, { text: '❌ Nominal minimal Rp 1.000' });
+        }
+        
+        const validatedPhone = validatePhone(nohp);
+        if (validatedPhone.length < 10) {
+            return sock.sendMessage(from, { text: '❌ Nomor HP tidak valid' });
         }
 
-        const orders = loadOrders();
-        const id = generateOrderId(nama);
-
-        orders[id] = {
-            id,
+        // Generate order
+        const orderId = generateOrderId();
+        const timestamp = new Date().toISOString();
+        
+        const order = {
+            id: orderId,
             nama,
             nominal,
-            metode,
-            nohp,
-            last4,
+            metode: metode.toLowerCase(),
+            nohp: validatedPhone,
+            produk,
             catatan,
-            status: "belum",
-            timestamp: nowTime()
+            status,
+            timestamp,
+            created_at: timestamp,
+            updated_at: timestamp,
+            created_by: from,
+            history: [{
+                action: 'created',
+                timestamp,
+                by: from,
+                note: 'Order dibuat'
+            }]
         };
 
-        saveOrders(orders);
+        // Save to database
+        const orders = loadOrders();
+        orders[orderId] = order;
+        
+        if (saveOrders(orders)) {
+            updateStats(order, 'add');
+            
+            // Send confirmation
+            const message = `
+✅ *ORDER BERHASIL DICATAT!*
 
-        return sock.sendMessage(from, {
-            text:
-                `🟢 ORDER MASUK!  
-ID: ${id}
-Nama: ${nama}
-Nominal: Rp${nominal.toLocaleString('id-ID')}
-Metode: ${metode}
-HP Akhir: ${last4}
-Catatan: ${catatan}
-Status: belum
-Tanggal: ${orders[id].timestamp}`
-        });
+📋 *DETAIL ORDER:*
+🆔 ID: \`${orderId}\`
+👤 Nama: ${nama}
+💰 Nominal: ${formatCurrency(nominal)}
+📱 No. HP: ${validatedPhone}
+🏷️ Produk: ${produk}
+💳 Metode: ${metode}
+📝 Status: ${status}
+📅 Waktu: ${formatDate(timestamp)}
+${catatan ? `📌 Catatan: ${catatan}\n` : ''}
+━━━━━━━━━━━━━━━━━━━━
+*PERINTAH LANJUTAN:*
+• \`.order ${orderId}\` ➜ Lihat detail
+• \`.done ${orderId}\` ➜ Tandai selesai
+• \`.edit ${orderId}|field|value\` ➜ Edit data
+            `.trim();
+            
+            return sock.sendMessage(from, { text: message });
+        } else {
+            return sock.sendMessage(from, { text: '❌ Gagal menyimpan order' });
+        }
     },
 
     // ===============================
-    // CEK ORDER
+    // ENHANCED VIEW ORDERS (PAGINATED)
     // ===============================
-    async cekOrder(sock, from) {
+    async viewOrders(sock, from, text) {
         const orders = loadOrders();
-        if (Object.keys(orders).length === 0)
-            return sock.sendMessage(from, { text: "Belum ada order." });
-
-        let out = "📦 *DAFTAR ORDER*\n\n";
-
-        for (const o of Object.values(orders)) {
-            out +=
-                `ID: ${o.id}
-Nama: ${o.nama}
-Nominal: Rp${o.nominal.toLocaleString('id-ID')}
-Metode: ${o.metode}
-HP: ****${o.last4}
-Status: ${o.status}
-Tanggal: ${o.timestamp}
-Catatan: ${o.catatan}
------------------------\n`;
+        const orderList = Object.values(orders);
+        
+        if (orderList.length === 0) {
+            return sock.sendMessage(from, { text: '📭 Tidak ada order yang tercatat.' });
         }
 
-        return sock.sendMessage(from, { text: out });
+        // Parse optional page number
+        const pageMatch = text.match(/page\s+(\d+)/i);
+        const page = pageMatch ? parseInt(pageMatch[1]) : 1;
+        const pageSize = 10;
+        const totalPages = Math.ceil(orderList.length / pageSize);
+        
+        // Sort by latest first
+        orderList.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
+        // Get current page
+        const start = (page - 1) * pageSize;
+        const end = start + pageSize;
+        const pageOrders = orderList.slice(start, end);
+        
+        // Build message
+        let message = `📋 *DAFTAR ORDER* (${orderList.length} total)\n`;
+        message += `Halaman ${page} dari ${totalPages}\n\n`;
+        
+        const statusIcons = {
+            'pending': '⏳',
+            'paid': '💳',
+            'process': '🔄',
+            'completed': '✅',
+            'cancelled': '❌',
+            'refunded': '💸'
+        };
+        
+        pageOrders.forEach((order, index) => {
+            const icon = statusIcons[order.status] || '📝';
+            message += `${start + index + 1}. ${icon} *${order.id}*\n`;
+            message += `   👤 ${order.nama} | ${formatCurrency(order.nominal)}\n`;
+            message += `   🏷️ ${order.produk || 'Tanpa produk'}\n`;
+            message += `   📅 ${formatDate(order.timestamp)}\n`;
+            message += `   ─────────────────\n`;
+        });
+        
+        if (totalPages > 1) {
+            message += `\n📄 Navigasi: \`.orders page 2\` (halaman berikutnya)`;
+        }
+        
+        return sock.sendMessage(from, { text: message });
     },
 
     // ===============================
-    // DONE ORDER (by ID) - UNTUK OBJECT
+    // VIEW SINGLE ORDER
     // ===============================
-    async markDone(sock, from, text) {
-        const p = text.split("|");
-        if (p.length < 2) return sock.sendMessage(from, { text: "Format: .done|ID\nContoh: .done|ORD001" });
-
-        const targetId = p[1].trim().toUpperCase();
+    async viewOrder(sock, from, text) {
+        const match = text.match(/\.order\s+(\w+)/i);
+        if (!match) {
+            return sock.sendMessage(from, { text: 'Gunakan: `.order ID`\nContoh: `.order ORDABC123`' });
+        }
+        
+        const orderId = match[1].toUpperCase();
         const orders = loadOrders();
-
-        // Cek langsung di object orders
-        if (orders[targetId]) {
-            orders[targetId].status = "selesai";
-            saveOrders(orders);
-
-            return sock.sendMessage(from, {
-                text: `✨ Order *${targetId}* (${orders[targetId].nama}) ditandai SELESAI ✅`
-            });
-        } else {
-            // Cari ID yang mirip
-            const allIds = Object.keys(orders);
-            const similarIds = allIds.filter(id =>
-                id.includes(targetId) ||
-                targetId.includes(id) ||
-                id.toLowerCase().includes(targetId.toLowerCase())
+        const order = orders[orderId];
+        
+        if (!order) {
+            // Try to find similar orders
+            const similar = Object.keys(orders).filter(id => 
+                id.includes(orderId) || orderId.includes(id)
             );
-
-            let reply = `❌ Order dengan ID "${targetId}" tidak ditemukan.`;
-            if (similarIds.length > 0) {
-                reply += `\n\nID yang mirip:\n${similarIds.map(id => `• ${id} - ${orders[id].nama}`).join('\n')}`;
-            } else if (allIds.length > 0) {
-                reply += `\n\nID yang tersedia:\n${allIds.map(id => `• ${id} - ${orders[id].nama}`).join('\n')}`;
-            } else {
-                reply += `\n\nBelum ada order aktif.`;
+            
+            let reply = `❌ Order \`${orderId}\` tidak ditemukan.`;
+            if (similar.length > 0) {
+                reply += `\n\nMungkin maksud Anda:\n${similar.slice(0, 5).map(id => `• \`${id}\` - ${orders[id].nama}`).join('\n')}`;
             }
-
             return sock.sendMessage(from, { text: reply });
         }
+        
+        const statusIcons = {
+            'pending': '⏳ Menunggu',
+            'paid': '💳 Dibayar',
+            'process': '🔄 Diproses',
+            'completed': '✅ Selesai',
+            'cancelled': '❌ Dibatalkan',
+            'refunded': '💸 Refund'
+        };
+        
+        const message = `
+📄 *DETAIL ORDER*
+
+🆔 ID: \`${order.id}\`
+👤 Nama: ${order.nama}
+📱 No. HP: ${order.nohp}
+💰 Nominal: ${formatCurrency(order.nominal)}
+🏷️ Produk: ${order.produk || '-'}
+💳 Metode: ${order.metode || '-'}
+📝 Status: ${statusIcons[order.status] || order.status}
+📅 Dibuat: ${formatDate(order.created_at)}
+🔄 Diupdate: ${formatDate(order.updated_at)}
+${order.catatan ? `📌 Catatan: ${order.catatan}\n` : ''}
+━━━━━━━━━━━━━━━━━━━━
+*HISTORY:*
+${order.history ? order.history.slice(-3).map(h => 
+    `• ${formatDate(h.timestamp)}: ${h.action}${h.note ? ` (${h.note})` : ''}`
+).join('\n') : 'Tidak ada history'}
+
+━━━━━━━━━━━━━━━━━━━━
+*PERINTAH:*
+• \`.done ${order.id}\` ➜ Tandai selesai
+• \`.edit ${order.id}|field|value\` ➜ Edit
+• \`.status ${order.id}|status_baru\` ➜ Ubah status
+• \`.delete ${order.id}\` ➜ Hapus
+        `.trim();
+        
+        return sock.sendMessage(from, { text: message });
     },
+
     // ===============================
-    // EDIT ORDER (PAKE PIPE)
+    // ENHANCED MARK DONE (with history)
     // ===============================
-    async editOrder(sock, from, text) {
-        const p = text.split("|").map(x => x.trim());
-
-        if (p.length < 4)
-            return sock.sendMessage(from, { text: "Format: .editorder|ID|field|value" });
-
-        const id = p[1];
-        const field = p[2].toLowerCase();
-        let value = p.slice(3).join("|"); // agar value bisa mengandung pipe |
-
-        const orders = loadOrders();
-        if (!orders[id])
-            return sock.sendMessage(from, { text: `ID ${id} tidak ditemukan.` });
-
-        if (field === "nominal") value = Number(value);
-        if (field === "nohp") {
-            value = value.replace(/[^0-9]/g, "");
-            orders[id].last4 = value.slice(-4);
+    async markDone(sock, from, text) {
+        const match = text.match(/\.done\s+(\w+)/i);
+        if (!match) {
+            return sock.sendMessage(from, { text: 'Gunakan: `.done ID`\nContoh: `.done ORDABC123`' });
         }
+        
+        const orderId = match[1].toUpperCase();
+        const orders = loadOrders();
+        const order = orders[orderId];
+        
+        if (!order) {
+            // Fuzzy search for similar IDs
+            const allIds = Object.keys(orders);
+            const similar = allIds.filter(id => 
+                id.toLowerCase().includes(orderId.toLowerCase()) ||
+                orderId.toLowerCase().includes(id.toLowerCase())
+            );
+            
+            let reply = `❌ Order \`${orderId}\` tidak ditemukan.`;
+            if (similar.length > 0) {
+                reply += `\n\nOrder yang tersedia:\n${similar.slice(0, 5).map(id => 
+                    `• \`${id}\` - ${orders[id].nama} (${orders[id].status})`
+                ).join('\n')}`;
+            } else if (allIds.length > 0) {
+                reply += `\n\nOrder aktif:\n${allIds.slice(0, 5).map(id => 
+                    `• \`${id}\` - ${orders[id].nama}`
+                ).join('\n')}`;
+                if (allIds.length > 5) reply += `\n...dan ${allIds.length - 5} lainnya`;
+            }
+            return sock.sendMessage(from, { text: reply });
+        }
+        
+        // Check current status
+        if (order.status === 'completed') {
+            return sock.sendMessage(from, { 
+                text: `ℹ️ Order \`${orderId}\` sudah selesai sejak ${formatDate(order.updated_at)}` 
+            });
+        }
+        
+        // Update order
+        const oldStatus = order.status;
+        order.status = 'completed';
+        order.updated_at = new Date().toISOString();
+        
+        // Add to history
+        if (!order.history) order.history = [];
+        order.history.push({
+            action: 'status_change',
+            timestamp: order.updated_at,
+            by: from,
+            note: `${oldStatus} → completed`,
+            details: { old_status: oldStatus, new_status: 'completed' }
+        });
+        
+        orders[orderId] = order;
+        
+        if (saveOrders(orders)) {
+            const message = `
+✅ *ORDER SELESAI!*
 
-        if (field in orders[id]) {
-            orders[id][field] = value;
-            saveOrders(orders);
-            return sock.sendMessage(from, { text: `✔ Order ${id} berhasil diperbarui (${field} → ${value})` });
+🆔 \`${orderId}\`
+👤 ${order.nama}
+💰 ${formatCurrency(order.nominal)}
+🏷️ ${order.produk || '-'}
+📅 Selesai: ${formatDate(order.updated_at)}
+
+📊 Status: ${oldStatus} → ✅ *COMPLETED*
+
+━━━━━━━━━━━━━━━━━━━━
+*OPSI LAINNYA:*
+• \`.order ${orderId}\` ➜ Lihat detail lengkap
+• \`.stats\` ➜ Lihat statistik
+• \`.today\` ➜ Order hari ini
+            `.trim();
+            
+            return sock.sendMessage(from, { text: message });
         } else {
-            return sock.sendMessage(from, { text: `Field ${field} tidak valid.` });
+            return sock.sendMessage(from, { text: '❌ Gagal menyimpan perubahan' });
         }
     },
 
     // ===============================
-    // DELETE ORDER
+    // SEARCH ORDERS
     // ===============================
-    async deleteOrder(sock, from, text) {
-        const p = text.split("|");
-        if (p.length < 2)
-            return sock.sendMessage(from, { text: "Format: .hapusorder|ID" });
-
-        const id = p[1];
+    async searchOrders(sock, from, text) {
+        const match = text.match(/\.search\s+(.+)/i);
+        if (!match) {
+            return sock.sendMessage(from, { 
+                text: 'Gunakan: `.search kata_kunci`\nContoh: `.search Budi` atau `.search 50000`' 
+            });
+        }
+        
+        const query = match[1].toLowerCase();
         const orders = loadOrders();
-
-        if (!orders[id])
-            return sock.sendMessage(from, { text: `ID ${id} tidak ditemukan.` });
-
-        delete orders[id];
-        saveOrders(orders);
-
-        return sock.sendMessage(from, { text: `🗑 Order ${id} dihapus.` });
-    },
-
-    // ===============================
-    // REFUND ORDER
-    // ===============================
-    async refundOrder(sock, from, text) {
-        const p = text.split("|");
-        if (p.length < 2)
-            return sock.sendMessage(from, { text: "Format: .refund|ID" });
-
-        const id = p[1];
-        const orders = loadOrders();
-
-        if (!orders[id])
-            return sock.sendMessage(from, { text: `ID ${id} tidak ditemukan.` });
-
-        orders[id].status = "refund";
-        saveOrders(orders);
-
-        return sock.sendMessage(from, { text: `💸 Order ${id} ditandai REFUND.` });
-    },
-
-    // ===============================
-    // REKAP BULANAN (PAKE PIPE)
-    // ===============================
-    async rekapBulan(sock, from, text) {
-        const p = text.split("|");
-        if (p.length < 2)
-            return sock.sendMessage(from, { text: "Format: .rekapbulan|YYYY-MM (contoh: .rekapbulan|2025-12)" });
-
-        const periode = p[1].trim();
-        const match = periode.match(/^(\d{4})-(\d{2})$/);
-        if (!match)
-            return sock.sendMessage(from, { text: "Format salah! Gunakan YYYY-MM, contoh: 2025-12" });
-
-        const [, yr, mn] = match;
-
-        const orders = loadOrders();
-        let total = 0;
-        let detail = "";
-        let count = 0;
-
-        for (const o of Object.values(orders)) {
-            try {
-                const datePart = o.timestamp.split(",")[0].trim(); // "10/12/2025"
-                const [d, m, y] = datePart.split("/");
-
-                const orderMonth = m.padStart(2, "0");
-                const orderYear = y;
-
-                if (orderYear === yr && orderMonth === mn) {
-                    if (o.status !== "refund") {
-                        total += o.nominal;
-                    }
-                    detail += `• ${o.nama} – Rp${o.nominal.toLocaleString('id-ID')} (${o.status})\n`;
-                    count++;
-                }
-            } catch (e) {
-                continue;
+        const results = [];
+        
+        // Search in all fields
+        for (const [id, order] of Object.entries(orders)) {
+            if (
+                id.toLowerCase().includes(query) ||
+                order.nama.toLowerCase().includes(query) ||
+                order.nohp.includes(query) ||
+                order.produk?.toLowerCase().includes(query) ||
+                order.catatan?.toLowerCase().includes(query) ||
+                order.metode?.toLowerCase().includes(query) ||
+                order.nominal.toString().includes(query)
+            ) {
+                results.push({ id, ...order });
             }
         }
-
-        const teksTotal = total > 0 ? `Rp${total.toLocaleString('id-ID')}` : "0";
-
-        return sock.sendMessage(from, {
-            text: `📊 *REKAP BULAN ${mn}/${yr}*
-
-Total pemasukan: *${teksTotal}* (${count} transaksi)
-
-Detail:
-${detail || "Tidak ada transaksi pada periode ini."}`
+        
+        if (results.length === 0) {
+            return sock.sendMessage(from, { 
+                text: `🔍 Tidak ditemukan order dengan kata kunci "${query}"` 
+            });
+        }
+        
+        // Sort by relevance (exact matches first)
+        results.sort((a, b) => {
+            const aScore = a.nama.toLowerCase() === query ? 100 : 
+                          a.id.toLowerCase() === query ? 90 : 0;
+            const bScore = b.nama.toLowerCase() === query ? 100 : 
+                          b.id.toLowerCase() === query ? 90 : 0;
+            return bScore - aScore;
         });
+        
+        let message = `🔍 *HASIL PENCARIAN* (${results.length} ditemukan)\n\n`;
+        
+        results.slice(0, 10).forEach((order, index) => {
+            const statusIcon = {
+                'pending': '⏳', 'paid': '💳', 'process': '🔄',
+                'completed': '✅', 'cancelled': '❌', 'refunded': '💸'
+            }[order.status] || '📝';
+            
+            message += `${index + 1}. ${statusIcon} *${order.id}*\n`;
+            message += `   👤 ${order.nama} | ${formatCurrency(order.nominal)}\n`;
+            message += `   📱 ${order.nohp.slice(-4)} | ${order.status}\n`;
+            message += `   🏷️ ${order.produk || '-'}\n`;
+            if (order.catatan) message += `   📝 ${order.catatan.slice(0, 30)}${order.catatan.length > 30 ? '...' : ''}\n`;
+            message += `   ─────────────────\n`;
+        });
+        
+        if (results.length > 10) {
+            message += `\n📄 Menampilkan 10 dari ${results.length} hasil. Gunakan filter yang lebih spesifik.`;
+        }
+        
+        message += `\n\n💡 *Tips:* Gunakan \`.order ID\` untuk melihat detail lengkap`;
+        
+        return sock.sendMessage(from, { text: message });
+    },
+
+    // ===============================
+    // VIEW TODAY'S ORDERS
+    // ===============================
+    async todayOrders(sock, from) {
+        const orders = loadOrders();
+        const today = new Date().toISOString().split('T')[0];
+        const todayOrders = [];
+        
+        for (const [id, order] of Object.entries(orders)) {
+            const orderDate = new Date(order.timestamp).toISOString().split('T')[0];
+            if (orderDate === today) {
+                todayOrders.push({ id, ...order });
+            }
+        }
+        
+        if (todayOrders.length === 0) {
+            return sock.sendMessage(from, { 
+                text: `📅 Tidak ada order hari ini (${formatDate(new Date(), 'id-ID').split(',')[0]})` 
+            });
+        }
+        
+        // Calculate totals
+        const totalRevenue = todayOrders.reduce((sum, order) => sum + order.nominal, 0);
+        const byStatus = {};
+        todayOrders.forEach(order => {
+            byStatus[order.status] = (byStatus[order.status] || 0) + 1;
+        });
+        
+        let message = `📅 *ORDER HARI INI* (${formatDate(new Date(), 'id-ID').split(',')[0]})\n\n`;
+        message += `📊 *STATISTIK:*\n`;
+        message += `• Total Order: ${todayOrders.length}\n`;
+        message += `• Total Revenue: ${formatCurrency(totalRevenue)}\n`;
+        message += `• Status:\n`;
+        Object.entries(byStatus).forEach(([status, count]) => {
+            const icon = {
+                'pending': '⏳', 'paid': '💳', 'process': '🔄',
+                'completed': '✅', 'cancelled': '❌', 'refunded': '💸'
+            }[status] || '📝';
+            message += `  ${icon} ${status}: ${count}\n`;
+        });
+        
+        message += `\n📋 *DAFTAR ORDER:*\n`;
+        todayOrders.forEach((order, index) => {
+            const icon = {
+                'pending': '⏳', 'paid': '💳', 'process': '🔄',
+                'completed': '✅', 'cancelled': '❌', 'refunded': '💸'
+            }[order.status] || '📝';
+            
+            message += `${index + 1}. ${icon} *${order.id}*\n`;
+            message += `   👤 ${order.nama} | ${formatCurrency(order.nominal)}\n`;
+            message += `   🏷️ ${order.produk || '-'}\n`;
+            message += `   ─────────────────\n`;
+        });
+        
+        return sock.sendMessage(from, { text: message });
+    },
+
+    // ===============================
+    // VIEW PENDING ORDERS
+    // ===============================
+    async pendingOrders(sock, from) {
+        const orders = loadOrders();
+        const pending = Object.entries(orders)
+            .filter(([_, order]) => ['pending', 'paid', 'process'].includes(order.status))
+            .map(([id, order]) => ({ id, ...order }));
+        
+        if (pending.length === 0) {
+            return sock.sendMessage(from, { 
+                text: '🎉 Tidak ada order yang pending! Semua order sudah selesai.' 
+            });
+        }
+        
+        let message = `⏳ *ORDER PENDING* (${pending.length} order)\n\n`;
+        
+        pending.forEach((order, index) => {
+            const statusIcon = {
+                'pending': '⏳ Menunggu Bayar',
+                'paid': '💳 Sudah Bayar',
+                'process': '🔄 Diproses'
+            }[order.status];
+            
+            message += `${index + 1}. *${order.id}*\n`;
+            message += `   👤 ${order.nama}\n`;
+            message += `   💰 ${formatCurrency(order.nominal)}\n`;
+            message += `   📱 ${order.nohp.slice(-4)}\n`;
+            message += `   🏷️ ${order.produk || '-'}\n`;
+            message += `   ${statusIcon}\n`;
+            message += `   📅 ${formatDate(order.timestamp)}\n`;
+            message += `   ─────────────────\n`;
+        });
+        
+        message += `\n💡 *Tindakan:*\n`;
+        message += `Gunakan \`.done ID\` untuk menandai selesai\n`;
+        message += `Gunakan \`.order ID\` untuk melihat detail`;
+        
+        return sock.sendMessage(from, { text: message });
+    },
+
+    // ===============================
+    // ADVANCED STATISTICS
+    // ===============================
+    async showStats(sock, from) {
+        const stats = loadStats();
+        const orders = loadOrders();
+        
+        const today = new Date().toISOString().split('T')[0];
+        const todayOrders = Object.values(orders).filter(order => 
+            new Date(order.timestamp).toISOString().split('T')[0] === today
+        );
+        const todayRevenue = todayOrders.reduce((sum, order) => sum + order.nominal, 0);
+        
+        // Calculate status distribution
+        const statusCount = {};
+        Object.values(orders).forEach(order => {
+            statusCount[order.status] = (statusCount[order.status] || 0) + 1;
+        });
+        
+        // Top products
+        const topProducts = Object.entries(stats.product_stats || {})
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+        
+        // Monthly revenue (last 6 months)
+        const months = Object.entries(stats.monthly_stats || {})
+            .sort((a, b) => b[0].localeCompare(a[0]))
+            .slice(0, 6);
+        
+        const message = `
+📊 *SISTEM STATISTIK BAKULAN*
+
+━━━━━━━━━━━━━━━━━━━━
+📈 *OVERVIEW:*
+• Total Order: ${stats.total_orders}
+• Total Revenue: ${formatCurrency(stats.total_revenue)}
+• Order Hari Ini: ${todayOrders.length} (${formatCurrency(todayRevenue)})
+
+━━━━━━━━━━━━━━━━━━━━
+📅 *DISTRIBUSI STATUS:*
+${Object.entries(statusCount).map(([status, count]) => {
+    const icon = {
+        'pending': '⏳', 'paid': '💳', 'process': '🔄',
+        'completed': '✅', 'cancelled': '❌', 'refunded': '💸'
+    }[status] || '📝';
+    const percent = ((count / stats.total_orders) * 100).toFixed(1);
+    return `• ${icon} ${status}: ${count} (${percent}%)`;
+}).join('\n')}
+
+━━━━━━━━━━━━━━━━━━━━
+🏆 *PRODUK TERLARIS:*
+${topProducts.length > 0 ? topProducts.map(([product, count]) => 
+    `• ${product}: ${count} order`
+).join('\n') : 'Belum ada data produk'}
+
+━━━━━━━━━━━━━━━━━━━━
+📅 *REVENUE 6 BULAN TERAKHIR:*
+${months.length > 0 ? months.map(([month, data]) => {
+    const [year, mon] = month.split('-');
+    return `• ${mon}/${year}: ${formatCurrency(data.revenue)} (${data.orders} order)`;
+}).join('\n') : 'Belum ada data bulanan'}
+
+━━━━━━━━━━━━━━━━━━━━
+💳 *METODE PEMBAYARAN:*
+${Object.entries(stats.method_stats || {}).map(([method, count]) => 
+    `• ${method}: ${count}`
+).join('\n') || 'Belum ada data metode'}
+
+━━━━━━━━━━━━━━━━━━━━
+💡 *PERINTAH LAINNYA:*
+• \`.report YYYY-MM\` ➜ Laporan bulanan
+• \`.top\` ➜ Detail produk terlaris
+• \`.chart\` ➜ Chart visual
+        `.trim();
+        
+        return sock.sendMessage(from, { text: message });
+    },
+
+    // ===============================
+    // MONTHLY REPORT
+    // ===============================
+    async monthlyReport(sock, from, text) {
+        const match = text.match(/\.report\s+(\d{4}-\d{2})/i);
+        const month = match ? match[1] : new Date().toISOString().slice(0, 7);
+        
+        const orders = loadOrders();
+        const monthOrders = Object.values(orders).filter(order => {
+            const orderMonth = new Date(order.timestamp).toISOString().slice(0, 7);
+            return orderMonth === month;
+        });
+        
+        if (monthOrders.length === 0) {
+            return sock.sendMessage(from, { 
+                text: `📭 Tidak ada order pada bulan ${month}` 
+            });
+        }
+        
+        // Calculate statistics
+        const totalRevenue = monthOrders.reduce((sum, order) => sum + order.nominal, 0);
+        const statusCount = {};
+        const productRevenue = {};
+        const methodCount = {};
+        
+        monthOrders.forEach(order => {
+            // Status count
+            statusCount[order.status] = (statusCount[order.status] || 0) + 1;
+            
+            // Product revenue
+            const product = order.produk || 'lainnya';
+            productRevenue[product] = (productRevenue[product] || 0) + order.nominal;
+            
+            // Method count
+            if (order.metode) {
+                methodCount[order.metode] = (methodCount[order.metode] || 0) + 1;
+            }
+        });
+        
+        // Top products
+        const topProducts = Object.entries(productRevenue)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5);
+        
+        const [year, mon] = month.split('-');
+        const monthName = new Date(`${year}-${mon}-01`).toLocaleDateString('id-ID', { month: 'long' });
+        
+        const message = `
+📊 *LAPORAN BULANAN: ${monthName} ${year}*
+
+━━━━━━━━━━━━━━━━━━━━
+📈 *OVERVIEW:*
+• Total Order: ${monthOrders.length}
+• Total Revenue: ${formatCurrency(totalRevenue)}
+• Rata-rata/Order: ${formatCurrency(totalRevenue / monthOrders.length)}
+
+━━━━━━━━━━━━━━━━━━━━
+📋 *DISTRIBUSI STATUS:*
+${Object.entries(statusCount).map(([status, count]) => {
+    const icon = {
+        'pending': '⏳', 'paid': '💳', 'process': '🔄',
+        'completed': '✅', 'cancelled': '❌', 'refunded': '💸'
+    }[status] || '📝';
+    const percent = ((count / monthOrders.length) * 100).toFixed(1);
+    return `• ${icon} ${status}: ${count} order (${percent}%)`;
+}).join('\n')}
+
+━━━━━━━━━━━━━━━━━━━━
+🏆 *PRODUK TERBAIK:*
+${topProducts.map(([product, revenue], index) => {
+    const percent = ((revenue / totalRevenue) * 100).toFixed(1);
+    const emoji = ['🥇', '🥈', '🥉', '4.', '5.'][index] || '•';
+    return `${emoji} ${product}: ${formatCurrency(revenue)} (${percent}%)`;
+}).join('\n')}
+
+━━━━━━━━━━━━━━━━━━━━
+💳 *METODE PEMBAYARAN:*
+${Object.entries(methodCount).map(([method, count]) => 
+    `• ${method}: ${count} order`
+).join('\n') || 'Tidak ada data metode'}
+
+━━━━━━━━━━━━━━━━━━━━
+📅 *ORDER TERBARU:*
+${monthOrders
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .slice(0, 3)
+    .map(order => `• ${order.nama}: ${formatCurrency(order.nominal)} (${order.status})`)
+    .join('\n')}
+
+━━━━━━━━━━━━━━━━━━━━
+💡 *REKOMENDASI:*
+${totalRevenue > 0 ? 
+    `• Fokus pada produk: ${topProducts[0]?.[0] || '-'}\n` +
+    `• Tingkatkan konversi dari status "pending"\n` +
+    `• Metode populer: ${Object.entries(methodCount).sort((a,b) => b[1]-a[1])[0]?.[0] || '-'}`
+    : 'Belum ada data yang cukup untuk rekomendasi'}
+        `.trim();
+        
+        return sock.sendMessage(from, { text: message });
+    },
+
+    // ===============================
+    // EXPORT DATA
+    // ===============================
+    async exportData(sock, from) {
+        const orders = loadOrders();
+        if (Object.keys(orders).length === 0) {
+            return sock.sendMessage(from, { text: '📭 Tidak ada data untuk diexport' });
+        }
+        
+        // Create CSV content
+        let csv = 'ID,Nama,Nominal,Metode,NoHP,Produk,Status,Catatan,Tanggal\n';
+        
+        Object.values(orders).forEach(order => {
+            const row = [
+                `"${order.id}"`,
+                `"${order.nama}"`,
+                order.nominal,
+                `"${order.metode || ''}"`,
+                `"${order.nohp || ''}"`,
+                `"${order.produk || ''}"`,
+                `"${order.status}"`,
+                `"${(order.catatan || '').replace(/"/g, '""')}"`,
+                `"${order.timestamp}"`
+            ];
+            csv += row.join(',') + '\n';
+        });
+        
+        // Save to file
+        const exportFile = path.join(DATA_DIR, `export_${Date.now()}.csv`);
+        fs.writeFileSync(exportFile, csv, 'utf8');
+        
+        // Send file via WhatsApp
+        await sock.sendMessage(from, {
+            document: { url: `file://${exportFile}` },
+            fileName: `bakulan_export_${new Date().toISOString().split('T')[0]}.csv`,
+            mimetype: 'text/csv',
+            caption: `📤 *EXPORT DATA BAKULAN*\n\n` +
+                     `Total: ${Object.keys(orders).length} order\n` +
+                     `Tanggal: ${formatDate(new Date())}\n\n` +
+                     `File akan terhapus otomatis dalam 24 jam.`
+        });
+        
+        // Delete file after 1 minute (optional)
+        setTimeout(() => {
+            try {
+                if (fs.existsSync(exportFile)) {
+                    fs.unlinkSync(exportFile);
+                    console.log(`🗑️ Deleted export file: ${exportFile}`);
+                }
+            } catch (e) {
+                console.error('Error deleting export file:', e.message);
+            }
+        }, 60000);
+        
+        return true;
+    },
+
+    // ===============================
+    // SYSTEM CLEANUP
+    // ===============================
+    async systemCleanup(sock, from) {
+        const orders = loadOrders();
+        const oldOrders = [];
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30));
+        
+        for (const [id, order] of Object.entries(orders)) {
+            const orderDate = new Date(order.timestamp);
+            if (orderDate < thirtyDaysAgo && order.status === 'completed') {
+                oldOrders.push(id);
+            }
+        }
+        
+        if (oldOrders.length === 0) {
+            return sock.sendMessage(from, { 
+                text: '🧹 Tidak ada data lama (>30 hari) yang bisa dibersihkan.' 
+            });
+        }
+        
+        // Create archive
+        const archive = {};
+        oldOrders.forEach(id => {
+            archive[id] = orders[id];
+            delete orders[id];
+        });
+        
+        // Save archive
+        const archiveFile = path.join(BACKUP_DIR, `archive_${Date.now()}.json`);
+        fs.writeFileSync(archiveFile, JSON.stringify(archive, null, 2));
+        
+        // Save current orders
+        saveOrders(orders);
+        
+        return sock.sendMessage(from, {
+            text: `🧹 *CLEANUP SELESAI*\n\n` +
+                  `• Order diarsipkan: ${oldOrders.length}\n` +
+                  `• Order tersisa: ${Object.keys(orders).length}\n` +
+                  `• File archive: ${path.basename(archiveFile)}\n\n` +
+                  `📂 Arsip disimpan di folder backups.`
+        });
+    },
+
+    // ===============================
+    // EDIT ORDER (ENHANCED)
+    // ===============================
+    async editOrder(sock, from, text) {
+        const match = text.match(/\.edit\s+(\w+)\|(\w+)\|(.+)/i);
+        if (!match) {
+            return sock.sendMessage(from, {
+                text: 'Gunakan: `.edit ID|field|value`\n' +
+                      'Contoh: `.edit ORDABC123|status|completed`\n' +
+                      'Field yang bisa diedit: nama, nominal, metode, nohp, produk, catatan, status'
+            });
+        }
+        
+        const [, orderId, field, value] = match;
+        const allowedFields = ['nama', 'nominal', 'metode', 'nohp', 'produk', 'catatan', 'status'];
+        
+        if (!allowedFields.includes(field.toLowerCase())) {
+            return sock.sendMessage(from, {
+                text: `❌ Field "${field}" tidak valid.\n` +
+                      `Field yang diperbolehkan: ${allowedFields.join(', ')}`
+            });
+        }
+        
+        const orders = loadOrders();
+        const order = orders[orderId.toUpperCase()];
+        
+        if (!order) {
+            return sock.sendMessage(from, { 
+                text: `❌ Order \`${orderId}\` tidak ditemukan.` 
+            });
+        }
+        
+        const oldValue = order[field];
+        let newValue = value;
+        
+        // Special handling for each field
+        switch (field.toLowerCase()) {
+            case 'nominal':
+                newValue = parseInt(value);
+                if (isNaN(newValue)) {
+                    return sock.sendMessage(from, { text: '❌ Nominal harus angka' });
+                }
+                break;
+                
+            case 'nohp':
+                newValue = validatePhone(value);
+                if (newValue.length < 10) {
+                    return sock.sendMessage(from, { text: '❌ Nomor HP tidak valid' });
+                }
+                break;
+                
+            case 'status':
+                if (!['pending', 'paid', 'process', 'completed', 'cancelled', 'refunded'].includes(value.toLowerCase())) {
+                    return sock.sendMessage(from, { 
+                        text: '❌ Status tidak valid. Gunakan: pending, paid, process, completed, cancelled, refunded' 
+                    });
+                }
+                newValue = value.toLowerCase();
+                break;
+        }
+        
+        // Update order
+        order[field] = newValue;
+        order.updated_at = new Date().toISOString();
+        
+        // Add to history
+        if (!order.history) order.history = [];
+        order.history.push({
+            action: 'edit',
+            timestamp: order.updated_at,
+            by: from,
+            note: `${field}: ${oldValue} → ${newValue}`,
+            details: { field, old_value: oldValue, new_value: newValue }
+        });
+        
+        orders[orderId.toUpperCase()] = order;
+        
+        if (saveOrders(orders)) {
+            return sock.sendMessage(from, {
+                text: `✅ *ORDER DIPERBARUI*\n\n` +
+                      `🆔 \`${orderId}\`\n` +
+                      `👤 ${order.nama}\n` +
+                      `📝 *${field.toUpperCase()}:* ${oldValue} → ${newValue}\n` +
+                      `📅 Diupdate: ${formatDate(order.updated_at)}\n\n` +
+                      `Gunakan \`.order ${orderId}\` untuk melihat detail lengkap.`
+            });
+        } else {
+            return sock.sendMessage(from, { text: '❌ Gagal menyimpan perubahan' });
+        }
+    },
+
+    // ===============================
+    // CHANGE STATUS ONLY
+    // ===============================
+    async changeStatus(sock, from, text) {
+        const match = text.match(/\.status\s+(\w+)\|(\w+)/i);
+        if (!match) {
+            return sock.sendMessage(from, {
+                text: 'Gunakan: `.status ID|status_baru`\n' +
+                      'Contoh: `.status ORDABC123|completed`\n' +
+                      'Status: pending, paid, process, completed, cancelled, refunded'
+            });
+        }
+        
+        const [, orderId, newStatus] = match;
+        const validStatuses = ['pending', 'paid', 'process', 'completed', 'cancelled', 'refunded'];
+        
+        if (!validStatuses.includes(newStatus.toLowerCase())) {
+            return sock.sendMessage(from, {
+                text: `❌ Status "${newStatus}" tidak valid.\n` +
+                      `Status yang diperbolehkan: ${validStatuses.join(', ')}`
+            });
+        }
+        
+        const orders = loadOrders();
+        const order = orders[orderId.toUpperCase()];
+        
+        if (!order) {
+            return sock.sendMessage(from, { 
+                text: `❌ Order \`${orderId}\` tidak ditemukan.` 
+            });
+        }
+        
+        const oldStatus = order.status;
+        if (oldStatus === newStatus) {
+            return sock.sendMessage(from, { 
+                text: `ℹ️ Order sudah berstatus "${newStatus}"` 
+            });
+        }
+        
+        // Update order
+        order.status = newStatus.toLowerCase();
+        order.updated_at = new Date().toISOString();
+        
+        // Add to history
+        if (!order.history) order.history = [];
+        order.history.push({
+            action: 'status_change',
+            timestamp: order.updated_at,
+            by: from,
+            note: `${oldStatus} → ${newStatus}`,
+            details: { old_status: oldStatus, new_status: newStatus }
+        });
+        
+        orders[orderId.toUpperCase()] = order;
+        
+        if (saveOrders(orders)) {
+            const statusIcons = {
+                'pending': '⏳', 'paid': '💳', 'process': '🔄',
+                'completed': '✅', 'cancelled': '❌', 'refunded': '💸'
+            };
+            
+            const oldIcon = statusIcons[oldStatus] || '📝';
+            const newIcon = statusIcons[newStatus] || '📝';
+            
+            return sock.sendMessage(from, {
+                text: `🔄 *STATUS DIUBAH*\n\n` +
+                      `🆔 \`${orderId}\`\n` +
+                      `👤 ${order.nama}\n` +
+                      `💰 ${formatCurrency(order.nominal)}\n` +
+                      `📊 Status: ${oldIcon} ${oldStatus} → ${newIcon} *${newStatus}*\n` +
+                      `📅 Diupdate: ${formatDate(order.updated_at)}\n\n` +
+                      `Gunakan \`.order ${orderId}\` untuk melihat detail lengkap.`
+            });
+        } else {
+            return sock.sendMessage(from, { text: '❌ Gagal mengubah status' });
+        }
+    },
+
+    // ===============================
+    // DELETE ORDER (ENHANCED)
+    // ===============================
+    async deleteOrder(sock, from, text) {
+        const match = text.match(/\.delete\s+(\w+)/i);
+        if (!match) {
+            return sock.sendMessage(from, { 
+                text: 'Gunakan: `.delete ID`\nContoh: `.delete ORDABC123`' 
+            });
+        }
+        
+        const orderId = match[1].toUpperCase();
+        const orders = loadOrders();
+        const order = orders[orderId];
+        
+        if (!order) {
+            return sock.sendMessage(from, { 
+                text: `❌ Order \`${orderId}\` tidak ditemukan.` 
+            });
+        }
+        
+        // Archive before deleting
+        const archiveFile = path.join(BACKUP_DIR, `deleted_${orderId}_${Date.now()}.json`);
+        fs.writeFileSync(archiveFile, JSON.stringify(order, null, 2));
+        
+        // Delete from active orders
+        delete orders[orderId];
+        
+        if (saveOrders(orders)) {
+            updateStats(order, 'remove');
+            
+            return sock.sendMessage(from, {
+                text: `🗑️ *ORDER DIHAPUS*\n\n` +
+                      `🆔 \`${orderId}\`\n` +
+                      `👤 ${order.nama}\n` +
+                      `💰 ${formatCurrency(order.nominal)}\n` +
+                      `🏷️ ${order.produk || '-'}\n` +
+                      `📅 Dihapus: ${formatDate(new Date())}\n\n` +
+                      `📂 Data diarsipkan di: ${path.basename(archiveFile)}`
+            });
+        } else {
+            return sock.sendMessage(from, { text: '❌ Gagal menghapus order' });
+        }
+    },
+
+    // ===============================
+    // SHOW TOP PRODUCTS
+    // ===============================
+    async showTopProducts(sock, from) {
+        const stats = loadStats();
+        const productStats = stats.product_stats || {};
+        
+        if (Object.keys(productStats).length === 0) {
+            return sock.sendMessage(from, { 
+                text: '📭 Belum ada data produk' 
+            });
+        }
+        
+        const sortedProducts = Object.entries(productStats)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+        
+        const orders = loadOrders();
+        const productRevenue = {};
+        
+        // Calculate revenue per product
+        Object.values(orders).forEach(order => {
+            const product = order.produk || 'lainnya';
+            productRevenue[product] = (productRevenue[product] || 0) + order.nominal;
+        });
+        
+        const message = `
+🏆 *PRODUK TERLARIS*
+
+━━━━━━━━━━━━━━━━━━━━
+${sortedProducts.map(([product, count], index) => {
+    const emoji = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'][index] || '•';
+    const revenue = productRevenue[product] || 0;
+    const avg = revenue / count;
+    return `${emoji} *${product}*\n` +
+           `   📊 Order: ${count}\n` +
+           `   💰 Revenue: ${formatCurrency(revenue)}\n` +
+           `   📈 Rata-rata: ${formatCurrency(avg)}\n` +
+           `   ─────────────────`;
+}).join('\n')}
+
+━━━━━━━━━━━━━━━━━━━━
+💡 *REKOMENDASI:*
+${sortedProducts.length > 0 ? 
+    `1. Fokus promosi pada: *${sortedProducts[0][0]}*\n` +
+    `2. Tingkatkan stok untuk: *${sortedProducts[1]?.[0] || sortedProducts[0][0]}*\n` +
+    `3. Buat bundle dengan: *${sortedProducts[2]?.[0] || sortedProducts[0][0]}*`
+    : 'Belum ada data yang cukup'}
+        `.trim();
+        
+        return sock.sendMessage(from, { text: message });
+    },
+
+    // ===============================
+    // SIMPLE CHART (TEXT-BASED)
+    // ===============================
+    async showChart(sock, from) {
+        const stats = loadStats();
+        const monthlyStats = stats.monthly_stats || {};
+        
+        if (Object.keys(monthlyStats).length === 0) {
+            return sock.sendMessage(from, { 
+                text: '📭 Belum ada data untuk ditampilkan dalam chart' 
+            });
+        }
+        
+        // Get last 6 months
+        const months = Object.entries(monthlyStats)
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .slice(-6);
+        
+        if (months.length === 0) {
+            return sock.sendMessage(from, { text: '📭 Tidak ada data bulanan' });
+        }
+        
+        // Find max revenue for scaling
+        const maxRevenue = Math.max(...months.map(([_, data]) => data.revenue || 0));
+        const scale = maxRevenue > 0 ? 20 / maxRevenue : 1;
+        
+        let message = `📊 *CHART REVENUE 6 BULAN TERAKHIR*\n\n`;
+        
+        months.forEach(([month, data]) => {
+            const [year, mon] = month.split('-');
+            const monthName = new Date(`${year}-${mon}-01`).toLocaleDateString('id-ID', { month: 'short' });
+            const barLength = Math.round((data.revenue || 0) * scale);
+            const bar = '█'.repeat(Math.max(1, barLength));
+            
+            message += `${monthName} ${year} | ${bar} ${formatCurrency(data.revenue || 0)}\n`;
+        });
+        
+        message += `\n📈 *KETERANGAN:*\n`;
+        message += `• Setiap "█" ≈ ${formatCurrency(maxRevenue / 20)}\n`;
+        message += `• Total periode: ${formatCurrency(months.reduce((sum, [_, data]) => sum + (data.revenue || 0), 0))}\n`;
+        message += `• Rata-rata/bulan: ${formatCurrency(months.reduce((sum, [_, data]) => sum + (data.revenue || 0), 0) / months.length)}\n`;
+        
+        message += `\n💡 *TREND:*\n`;
+        if (months.length >= 2) {
+            const last = months[months.length - 1][1].revenue || 0;
+            const secondLast = months[months.length - 2][1].revenue || 0;
+            const trend = last > secondLast ? '📈 Naik' : last < secondLast ? '📉 Turun' : '➡️ Stabil';
+            const percentage = secondLast > 0 ? ((last - secondLast) / secondLast * 100).toFixed(1) : 0;
+            
+            message += `${trend} ${percentage > 0 ? '+' : ''}${percentage}% dari bulan sebelumnya`;
+        }
+        
+        return sock.sendMessage(from, { text: message });
     }
 };
