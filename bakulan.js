@@ -164,34 +164,39 @@ Catatan: ${o.catatan}
     },
 
     // ===============================
-    // DONE ORDER (by nama)
+    // DONE ORDER (by ID) - UNTUK OBJECT
     // ===============================
     async markDone(sock, from, text) {
         const p = text.split("|");
         if (p.length < 2) return sock.sendMessage(from, { text: "Format: .done|ID\nContoh: .done|ORD001" });
 
         const targetId = p[1].trim().toUpperCase();
-        const orders = loadOrders(); // Asumsi: orders adalah array
+        const orders = loadOrders();
 
-        // Cari order berdasarkan ID
-        const orderIndex = orders.findIndex(order => order.id === targetId);
-
-        if (orderIndex !== -1) {
-            orders[orderIndex].status = "selesai";
+        // Cek langsung di object orders
+        if (orders[targetId]) {
+            orders[targetId].status = "selesai";
             saveOrders(orders);
 
             return sock.sendMessage(from, {
-                text: `✨ Order *${targetId}* (${orders[orderIndex].nama}) ditandai SELESAI ✅`
+                text: `✨ Order *${targetId}* (${orders[targetId].nama}) ditandai SELESAI ✅`
             });
         } else {
-            // Tampilkan ID yang tersedia
-            const availableIds = orders
-                .filter(o => o.status !== "selesai")
-                .map(o => `• ${o.id} - ${o.nama}`);
+            // Cari ID yang mirip
+            const allIds = Object.keys(orders);
+            const similarIds = allIds.filter(id =>
+                id.includes(targetId) ||
+                targetId.includes(id) ||
+                id.toLowerCase().includes(targetId.toLowerCase())
+            );
 
             let reply = `❌ Order dengan ID "${targetId}" tidak ditemukan.`;
-            if (availableIds.length > 0) {
-                reply += `\n\nID yang tersedia:\n${availableIds.join('\n')}`;
+            if (similarIds.length > 0) {
+                reply += `\n\nID yang mirip:\n${similarIds.map(id => `• ${id} - ${orders[id].nama}`).join('\n')}`;
+            } else if (allIds.length > 0) {
+                reply += `\n\nID yang tersedia:\n${allIds.map(id => `• ${id} - ${orders[id].nama}`).join('\n')}`;
+            } else {
+                reply += `\n\nBelum ada order aktif.`;
             }
 
             return sock.sendMessage(from, { text: reply });
