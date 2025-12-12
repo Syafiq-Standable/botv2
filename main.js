@@ -1072,16 +1072,16 @@ wa.me/6289528950624 - Sam @Sukabyone
 
                 // === STIKER COMMAND ===
                 // trigger: .s, .stiker, .sticker
-const lowerText = text.toLowerCase();
+                const lowerText = text.toLowerCase();
 
-// Cek apakah diawali dengan trigger diikuti spasi atau akhir pesan
-const isTrigger = 
-    lowerText.startsWith('.s ') || 
-    lowerText === '.s' ||
-    lowerText.startsWith('.stiker ') || 
-    lowerText === '.stiker' ||
-    lowerText.startsWith('.sticker ') || 
-    lowerText === '.sticker';
+                // Cek apakah diawali dengan trigger diikuti spasi atau akhir pesan
+                const isTrigger =
+                    lowerText.startsWith('.s ') ||
+                    lowerText === '.s' ||
+                    lowerText.startsWith('.stiker ') ||
+                    lowerText === '.stiker' ||
+                    lowerText.startsWith('.sticker ') ||
+                    lowerText === '.sticker';
 
 
                 if (isTrigger) {
@@ -1322,30 +1322,44 @@ const isTrigger =
                             const response = await axios.get(apiUrl, { timeout: 30000 });
                             console.log('[DEBUG] Respons API:', JSON.stringify(response.data, null, 2));
 
-                            // CARA 1: Akses yang lebih aman dengan optional chaining
-                            const videoData = response.data?.url?.data?.[0];
+                            // Ambil seluruh daftar media (foto/video)
+                            const mediaList = response.data?.url?.data;
 
-                            if (videoData && videoData.url) {
-                                const videoUrl = videoData.url;
-                                console.log('[DEBUG] Link video (String):', videoUrl);
-                                console.log('[DEBUG] Tipe videoUrl:', typeof videoUrl); // Harusnya "string"
+                            // Hapus pesan "sedang memproses" di awal
+                            if (processingMsg?.key) {
+                                await sock.sendMessage(from, { delete: processingMsg.key });
+                            }
 
-                                // Hapus pesan "sedang memproses"
-                                if (processingMsg?.key) {
-                                    await sock.sendMessage(from, { delete: processingMsg.key });
+                            // Cek apakah ada media yang ditemukan
+                            if (Array.isArray(mediaList) && mediaList.length > 0) {
+                                let caption = `✅ Berhasil mengunduh ${mediaList.length} media dari Instagram`;
+
+                                // Loop melalui setiap item media
+                                for (let i = 0; i < mediaList.length; i++) {
+                                    const mediaItem = mediaList[i];
+                                    const mediaUrl = mediaItem.url;
+
+                                    // Tentukan tipe media (video atau foto)
+                                    let messageType = {};
+                                
+                                    if (mediaItem.type === 'video' || mediaUrl.includes('.mp4')) {
+                                        messageType = { video: { url: mediaUrl }, mimetype: 'video/mp4' };
+                                    } else {
+                                        // Asumsi default adalah image
+                                        messageType = { image: { url: mediaUrl } };
+                                    }
+
+                                    // Kirim media
+                                    await sock.sendMessage(from, {
+                                        ...messageType, // Menggunakan `image` atau `video`
+                                        caption: i === 0 ? caption : undefined, // Caption hanya di item pertama
+                                    });
                                 }
-
-                                // KIRIM VIDEO - Cara yang benar
-                                await sock.sendMessage(from, {
-                                    video: { url: videoUrl }, // Pastikan videoUrl adalah STRING
-                                    caption: '✅ Instagram Reel berhasil diunduh',
-                                    mimetype: 'video/mp4'
-                                });
 
                             } else {
                                 // Debug: Tampilkan struktur jika tidak sesuai
-                                console.error('[ERROR] Struktur data tidak sesuai:', response.data);
-                                throw new Error('Link download tidak ditemukan dalam respons API');
+                                console.error('[ERROR] Struktur data tidak sesuai atau media kosong:', response.data);
+                                throw new Error('Link download tidak ditemukan atau respons API kosong');
                             }
 
                         } catch (error) {
