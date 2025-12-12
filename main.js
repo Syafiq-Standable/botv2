@@ -8,7 +8,7 @@ const bakulan = require('./bakulan.js');
 const promo = require('./promo');
 const welcome = require('./welcome');
 const cron = require('node-cron');
-const instagramDownloader = require('./instagram-downloader');
+const downloadInstagram = require('./instagram-downloader');
 
 
 async function connectToWhatsApp() {
@@ -1304,77 +1304,47 @@ wa.me/6289528950624 - Sam @Sukabyone
                     }
                 }
 
-                // INSTAGRAM DOWNLOADER
-                if (text.toLowerCase().startsWith('.ig') || text.toLowerCase().startsWith('.instagram')) {
-                    if (text.toLowerCase().startsWith('.ig') || text.toLowerCase().startsWith('.instagram')) {
-                        const args = text.split(' ');
-                        if (args.length < 2) {
-                            return sock.sendMessage(from, { text: 'linknya maneeeee?\n gini lohh\n".ig https://instagram.com/reel/..."' }, { quoted: msg });
-                        }
-
-                        const url = args[1].trim();
-                        const processingMsg = await sock.sendMessage(from, { text: '⏳ Mengunduh...' }, { quoted: msg });
-
-                        try {
-                            const apiUrl = `http://localhost:3000/igdl?url=${encodeURIComponent(url)}`;
-                            console.log('[DEBUG] Request ke API:', apiUrl);
-
-                            const response = await axios.get(apiUrl, { timeout: 30000 });
-                            console.log('[DEBUG] Respons API:', JSON.stringify(response.data, null, 2));
-
-                            // Ambil seluruh daftar media (foto/video)
-                            const mediaList = response.data?.url?.data;
-
-                            // Hapus pesan "sedang memproses" di awal
-                            if (processingMsg?.key) {
-                                await sock.sendMessage(from, { delete: processingMsg.key });
-                            }
-
-                            // Cek apakah ada media yang ditemukan
-                            if (Array.isArray(mediaList) && mediaList.length > 0) {
-                                let caption = `✅ Berhasil mengunduh ${mediaList.length} media dari Instagram`;
-
-                                // Loop melalui setiap item media
-                                for (let i = 0; i < mediaList.length; i++) {
-                                    const mediaItem = mediaList[i];
-                                    const mediaUrl = mediaItem.url;
-
-                                    // Tentukan tipe media (video atau foto)
-                                    let messageType = {};
-                                
-                                    if (mediaItem.type === 'video' || mediaUrl.includes('.mp4')) {
-                                        messageType = { video: { url: mediaUrl }, mimetype: 'video/mp4' };
-                                    } else {
-                                        // Asumsi default adalah image
-                                        messageType = { image: { url: mediaUrl } };
-                                    }
-
-                                    // Kirim media
-                                    await sock.sendMessage(from, {
-                                        ...messageType, // Menggunakan `image` atau `video`
-                                        caption: i === 0 ? caption : undefined, // Caption hanya di item pertama
-                                    });
-                                }
-
-                            } else {
-                                // Debug: Tampilkan struktur jika tidak sesuai
-                                console.error('[ERROR] Struktur data tidak sesuai atau media kosong:', response.data);
-                                throw new Error('Link download tidak ditemukan atau respons API kosong');
-                            }
-
-                        } catch (error) {
-                            console.error('[ERROR] Detail:', error.message, error.stack);
-
-                            let errorMsg = '❌ Gagal mengunduh video. ';
-                            if (error.message.includes('path') && error.message.includes('Object')) {
-                                errorMsg += 'Terjadi kesalahan: URL video bukan string. Cek log server.';
-                            } else {
-                                errorMsg += `Detail: ${error.message}`;
-                            }
-
-                            await sock.sendMessage(from, { text: errorMsg }, { quoted: msg });
-                        }
+                // INSTAGRAM DOWNLOADER - PERBAIKAN
+                if (text.toLowerCase().startsWith('.ig ') || text.toLowerCase().startsWith('.instagram ')) {
+                    const args = text.split(' ');
+                    if (args.length < 2) {
+                        return sock.sendMessage(from, { text: 'linknya maneeeee?\n gini lohh\n".ig https://instagram.com/reel/..."' }, { quoted: msg });
                     }
+
+                    const url = args[1].trim();
+                    await sock.sendMessage(from, { text: '⏳ Mengunduh...' }, { quoted: msg });
+
+                    try {
+                        // check access: rental required
+                        const fullSenderForIg = msg.key.participant || msg.key.remoteJid;
+                        const isGroup = from.endsWith('@g.us');
+                        const groupId = from;
+                        if (!hasAccessForCommand('.ig', isGroup, fullSenderForIg, groupId)) {
+                            return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk akun/grup yang menyewa bot. Ketik .sewa untuk info.' });
+                        }
+
+                        const result = await downloadInstagram(url);
+
+                        if (result.success) {
+                            if (result.type === 'video') {
+                                await sock.sendMessage(from, {
+                                    video: { url: result.url },
+                                    caption: `✅ Instagram Video Downloaded!\n\nSource: ${result.source || 'unknown'}\n\n_Downloaded by SAM BOT🔥_`
+                                });
+                            } else {
+                                await sock.sendMessage(from, {
+                                    image: { url: result.url },
+                                    caption: `✅ Instagram Image Downloaded!\n\nSource: ${result.source || 'unknown'}\n\n_Downloaded by SAM BOT🔥_`
+                                });
+                            }
+                        } else {
+                            await sock.sendMessage(from, { text: `❌ Gagal: ${result.message}` });
+                        }
+                    } catch (error) {
+                        console.error('Instagram download error:', error);
+                        await sock.sendMessage(from, { text: `❌ Error: ${error.message}` });
+                    }
+                    return;
                 }
 
                 // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI

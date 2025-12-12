@@ -334,4 +334,5 @@ async function downloadInstagramPrivate(url, cookie = null) {
     };
 }
 
-module.exports = instagramDownloader;
+// Ekspor fungsi utama
+module.exports = downloadInstagram; // Perbaikan di sini!
