@@ -1072,7 +1072,7 @@ wa.me/6289528950624 - Sam @Sukabyone
 
                 // === STIKER COMMAND ===
                 // trigger: .s, .stiker, .sticker
-                const triggers = ['.s', '.stiker', '.sticker'];
+                const triggers = ['.s ', '.stiker', '.sticker'];
 
                 const lowerText = text.toLowerCase();
                 const isTrigger = triggers.some(t => lowerText.includes(t));
