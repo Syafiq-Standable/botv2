@@ -1071,11 +1071,12 @@ wa.me/6289528950624 - Sam @Sukabyone
                 }
 
                 // === STIKER COMMAND ===
-                // trigger: .s, .stiker, .sticker
-                const triggers = ['.s ', '.stiker', '.sticker'];
+                // const lowerText = text.toLowerCase();
 
-                const lowerText = text.toLowerCase();
-                const isTrigger = triggers.some(t => lowerText.includes(t));
+// Regex untuk mencocokkan tepat di awal pesan
+const stickerRegex = /^(\.s|\.stiker|\.sticker)(\s|$)/;
+const isTrigger = stickerRegex.test(lowerText);
+
 
                 if (isTrigger) {
 
