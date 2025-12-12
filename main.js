@@ -20,12 +20,12 @@ async function connectToWhatsApp() {
     });
 
     // ====================== PROMO HARIAN + .topup (SATU TEMPAT) ======================
-    const PROMO_TARGET = '6289528950624@s.whatsapp.net'; // ganti kalau mau ke grup
+    const PROMO_TARGET = '6289528950624@s.whatsapp.net', '120363280006072640@g.us'; // ganti kalau mau ke grup
     const FOLDER = path.join(__dirname, 'data');
 
     const promos = [
         {
-            time: '30 8 * * *', photo: 'promo_3d.jpg', caption: `🔥 *JASA 3D FREE FIRE MURAH!*\n` +
+            time: '30 7 * * *', photo: 'promo_3d.jpg', caption: `🔥 *JASA 3D FREE FIRE MURAH!*\n` +
                 `• 3D Solo       : 50rb\n` +
                 `• 3D Couple     : 70rb\n` +
                 `• 3D Squad     : 100rb-150rb\n\n` +
@@ -34,7 +34,7 @@ async function connectToWhatsApp() {
                 `#3DFreeFire #3DFF #Jasa3D`
         },
         {
-            time: '31 8 * * *', photo: 'promo_topup.jpg', caption:
+            time: '31 7 * * *', photo: 'promo_topup.jpg', caption:
                 `𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ
 💎 TOPUP GAME MURAHHH!
 
@@ -57,7 +57,7 @@ Keterangan lebih lanjut langsung chat:
 wa.me/6289528950624
 #TopUpMurah #SamSukabyone #DiamondMurah` },
         {
-            time: '32 8 * * *', photo: 'promo_sewa.jpg', caption: `🤖 *SEWA BOT WHATSAPP PREMIUM CUMA 10K/BULAN!*\n` +
+            time: '32 7 * * *', photo: 'promo_sewa.jpg', caption: `🤖 *SEWA BOT WHATSAPP PREMIUM CUMA 10K/BULAN!*\n` +
                 `Fitur gacor:\n` +
                 `• Tagall / Hidetag\n` +
                 `• Downloader (TT, IG, YT)\n` +
