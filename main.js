@@ -1071,11 +1071,17 @@ wa.me/6289528950624 - Sam @Sukabyone
                 }
 
                 // === STIKER COMMAND ===
-                // const lowerText = text.toLowerCase();
+                // trigger: .s, .stiker, .sticker
+const lowerText = text.toLowerCase();
 
-// Regex untuk mencocokkan tepat di awal pesan
-const stickerRegex = /^(\.s|\.stiker|\.sticker)(\s|$)/;
-const isTrigger = stickerRegex.test(lowerText);
+// Cek apakah diawali dengan trigger diikuti spasi atau akhir pesan
+const isTrigger = 
+    lowerText.startsWith('.s ') || 
+    lowerText === '.s' ||
+    lowerText.startsWith('.stiker ') || 
+    lowerText === '.stiker' ||
+    lowerText.startsWith('.sticker ') || 
+    lowerText === '.sticker';
 
 
                 if (isTrigger) {
