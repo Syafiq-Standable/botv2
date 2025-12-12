@@ -334,6 +334,11 @@ async function downloadInstagramPrivate(url, cookie = null) {
     };
 }
 
+const port = 3000; // Pastikan port di sini
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}`);
+});
+
 // Export fungsi utama
 module.exports = {
     downloadInstagram,
