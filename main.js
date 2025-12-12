@@ -20,12 +20,12 @@ async function connectToWhatsApp() {
     });
 
     // ====================== PROMO HARIAN + .topup (SATU TEMPAT) ======================
-    const PROMO_TARGET = '6289528950624@s.whatsapp.net', '120363280006072640@g.us'; // ganti kalau mau ke grup
+    const PROMO_TARGET = '120363280006072640@g.us'; // ganti kalau mau ke grup
     const FOLDER = path.join(__dirname, 'data');
 
     const promos = [
         {
-            time: '30 7 * * *', photo: 'promo_3d.jpg', caption: `🔥 *JASA 3D FREE FIRE MURAH!*\n` +
+            time: '35 7 * * *', photo: 'promo_3d.jpg', caption: `🔥 *JASA 3D FREE FIRE MURAH!*\n` +
                 `• 3D Solo       : 50rb\n` +
                 `• 3D Couple     : 70rb\n` +
                 `• 3D Squad     : 100rb-150rb\n\n` +
