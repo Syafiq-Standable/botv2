@@ -36,10 +36,11 @@ async function handleVideoHD(msg, sock) {
 
         ffmpeg(inputPath)
             .outputOptions([
-                '-c:v libx264',
-                '-crf 18',
-                '-preset slow',
-                '-c:a copy'
+                '-c:v libx264',   // Codec standar
+                '-crf 23',        // Angka 23 itu titik tengah (HD tapi gak berat banget)
+                '-preset ultrafast', // Ganti jadi ultrafast biar CPU & RAM gak meledak
+                '-c:a copy',      // Audio gak usah diproses
+                '-threads 1'      // Batasi biar gak pake semua core CPU
             ])
             .save(outputPath)
             .on('end', async () => {
