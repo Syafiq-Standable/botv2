@@ -11,56 +11,26 @@ const welcome = require('./welcome');
 const cron = require('node-cron');
 
 // ====================== HELPER FUNCTION: VIDEO HD ======================
-async function handleVideoHD(msg, sock) {
-    const from = msg.key.remoteJid;
-    const quotaSize = 20 * 1024 * 1024; // Limit 20MB
-
-    // Ambil info file dari document atau video message
-    const mediaMsg = msg.message.documentMessage || msg.message.videoMessage;
-
-    if (!mediaMsg) return;
-
-    const fileSize = mediaMsg.fileLength;
-    if (fileSize > quotaSize) {
-        return sock.sendMessage(from, { text: 'Kegedean bos! Maksimal 20MB biar gak berat.' });
-    }
-
-    await sock.sendMessage(from, { text: 'Sabar ya, lagi proses "Magic" biar HD... ✨' });
+async function handleVideoHD(m, sock) {
+    const from = m.key.remoteJid;
+    
+    // 1. Kasih tanda kalau bot lagi kerja
+    await sock.sendMessage(from, { text: 'Bentar ya, lagi dikonversi jadi video biasa... ⏳' });
 
     try {
-        const buffer = await downloadMediaMessage(msg, 'buffer');
-        const inputPath = `./temp_input_${Date.now()}.mp4`;
-        const outputPath = `./temp_output_${Date.now()}.mp4`;
+        // 2. Download media (dari dokumen atau video)
+        const buffer = await downloadMediaMessage(m, 'buffer');
 
-        fs.writeFileSync(inputPath, buffer);
+        // 3. Kirim balik sebagai Video biasa (bukan dokumen)
+        await sock.sendMessage(from, { 
+            video: buffer, 
+            caption: 'Nih udah jadi video biasa! Tinggal "Teruskan" ke SW biar jernih.',
+            mimetype: 'video/mp4'
+        });
 
-        ffmpeg(inputPath)
-            .outputOptions([
-                '-c:v libx264',   // Codec standar
-                '-crf 23',        // Angka 23 itu titik tengah (HD tapi gak berat banget)
-                '-preset ultrafast', // Ganti jadi ultrafast biar CPU & RAM gak meledak
-                '-c:a copy',      // Audio gak usah diproses
-                '-threads 1'      // Batasi biar gak pake semua core CPU
-            ])
-            .save(outputPath)
-            .on('end', async () => {
-                await sock.sendMessage(from, {
-                    video: fs.readFileSync(outputPath),
-                    caption: 'Nih udah jadi HD! 🔥\n\n*Tips:* Langsung "Teruskan/Forward" video ini ke SW lu biar kualitasnya gak turun lagi.',
-                    mimetype: 'video/mp4'
-                });
-
-                if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-                if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-            })
-            .on('error', (err) => {
-                console.log('Error pas convert HD: ', err);
-                sock.sendMessage(from, { text: 'Aduh, gagal convert HD nih. Pastikan formatnya bener ya!' });
-                if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-            });
-    } catch (e) {
-        console.log('HD Error:', e);
-        sock.sendMessage(from, { text: 'Terjadi kesalahan sistem pas proses HD.' });
+    } catch (err) {
+        console.log('Error pas convert dokumen: ', err);
+        await sock.sendMessage(from, { text: 'Waduh gagal pas download/kirim videonya.' });
     }
 }
 
