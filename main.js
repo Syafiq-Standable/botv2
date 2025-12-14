@@ -9,7 +9,6 @@ const bakulan = require('./bakulan.js');
 const promo = require('./promo');
 const welcome = require('./welcome');
 const cron = require('node-cron');
-const downloadInstagram = require('./instagram-downloader');
 
 // ====================== HELPER FUNCTION: VIDEO HD ======================
 async function handleVideoHD(msg, sock) {
@@ -772,7 +771,7 @@ wa.me/6289528950624
 
 📥 *DOWNLOADER:*
 • .tt [link] - Download TikTok
-• .ig [link] - Download Instagram
+• .ig [link] - Download Instagram (MATI)
 
 👥 *ADMIN GRUP:*
 • .tagall - Tag semua anggota
@@ -1378,49 +1377,6 @@ wa.me/6289528950624 - Sam @Sukabyone
                     console.log('ceksewa error:', e.message);
                     return sock.sendMessage(from, { text: 'Terjadi error saat memeriksa sewa: ' + e.message });
                 }
-            }
-
-            // INSTAGRAM DOWNLOADER - PERBAIKAN
-            if (text.toLowerCase().startsWith('.ig ') || text.toLowerCase().startsWith('.instagram ')) {
-                const args = text.split(' ');
-                if (args.length < 2) {
-                    return sock.sendMessage(from, { text: 'linknya maneeeee?\n gini lohh\n".ig https://instagram.com/reel/..."' }, { quoted: msg });
-                }
-
-                const url = args[1].trim();
-                await sock.sendMessage(from, { text: '⏳ Mengunduh...' }, { quoted: msg });
-
-                try {
-                    // check access: rental required
-                    const fullSenderForIg = msg.key.participant || msg.key.remoteJid;
-                    const isGroup = from.endsWith('@g.us');
-                    const groupId = from;
-                    if (!hasAccessForCommand('.ig', isGroup, fullSenderForIg, groupId)) {
-                        return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk akun/grup yang menyewa bot. Ketik .sewa untuk info.' });
-                    }
-
-                    const result = await downloadInstagram(url);
-
-                    if (result.success) {
-                        if (result.type === 'video') {
-                            await sock.sendMessage(from, {
-                                video: { url: result.url },
-                                caption: `✅ Instagram Video Downloaded!\n\nSource: ${result.source || 'unknown'}\n\n_Downloaded by SAM BOT🔥_`
-                            });
-                        } else {
-                            await sock.sendMessage(from, {
-                                image: { url: result.url },
-                                caption: `✅ Instagram Image Downloaded!\n\nSource: ${result.source || 'unknown'}\n\n_Downloaded by SAM BOT🔥_`
-                            });
-                        }
-                    } else {
-                        await sock.sendMessage(from, { text: `❌ Gagal: ${result.message}` });
-                    }
-                } catch (error) {
-                    console.error('Instagram download error:', error);
-                    await sock.sendMessage(from, { text: `❌ Error: ${error.message}` });
-                }
-                return;
             }
 
             // STIKER — 100% JADI & GAK "Cannot view sticker information" LAGI
