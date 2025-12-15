@@ -10,7 +10,8 @@ const promo = require('./promo');
 const welcome = require('./welcome');
 const cron = require('node-cron');
 const sharp = require('sharp');
-const ytdl = require('ytdl-core');
+const ytdl = require('@distube/ytdl-core');
+const { ndown } = require('ab-downloader');
 
 // ============================================================
 // KONFIGURASI AWAL & DEKLARASI PATH
@@ -36,49 +37,25 @@ try {
 
 
 // YouTube Downloader Helper
-async function handleDownload(msg, url, type) {
+async function handleDownload(sock, msg, from, url, type) {
     try {
-        // 1. Cek validasi link dulu
-        if (!ytdl.validateURL(url)) {
-            throw new Error("Link YouTube yang kamu kasih gak valid atau gak kebaca.");
-        }
+        await sock.sendMessage(from, { text: `Sabar ya, lagi download YouTube ${type}... ⏳` }, { quoted: msg });
 
         const info = await ytdl.getInfo(url);
-        const title = info.videoDetails.title;
-
-        const options = type === 'mp4' ?
-            { quality: 'highest', filter: 'videoandaudio' } :
-            { quality: 'highestaudio', filter: 'audioonly' };
+        const title = info.videoDetails.title.replace(/[^\w\s]/gi, '');
+        const options = type === 'mp4' ? { quality: 'highest', filter: 'videoandaudio' } : { quality: 'highestaudio', filter: 'audioonly' };
 
         const stream = ytdl(url, options);
 
-        // 2. Kirim file
         await sock.sendMessage(from, {
             [type === 'mp4' ? 'video' : 'audio']: { stream: stream },
-            mimetype: type === 'mp4' ? 'video/mp4' : 'audio/mp4',
+            mimetype: type === 'mp4' ? 'video/mp4' : 'audio/mpeg',
             fileName: `${title}.${type}`
         }, { quoted: msg });
-
-    } catch (error) {
-        // Ini yang muncul di terminal kamu buat ngecek
-        console.log("Ada masalah bos:", error.message);
-
-        // Ini pesan buat orang awam di WhatsApp
-        const pesanGagal = `
-*Waduh, Maaf Banget! 🙏*
-
-Bot gagal proses videonya nih. Biasanya karena:
-1. Video YouTube-nya diprivat atau dibatasi umur.
-2. Server YouTube lagi nolak permintaan bot (limit).
-3. Link-nya salah atau videonya kepanjangan.
-
-*Solusinya:* Coba kirim ulang link-nya atau pakai link video yang lain ya! 😊
-    `.trim();
-
-        // Kirim pesan gagalnya ke user
-        await sock.sendMessage(from, { text: pesanGagal }, { quoted: msg });
+    } catch (e) {
+        console.log("YouTube Error:", e.message);
+        await sock.sendMessage(from, { text: 'YouTube gagal. Coba pake .ytdl (alternatif) ya.' }, { quoted: msg });
     }
-    
 }
 
 /**
@@ -93,10 +70,13 @@ async function handleVideoHD(m, sock) {
         const buffer = await downloadMediaMessage(m, 'buffer');
         await sock.sendMessage(from, {
             video: buffer,
-            caption: 'Nih udah jadi video biasa! Tinggal "Teruskan" ke SW biar jernih.',
-            mimetype: 'video/mp4'
-        });
+            caption: 'Nih, coba cek sekarang. Harusnya udah gak blank hitam lagi.',
+            mimetype: 'video/mp4',
+            // Tambahin parameter ini biar WA nge-render ulang dikit di server mereka
+            fileName: 'video_hd.mp4'
+        }, { quoted: m });
     } catch (err) {
+        console.log('Error HD:', err);
         console.log('Error konversi video:', err);
         await sock.sendMessage(from, { text: 'Waduh gagal pas download/kirim videonya.' });
     }
@@ -555,6 +535,9 @@ async function connectToWhatsApp() {
                 const msg = m.messages[0];
                 if (!msg.message || msg.key.fromMe) return;
 
+                const isDoc = msg.message?.documentMessage;
+                const docCaption = msg.message?.documentMessage?.caption?.toLowerCase() || '';
+
                 const from = msg.key.remoteJid;
                 const text = (
                     msg.message?.conversation ||
@@ -568,24 +551,107 @@ async function connectToWhatsApp() {
                 const isGroup = from.endsWith('@g.us');
                 const groupId = from;
 
-                // ======================
-                // YouTube Downloader Commands
-                // ======================
-                if (pesan.startsWith('.ytmp4 ')) {
-                    const url = pesan.split(' ')[1]; // Ambil link setelah spasi
-                    if (!url) return await client.sendMessage(from, { text: 'Mana linknya, Bang?' });
+                // --- DOWNLOADER SECTION ---
 
-                    // Panggil fungsi handleDownload yang tadi kamu buat
-                    await handleDownload(msg, url, 'mp4');
+                // 1. YouTube Utama (.ytmp3 / .ytmp4)
+                if (text.startsWith('.ytmp3') || text.startsWith('.ytmp4')) {
+                    const url = text.split(' ')[1];
+                    const type = text.startsWith('.ytmp3') ? 'mp3' : 'mp4';
+                    if (!url) return sock.sendMessage(from, { text: 'Linknya mana?' });
+                    await handleDownload(sock, msg, from, url, type);
                 }
 
-                // 2. Cek command .ytmp3
-                if (pesan.startsWith('.ytmp3 ')) {
-                    const url = pesan.split(' ')[1];
-                    if (!url) return await client.sendMessage(from, { text: 'Mana linknya, Bang?' });
+                // 2. TikTok (.tt)
+                if (text.startsWith('.tt')) {
+                    const url = text.split(' ')[1];
+                    if (!url) return sock.sendMessage(from, { text: 'Link TikToknya mana?' });
+                    await sock.sendMessage(from, { text: 'Checking TikTok... 🔄' });
+                    try {
+                        const res = await ndown(url);
+                        if (res.status) {
+                            await sock.sendMessage(from, { video: { url: res.data[0].url }, caption: 'Nih TikToknya.' }, { quoted: msg });
+                        }
+                    } catch (e) { sock.sendMessage(from, { text: 'TikTok gagal.' }); }
+                }
 
-                    // Panggil fungsi handleDownload, typenya ganti jadi 'mp3'
-                    await handleDownload(msg, url, 'mp3');
+                // 3. Instagram (.ig)
+                if (text.startsWith('.ig')) {
+                    const url = text.split(' ')[1];
+                    if (!url) return sock.sendMessage(from, { text: 'Link IG-nya mana?' });
+                    await sock.sendMessage(from, { text: 'Checking Instagram... 🔄' });
+                    try {
+                        const res = await ndown(url);
+                        if (res.status) {
+                            // IG kadang fotonya banyak, kita ambil yang pertama aja videonya
+                            await sock.sendMessage(from, { video: { url: res.data[0].url }, caption: 'Nih IG-nya.' }, { quoted: msg });
+                        }
+                    } catch (e) { sock.sendMessage(from, { text: 'Instagram gagal.' }); }
+                }
+
+                // 4. Alternatif AIO (.ytdl) - Kalo jalur utama mati
+                if (text.startsWith('.ytdl')) {
+                    const url = text.split(' ')[1];
+                    if (!url) return sock.sendMessage(from, { text: 'Link YouTubenya mana?' });
+                    await sock.sendMessage(from, { text: 'Mencoba jalur alternatif... 🚀' });
+                    try {
+                        const res = await ndown(url);
+                        if (res.status) {
+                            await sock.sendMessage(from, { video: { url: res.data[0].url }, caption: 'Lewat jalur alternatif berhasil.' }, { quoted: msg });
+                        }
+                    } catch (e) { sock.sendMessage(from, { text: 'Jalur alternatif juga gagal, Bang.' }); }
+                }
+
+                // 5. Facebook (.fb)
+                if (text.startsWith('.fb')) {
+                    const url = text.split(' ')[1];
+                    if (!url) return sock.sendMessage(from, { text: 'Link Facebook-nya mana, Bang?' });
+                    await sock.sendMessage(from, { text: 'Checking Facebook... 🔄' });
+                    try {
+                        const res = await ndown(url);
+                        if (res.status && res.data.length > 0) {
+                            await sock.sendMessage(from, {
+                                video: { url: res.data[0].url },
+                                caption: 'Nih video FB-nya.'
+                            }, { quoted: msg });
+                        } else {
+                            sock.sendMessage(from, { text: 'Gagal ambil video FB, mungkin videonya di-privat.' });
+                        }
+                    } catch (e) { sock.sendMessage(from, { text: 'Facebook lagi rewel.' }); }
+                }
+
+                // 6. Twitter / X (.twit atau .x)
+                if (text.startsWith('.twit') || text.startsWith('.x')) {
+                    const url = text.split(' ')[1];
+                    if (!url) return sock.sendMessage(from, { text: 'Link Twitter/X mana?' });
+                    await sock.sendMessage(from, { text: 'Checking X... 🔄' });
+                    try {
+                        const res = await ndown(url);
+                        if (res.status) {
+                            await sock.sendMessage(from, {
+                                video: { url: res.data[0].url },
+                                caption: 'Nih video dari X.'
+                            }, { quoted: msg });
+                        }
+                    } catch (e) { sock.sendMessage(from, { text: 'X downloader lagi error.' }); }
+                }
+
+                // 7. Pinterest (.pin atau .pinter)
+                if (text.startsWith('.pin')) {
+                    const url = text.split(' ')[1];
+                    if (!url) return sock.sendMessage(from, { text: 'Link Pinterest-nya mana?' });
+                    await sock.sendMessage(from, { text: 'Checking Pinterest... 🔄' });
+                    try {
+                        const res = await ndown(url);
+                        if (res.status) {
+                            // Pinterest bisa gambar bisa video, ndown biasanya nangkep dua-duanya
+                            const mediaUrl = res.data[0].url;
+                            if (mediaUrl.includes('.mp4')) {
+                                await sock.sendMessage(from, { video: { url: mediaUrl }, caption: 'Nih video Pinterest-nya.' }, { quoted: msg });
+                            } else {
+                                await sock.sendMessage(from, { image: { url: mediaUrl }, caption: 'Nih foto Pinterest-nya.' }, { quoted: msg });
+                            }
+                        }
+                    } catch (e) { sock.sendMessage(from, { text: 'Pinterest downloader lagi tepar.' }); }
                 }
 
 
@@ -666,7 +732,7 @@ async function connectToWhatsApp() {
                 }
 
                 // ---- VIDEO HD COMMAND ----
-                if (text === '.hd') {
+                if (text === '.hd' || docCaption === '.hd') {
                     const isVideo = msg.message?.videoMessage || msg.message?.documentMessage;
                     const quotedMsg = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
                     const isQuotedVideo = quotedMsg?.videoMessage || quotedMsg?.documentMessage;
@@ -816,31 +882,50 @@ Detail lain tanya di wa.me/6289528950624 #TopUpMurah #Diamond`;
                 }
 
                 // ---- MENU COMMAND ----
+                // ---- MENU COMMAND (CLEAN NONCHALANT) ----
                 if (text === '.menu' || text === '.help') {
-                    const menuText = `📌 *𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ 🔥*\n` +
-                        `• .menu / .help - Tampilkan menu\n` +
-                        `• .ping - Cek status & latency\n` +
-                        `• .profile [@user] - Lihat profil\n` +
-                        `• .stiker - Buat stiker dari gambar\n` +
-                        `• .cekidgroup - Lihat ID grup\n\n` +
-                        `📥 *DOWNLOADER:*\n` +
-                        `• .tt [link] - Download TikTok\n` +
-                        `• .ig [link] - Download Instagram\n\n` +
-                        `👥 *ADMIN GRUP:*\n` +
-                        `• .tagall - Tag semua anggota\n` +
-                        `• .hidetag [pesan] - Tag tanpa notif\n` +
-                        `• .promote/demote [@user] - Atur admin\n` +
-                        `• .kick/ban/unban [@user] - Kelola member\n` +
-                        `• .close/opengroup - Buka/tutup grup\n\n` +
-                        `🔐 *SEWA & AKSES:*\n` +
-                        `• .sewa - Info sewa bot\n` +
-                        `• .ceksewa - Cek status sewa\n\n` +
-                        `────────────────────\n` +
-                        `📞 *KONTAK OWNER:*\n` +
-                        `wa.me/6289528950624 - Sam @Sukabyone\n\n` +
-                        `💎 *Note:* Beberapa fitur membutuhkan sewa bot. Ketik .sewa untuk info lengkap!`;
+                    const menuText = `
+*SAM BOT v2*
+_simple & functional._
 
-                    await sock.sendMessage(from, { text: menuText });
+*basic*
+.stiker
+.hd (video)
+.remini (foto)
+.profil
+
+*downloader*
+.ytmp3
+.ytmp4
+.tt (tiktok)
+.ig (instagram)
+
+*group*
+.hidetag
+.tagall
+.kick / .ban
+.close / .open
+
+*info*
+.sewa
+.ceksewa
+
+— _sam @sukabyone_
+    `.trim();
+
+                    await sock.sendMessage(from, {
+                        text: menuText,
+                        contextInfo: {
+                            externalAdReply: {
+                                title: "SamAl | Sukabyone",
+                                body: "Active",
+                                thumbnail: fs.existsSync(path.join(FOLDER, 'promo_sewa.jpg')) ? fs.readFileSync(path.join(FOLDER, 'promo_sewa.jpg')) : null,
+                                sourceUrl: "https://wa.me/6289528950624",
+                                mediaType: 1,
+                                renderLargerThumbnail: false
+                            }
+                        }
+                    }, { quoted: msg });
                     return;
                 }
 
