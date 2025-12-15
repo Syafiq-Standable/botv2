@@ -53,7 +53,7 @@ async function handleDownload(msg, url, type) {
         const stream = ytdl(url, options);
 
         // 2. Kirim file
-        await client.sendMessage(msg.from, {
+        await sock.sendMessage(from, {
             [type === 'mp4' ? 'video' : 'audio']: { stream: stream },
             mimetype: type === 'mp4' ? 'video/mp4' : 'audio/mp4',
             fileName: `${title}.${type}`
@@ -76,8 +76,9 @@ Bot gagal proses videonya nih. Biasanya karena:
     `.trim();
 
         // Kirim pesan gagalnya ke user
-        await client.sendMessage(msg.from, { text: pesanGagal }, { quoted: msg });
+        await sock.sendMessage(from, { text: pesanGagal }, { quoted: msg });
     }
+    
 }
 
 /**
