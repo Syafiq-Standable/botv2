@@ -11,7 +11,6 @@ const welcome = require('./welcome');
 const cron = require('node-cron');
 const sharp = require('sharp');
 const ytdl = require('ytdl-core');
-const fs = require('fs');
 
 // ============================================================
 // KONFIGURASI AWAL & DEKLARASI PATH
@@ -37,6 +36,42 @@ try {
 
 
 // YouTube Downloader Helper
+async function handleMessage(msg) {
+    const body = msg.body; // Isi chat user
+    const args = body.split(' '); // Pecah chat jadi array
+    const command = args[0].toLowerCase(); // Ambil command-nya (misal .mp3)
+    const url = args[1]; // Ambil link-nya
+
+    if (command === '.mp3' || command === '.mp4') {
+        if (!url || !ytdl.validateURL(url)) {
+            return msg.reply("Format salah! Contoh: .mp3 https://youtube.com/xxx");
+        }
+
+        try {
+            msg.reply("Sabar ya, lagi diproses...");
+
+            // Tentukan settingan berdasarkan command
+            const isVideo = command === '.mp4';
+            const options = isVideo ? 
+                { quality: 'highestvideo', filter: 'videoandaudio' } : 
+                { quality: 'highestaudio', filter: 'audioonly' };
+
+            const stream = ytdl(url, options);
+
+            // Kirim ke WhatsApp
+            // (Sesuaikan variabel 'client' dengan library bot WA yang kamu pakai)
+            await client.sendMessage(msg.from, { 
+                [isVideo ? 'video' : 'audio']: { stream: stream }, 
+                mimetype: isVideo ? 'video/mp4' : 'audio/mp4',
+                fileName: `download.${isVideo ? 'mp4' : 'mp3'}`
+            });
+
+        } catch (e) {
+            console.error(e);
+            msg.reply("Gagal download, coba lagi nanti.");
+        }
+    }
+}
 
 /**
  * Helper: Konversi video dokumen jadi video biasa
