@@ -418,9 +418,13 @@ async function connectToWhatsApp() {
         sock.ev.on('messages.upsert', async (m) => {
             try {
                 const msg = m.messages[0];
-                if (msg.key.fromMe && !text.startsWith('.')) return;
+                if (!msg.message) return;
 
                 const from = msg.key.remoteJid;
+                const sender = msg.key.participant || from;
+                const isGroup = from.endsWith('@g.us');
+
+                // Ambil teks dulu sebelum dipake filter fromMe
                 const text = (
                     msg.message?.conversation ||
                     msg.message?.extendedTextMessage?.text ||
@@ -429,25 +433,22 @@ async function connectToWhatsApp() {
                 ).trim();
 
                 const textLower = text.toLowerCase();
-                const sender = msg.key.participant || from;
-                const isGroup = from.endsWith('@g.us');
-                const groupId = from;
 
-                // MUTED USER CHECK
+                // Filter fromMe (Sekarang 'text' udah aman karena udah didefinisikan di atas)
+                if (msg.key.fromMe && !text.startsWith('.')) return;
+
+                // --- SISTEM MUTE (FIXED) ---
                 const muted = loadMuted();
                 if (isGroup && muted[from]?.includes(sender)) {
-                    try {
-                        const botAdmin = participants.find(p => p.id === botNumber)?.admin;
-                        if (botAdmin) {
-                            // Hapus pesan target secara instan
-                            await sock.sendMessage(from, {
-                                delete: msg.key
-                            });
-                        }
-                    } catch (e) {
-                        console.log('Mute delete error:', e.message);
+                    const groupMetadata = await sock.groupMetadata(from); // Ambil metadata dulu
+                    const participants = groupMetadata.participants;
+                    const botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+                    const botAdmin = participants.find(p => p.id === botNumber)?.admin;
+
+                    if (botAdmin) {
+                        await sock.sendMessage(from, { delete: msg.key });
                     }
-                    return; // Stop proses pesan, jangan lanjut ke command
+                    return;
                 }
 
                 // Update user record
@@ -1046,6 +1047,38 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
         console.error('Failed to connect:', error);
         setTimeout(connectToWhatsApp, 5000);
     }
+
+    // Mesin jam alarm - taruh sebelum tutup fungsi connectToWhatsApp
+    let lastRun = ""; // Taruh ini di atas setInterval
+
+    setInterval(async () => {
+        const now = new Date().toLocaleTimeString('en-GB', {
+            hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta'
+        });
+
+        if (lastRun === now) return; // Kalau menit ini udah jalan, skip!
+
+        let db = loadJSON('scheduler.json', []);
+        if (db.length === 0) return;
+
+        let executed = false;
+        for (let task of db) {
+            if (task.time === now) {
+                try {
+                    const meta = await sock.groupMetadata(task.groupId);
+                    const members = meta.participants.map(p => p.id);
+                    await sock.sendMessage(task.groupId, {
+                        text: task.message,
+                        mentions: members
+                    });
+                    executed = true;
+                } catch (e) {
+                    console.log(`Gagal kirim alarm: ${e.message}`);
+                }
+            }
+        }
+        if (executed) lastRun = now; // Tandai kalau menit ini udah sukses kirim
+    }, 30000); // Cek tiap 30 detik biar lebih akurat tapi gak double
 }
 
 // ============================================================
