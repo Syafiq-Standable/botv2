@@ -825,32 +825,31 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             return sock.sendMessage(from, { text: 'Nomor alarm nggak ketemu.' });
                         }
 
-                        // Ambil ID dari alarm yang dipilih
                         const targetId = groupTasks[index].id;
-
-                        // Hapus dari database global berdasarkan ID
                         let newDb = db.filter(item => item.id !== targetId);
                         saveJSON('scheduler.json', newDb);
 
-                        await sock.sendMessage(from, { text: `🗑️ Alarm nomor ${index + 1} berhasil dihapus.` });
+                        await sock.sendMessage(from, { text: `✅ Alarm nomor ${index + 1} berhasil dihapus!` });
+                        return;
                     }
 
-                    // FORMAT: .listalarm (Tampilkan daftar alarm di grup)
+                    // FORMAT: .listalarm (Cek semua jadwal di grup ini)
                     if (textLower === '.listalarm') {
-                        if (!isUserAdmin && !isOperator(sender, sock)) return;
-
                         let db = loadJSON('scheduler.json', []);
                         let groupTasks = db.filter(item => item.groupId === from);
 
-                        if (groupTasks.length === 0) return sock.sendMessage(from, { text: 'Gak ada jadwal alarm di grup ini, Bos.' });
+                        if (groupTasks.length === 0) {
+                            return sock.sendMessage(from, { text: 'Belum ada alarm yang di-set buat grup ini, Bos.' });
+                        }
 
-                        let listMsg = `*DAFTAR ALARM GRUP*\n━━━━━━━━━━━━━━\n`;
+                        let listText = `⏰ *DAFTAR ALARM GRUP*\n\n`;
                         groupTasks.forEach((task, i) => {
-                            listMsg += `${i + 1}. [${task.time}] ${task.message}\n`;
+                            listText += `${i + 1}. [${task.time}] - ${task.message}\n`;
                         });
-                        listMsg += `\n*Cara hapus:* .delalarm [nomor]`;
+                        listText += `\n_Hapus pake: .delalarm [nomor]_`;
 
-                        await sock.sendMessage(from, { text: listMsg });
+                        await sock.sendMessage(from, { text: listText });
+                        return;
                     }
 
                     if (textLower.startsWith('.h ')) {
@@ -1079,15 +1078,14 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
         setTimeout(connectToWhatsApp, 5000);
     }
 
-    // Mesin jam alarm - taruh sebelum tutup fungsi connectToWhatsApp
-    let lastRun = ""; // Taruh ini di atas setInterval
-
+    // --- MESIN JAM ALARM (SAM JAGA MALEM) ---
+    let lastRun = "";
     setInterval(async () => {
         const now = new Date().toLocaleTimeString('en-GB', {
             hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta'
         });
 
-        if (lastRun === now) return; // Kalau menit ini udah jalan, skip!
+        if (lastRun === now) return;
 
         let db = loadJSON('scheduler.json', []);
         if (db.length === 0) return;
@@ -1099,7 +1097,7 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                     const meta = await sock.groupMetadata(task.groupId);
                     const members = meta.participants.map(p => p.id);
                     await sock.sendMessage(task.groupId, {
-                        text: task.message,
+                        text: `📢 *PENGINGAT OTOMATIS*\n\n${task.message}`,
                         mentions: members
                     });
                     executed = true;
@@ -1108,8 +1106,8 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                 }
             }
         }
-        if (executed) lastRun = now; // Tandai kalau menit ini udah sukses kirim
-    }, 30000); // Cek tiap 30 detik biar lebih akurat tapi gak double
+        if (executed) lastRun = now;
+    }, 30000);
 }
 
 // ============================================================
