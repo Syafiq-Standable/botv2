@@ -526,38 +526,45 @@ async function connectToWhatsApp() {
                     const userNama = msg.pushName || 'User';
 
                     const menuText = `
-*SAM* — _v1.0_
+*SAM* — _v1.1 (Stable)_
 ━━━━━━━━━━━━━━
 
 *USER:* ${userNama.toUpperCase()}
+*MODE:* ${isGroup ? 'Group Chat' : 'Private Chat'}
 
-*— MEDIA*
-.tt       tiktok
-.ig       instagram
-.s        stiker
-.qrgen    kode qr
+*— MEDIA TOOLS*
+.tt        (tiktok)
+.ig        (instagram)
+.s         (stiker)
+.qrgen     (kode qr)
 
-*— GRUP*
-.hidetag  tag silent
-.tagall   tag semua
-.kick     keluarkan
-.ban      blokir
-.mute     bungkam
-.setname  ganti nama
+*— GROUP ADMIN*
+.h         (hidetag)
+.tagall    (mention all)
+.kick      (keluarkan)
+.ban       (blokir)
+.mute      (bungkam)
+.setname   (ganti nama)
 
-*— HIBURAN*
-.truth    .waifu
-.dare     .neko
-.sholat   jadwal
+*— SCHEDULER (ALARM)*
+.setalarm  (set jam|pesan)
+.listalarm (cek jadwal)
+.delalarm  (hapus jadwal)
 
-*— INFO*
-.profile  .ping
-.sewa     .help
+*— HIBURAN & LAINNYA*
+.truth     .waifu
+.dare      .neko
+.sholat    (jadwal)
+
+*— INFO SYSTEM*
+.profile   .ping
+.sewa      .help
 
 ━━━━━━━━━━━━━━
 _Managed by Sukabyone_
-wa.me/6289528950624
+*BOT SAM* — _Tuff & Reliable_
 `.trim();
+
                     await sock.sendMessage(from, { text: menuText }, { quoted: msg });
                     return;
                 }
