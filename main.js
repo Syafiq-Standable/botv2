@@ -46,25 +46,25 @@ async function handleDownload(msg, url, type) {
         const info = await ytdl.getInfo(url);
         const title = info.videoDetails.title;
 
-        const options = type === 'mp4' ? 
-            { quality: 'highest', filter: 'videoandaudio' } : 
+        const options = type === 'mp4' ?
+            { quality: 'highest', filter: 'videoandaudio' } :
             { quality: 'highestaudio', filter: 'audioonly' };
 
         const stream = ytdl(url, options);
 
         // 2. Kirim file
-        await client.sendMessage(msg.from, { 
-            [type === 'mp4' ? 'video' : 'audio']: { stream: stream }, 
+        await client.sendMessage(msg.from, {
+            [type === 'mp4' ? 'video' : 'audio']: { stream: stream },
             mimetype: type === 'mp4' ? 'video/mp4' : 'audio/mp4',
             fileName: `${title}.${type}`
         }, { quoted: msg });
 
     } catch (error) {
-    // Ini yang muncul di terminal kamu buat ngecek
-    console.log("Ada masalah bos:", error.message);
+        // Ini yang muncul di terminal kamu buat ngecek
+        console.log("Ada masalah bos:", error.message);
 
-    // Ini pesan buat orang awam di WhatsApp
-    const pesanGagal = `
+        // Ini pesan buat orang awam di WhatsApp
+        const pesanGagal = `
 *Waduh, Maaf Banget! 🙏*
 
 Bot gagal proses videonya nih. Biasanya karena:
@@ -75,9 +75,9 @@ Bot gagal proses videonya nih. Biasanya karena:
 *Solusinya:* Coba kirim ulang link-nya atau pakai link video yang lain ya! 😊
     `.trim();
 
-    // Kirim pesan gagalnya ke user
-    await client.sendMessage(msg.from, { text: pesanGagal }, { quoted: msg });
-}
+        // Kirim pesan gagalnya ke user
+        await client.sendMessage(msg.from, { text: pesanGagal }, { quoted: msg });
+    }
 }
 
 /**
@@ -359,11 +359,11 @@ Minat? Chat aja: wa.me/6289528950624 #3DFreeFire #Jasa3D`
         {
             time: '41 7 * * *',
             photo: 'promo_topup.jpg',
-            caption: `RATE TOPUP PER-ITEM HARI INI
-FREE FIRE: 121p
-ML: 250p  
-ROBLOX: 190p                  `
-                        `Untuk Game Lainnya, Chat Saja!\n#SamSukabyone #TopUpMurah`
+            caption: `RATE TOPUP PER-ITEM HARI INI`
+                `FREE FIRE: 121p`
+                `ML: 250p`
+                `ROBLOX: 190p`
+                `Untuk Game Lainnya, chat aja!\n#SamSukabyone #TopUpMurah`
         },
         {
             time: '42 7 * * *',
@@ -668,11 +668,11 @@ async function connectToWhatsApp() {
                 // ---- TOPUP COMMAND ----
                 if (text === '.topup' || text === '.harga') {
                     const photo = path.join(FOLDER, 'promo_topup.jpg');
-                    const promoText = `RATE TOPUP PER-ITEM HARI INI
-FREE FIRE: 121p
-ML: 250p  
-ROBLOX: 190p                  `
-                        `Untuk Game Lainnya, Chat Saja!\n#SamSukabyone #TopUpMurah`;
+                    const promoText = `RATE TOPUP PER-ITEM HARI INI`
+                `FREE FIRE: 121p`
+                `ML: 250p`
+                `ROBLOX: 190p`
+                `Untuk Game Lainnya, Chat Saja!\n#SamSukabyone #TopUpMurah`;
 
                     if (fs.existsSync(photo)) {
                         await sock.sendMessage(from, {
