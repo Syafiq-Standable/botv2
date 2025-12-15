@@ -11,7 +11,6 @@ const welcome = require('./welcome');
 const cron = require('node-cron');
 const sharp = require('sharp');
 const ytdl = require('@distube/ytdl-core');
-const { ndown } = require('ab-downloader');
 
 // ============================================================
 // KONFIGURASI AWAL & DEKLARASI PATH
@@ -36,26 +35,13 @@ try {
 // ============================================================
 
 
-// YouTube Downloader Helper
-async function handleDownload(sock, msg, from, url, type) {
-    try {
-        await sock.sendMessage(from, { text: `Sabar ya, lagi download YouTube ${type}... ⏳` }, { quoted: msg });
-
-        const info = await ytdl.getInfo(url);
-        const title = info.videoDetails.title.replace(/[^\w\s]/gi, '');
-        const options = type === 'mp4' ? { quality: 'highest', filter: 'videoandaudio' } : { quality: 'highestaudio', filter: 'audioonly' };
-
-        const stream = ytdl(url, options);
-
-        await sock.sendMessage(from, {
-            [type === 'mp4' ? 'video' : 'audio']: { stream: stream },
-            mimetype: type === 'mp4' ? 'video/mp4' : 'audio/mpeg',
-            fileName: `${title}.${type}`
-        }, { quoted: msg });
-    } catch (e) {
-        console.log("YouTube Error:", e.message);
-        await sock.sendMessage(from, { text: 'YouTube gagal. Coba pake .ytdl (alternatif) ya.' }, { quoted: msg });
-    }
+// --- YOUTUBE (.ytmp3 / .ytmp4) ---
+// Pake @distube/ytdl-core biar gak gampang limit
+if (text.startsWith('.ytmp3') || text.startsWith('.ytmp4')) {
+    const url = text.split(' ')[1];
+    const type = text.startsWith('.ytmp3') ? 'mp3' : 'mp4';
+    if (!url) return sock.sendMessage(from, { text: 'Linknya mana?' });
+    await handleDownload(sock, msg, from, url, type);
 }
 
 /**
@@ -561,97 +547,24 @@ async function connectToWhatsApp() {
                     await handleDownload(sock, msg, from, url, type);
                 }
 
-                // 2. TikTok (.tt)
-                if (text.startsWith('.tt')) {
-                    const url = text.split(' ')[1];
-                    if (!url) return sock.sendMessage(from, { text: 'Link TikToknya mana?' });
-                    await sock.sendMessage(from, { text: 'Checking TikTok... 🔄' });
-                    try {
-                        const res = await ndown(url);
-                        if (res.status) {
-                            await sock.sendMessage(from, { video: { url: res.data[0].url }, caption: 'Nih TikToknya.' }, { quoted: msg });
-                        }
-                    } catch (e) { sock.sendMessage(from, { text: 'TikTok gagal.' }); }
-                }
-
-                // 3. Instagram (.ig)
+                // --- INSTAGRAM (.ig) ---
+                // Pake BochilTeam, paling stabil buat scraper lokal
                 if (text.startsWith('.ig')) {
                     const url = text.split(' ')[1];
                     if (!url) return sock.sendMessage(from, { text: 'Link IG-nya mana?' });
-                    await sock.sendMessage(from, { text: 'Checking Instagram... 🔄' });
+                    await sock.sendMessage(from, { text: 'Bentar ya, lagi ditarik videonya... 🔄' });
                     try {
-                        const res = await ndown(url);
-                        if (res.status) {
-                            // IG kadang fotonya banyak, kita ambil yang pertama aja videonya
-                            await sock.sendMessage(from, { video: { url: res.data[0].url }, caption: 'Nih IG-nya.' }, { quoted: msg });
-                        }
-                    } catch (e) { sock.sendMessage(from, { text: 'Instagram gagal.' }); }
-                }
-
-                // 4. Alternatif AIO (.ytdl) - Kalo jalur utama mati
-                if (text.startsWith('.ytdl')) {
-                    const url = text.split(' ')[1];
-                    if (!url) return sock.sendMessage(from, { text: 'Link YouTubenya mana?' });
-                    await sock.sendMessage(from, { text: 'Mencoba jalur alternatif... 🚀' });
-                    try {
-                        const res = await ndown(url);
-                        if (res.status) {
-                            await sock.sendMessage(from, { video: { url: res.data[0].url }, caption: 'Lewat jalur alternatif berhasil.' }, { quoted: msg });
-                        }
-                    } catch (e) { sock.sendMessage(from, { text: 'Jalur alternatif juga gagal, Bang.' }); }
-                }
-
-                // 5. Facebook (.fb)
-                if (text.startsWith('.fb')) {
-                    const url = text.split(' ')[1];
-                    if (!url) return sock.sendMessage(from, { text: 'Link Facebook-nya mana, Bang?' });
-                    await sock.sendMessage(from, { text: 'Checking Facebook... 🔄' });
-                    try {
-                        const res = await ndown(url);
-                        if (res.status && res.data.length > 0) {
+                        const { instagramdl } = await import('@bochilteam/scraper-instagram');
+                        const res = await instagramdl(url);
+                        if (res && res.length > 0) {
                             await sock.sendMessage(from, {
-                                video: { url: res.data[0].url },
-                                caption: 'Nih video FB-nya.'
-                            }, { quoted: msg });
-                        } else {
-                            sock.sendMessage(from, { text: 'Gagal ambil video FB, mungkin videonya di-privat.' });
-                        }
-                    } catch (e) { sock.sendMessage(from, { text: 'Facebook lagi rewel.' }); }
-                }
-
-                // 6. Twitter / X (.twit atau .x)
-                if (text.startsWith('.twit') || text.startsWith('.x')) {
-                    const url = text.split(' ')[1];
-                    if (!url) return sock.sendMessage(from, { text: 'Link Twitter/X mana?' });
-                    await sock.sendMessage(from, { text: 'Checking X... 🔄' });
-                    try {
-                        const res = await ndown(url);
-                        if (res.status) {
-                            await sock.sendMessage(from, {
-                                video: { url: res.data[0].url },
-                                caption: 'Nih video dari X.'
+                                video: { url: res[0].url },
+                                caption: 'Nih IG-nya, moga cocok.'
                             }, { quoted: msg });
                         }
-                    } catch (e) { sock.sendMessage(from, { text: 'X downloader lagi error.' }); }
-                }
-
-                // 7. Pinterest (.pin atau .pinter)
-                if (text.startsWith('.pin')) {
-                    const url = text.split(' ')[1];
-                    if (!url) return sock.sendMessage(from, { text: 'Link Pinterest-nya mana?' });
-                    await sock.sendMessage(from, { text: 'Checking Pinterest... 🔄' });
-                    try {
-                        const res = await ndown(url);
-                        if (res.status) {
-                            // Pinterest bisa gambar bisa video, ndown biasanya nangkep dua-duanya
-                            const mediaUrl = res.data[0].url;
-                            if (mediaUrl.includes('.mp4')) {
-                                await sock.sendMessage(from, { video: { url: mediaUrl }, caption: 'Nih video Pinterest-nya.' }, { quoted: msg });
-                            } else {
-                                await sock.sendMessage(from, { image: { url: mediaUrl }, caption: 'Nih foto Pinterest-nya.' }, { quoted: msg });
-                            }
-                        }
-                    } catch (e) { sock.sendMessage(from, { text: 'Pinterest downloader lagi tepar.' }); }
+                    } catch (e) {
+                        sock.sendMessage(from, { text: 'IG lagi rewel, coba link lain atau hapus tulisan setelah tanda tanya (?) di linknya.' });
+                    }
                 }
 
 
