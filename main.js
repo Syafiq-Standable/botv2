@@ -36,41 +36,48 @@ try {
 
 
 // YouTube Downloader Helper
-async function handleMessage(msg) {
-    const body = msg.body; // Isi chat user
-    const args = body.split(' '); // Pecah chat jadi array
-    const command = args[0].toLowerCase(); // Ambil command-nya (misal .mp3)
-    const url = args[1]; // Ambil link-nya
-
-    if (command === '.mp3' || command === '.mp4') {
-        if (!url || !ytdl.validateURL(url)) {
-            return msg.reply("Format salah! Contoh: .mp3 https://youtube.com/xxx");
+async function handleDownload(msg, url, type) {
+    try {
+        // 1. Cek validasi link dulu
+        if (!ytdl.validateURL(url)) {
+            throw new Error("Link YouTube yang kamu kasih gak valid atau gak kebaca.");
         }
 
-        try {
-            msg.reply("Sabar ya, lagi diproses...");
+        const info = await ytdl.getInfo(url);
+        const title = info.videoDetails.title;
 
-            // Tentukan settingan berdasarkan command
-            const isVideo = command === '.mp4';
-            const options = isVideo ? 
-                { quality: 'highestvideo', filter: 'videoandaudio' } : 
-                { quality: 'highestaudio', filter: 'audioonly' };
+        const options = type === 'mp4' ? 
+            { quality: 'highest', filter: 'videoandaudio' } : 
+            { quality: 'highestaudio', filter: 'audioonly' };
 
-            const stream = ytdl(url, options);
+        const stream = ytdl(url, options);
 
-            // Kirim ke WhatsApp
-            // (Sesuaikan variabel 'client' dengan library bot WA yang kamu pakai)
-            await client.sendMessage(msg.from, { 
-                [isVideo ? 'video' : 'audio']: { stream: stream }, 
-                mimetype: isVideo ? 'video/mp4' : 'audio/mp4',
-                fileName: `download.${isVideo ? 'mp4' : 'mp3'}`
-            });
+        // 2. Kirim file
+        await client.sendMessage(msg.from, { 
+            [type === 'mp4' ? 'video' : 'audio']: { stream: stream }, 
+            mimetype: type === 'mp4' ? 'video/mp4' : 'audio/mp4',
+            fileName: `${title}.${type}`
+        }, { quoted: msg });
 
-        } catch (e) {
-            console.error(e);
-            msg.reply("Gagal download, coba lagi nanti.");
-        }
-    }
+    } catch (error) {
+    // Ini yang muncul di terminal kamu buat ngecek
+    console.log("Ada masalah bos:", error.message);
+
+    // Ini pesan buat orang awam di WhatsApp
+    const pesanGagal = `
+*Waduh, Maaf Banget! 🙏*
+
+Bot gagal proses videonya nih. Biasanya karena:
+1. Video YouTube-nya diprivat atau dibatasi umur.
+2. Server YouTube lagi nolak permintaan bot (limit).
+3. Link-nya salah atau videonya kepanjangan.
+
+*Solusinya:* Coba kirim ulang link-nya atau pakai link video yang lain ya! 😊
+    `.trim();
+
+    // Kirim pesan gagalnya ke user
+    await client.sendMessage(msg.from, { text: pesanGagal }, { quoted: msg });
+}
 }
 
 /**
@@ -253,20 +260,30 @@ function getRental(id) {
  * Cek akses untuk command tertentu
  */
 function hasAccessForCommand(command, isGroup, senderFullJid, groupId, sock) {
-    // Operator selalu diizinkan
-    if (isOperator(senderFullJid, sock)) return true;
-
     const cmd = command.toLowerCase();
+
     // Selalu izinkan .sewa agar user bisa melihat info
     if (cmd === '.sewa') return true;
 
-    // Cek rental
+    // Operator selalu diizinkan
+    if (isOperator(senderFullJid, sock)) return true;
+
+    // Jika di grup
     if (isGroup) {
         const rental = getRental(groupId);
-        return !!rental;
+        if (rental) {
+            // Grup aktif sewa, semua member bisa pakai command
+            return true;
+        } else {
+            // Grup tidak sewa, tidak ada akses
+            return false;
+        }
     } else {
+        // Jika private chat
         const senderId = (senderFullJid || '').split('@')[0];
         const rental = getRental(senderId);
+
+        // Hanya bisa jika user memiliki sewa aktif
         return !!rental;
     }
 }
@@ -333,7 +350,7 @@ function setupDailyPromo(sock) {
         {
             time: '40 7 * * *',
             photo: 'promo_3d.jpg',
-            caption: `3D FF super HD. Gak pasaran, gak ribet.
+            caption: `3D FF 4K. Gak pasaran, gak ribet.
 
 • Solo: 50k • Couple: 70k • Squad: 100k+
 
@@ -342,16 +359,16 @@ Minat? Chat aja: wa.me/6289528950624 #3DFreeFire #Jasa3D`
         {
             time: '41 7 * * *',
             photo: 'promo_topup.jpg',
-            caption: `Mau top up? Di sini aja yang murah.
-
-FF: 70💎 (8k) | 140💎 (15k) | Weekly (26k) ML: 3💎 (1k) | 1050💎 (262k) | Weekly (27k) Lainnya: Roblox, PUBG, Genshin ready.
-
-Detail lain tanya di wa.me/6289528950624 #TopUpMurah #Diamond`
+            caption: `RATE TOPUP PER-ITEM HARI INI
+FREE FIRE: 121p
+ML: 250p  
+ROBLOX: 190p                  `
+                        `Untuk Game Lainnya, Chat Saja!\n#SamSukabyone #TopUpMurah`
         },
         {
             time: '42 7 * * *',
             photo: 'promo_sewa.jpg',
-            caption: `Bot WA premium, cuma 10k sebulan. Udah bisa hidetag, download video, bikin stiker, sampe jagain grup biar gak kena link spam.
+            caption: `Bot WA premium, cuma 15k sebulan. Udah bisa hidetag, download video, bikin stiker, sampe jagain grup biar gak kena link spam.
 
 On 24 jam, jarang rewel. Sewa: wa.me/6289528950624 #SewaBot #BotWA`
         },
@@ -596,6 +613,36 @@ async function connectToWhatsApp() {
                 // 7.4.3. COMMAND HANDLING
                 // ======================
 
+                // Daftar command yang selalu diizinkan tanpa sewa
+                const freeCommands = ['.sewa', '.ping', '.help', '.menu'];
+
+                // Cek apakah command perlu akses sewa
+                const needsRental = !freeCommands.some(freeCmd =>
+                    text === freeCmd || text.startsWith(freeCmd + ' ')
+                );
+
+                if (needsRental) {
+                    // Cek akses berdasarkan sewa
+                    if (!hasAccessForCommand(text.split(' ')[0], isGroup, sender, groupId, sock)) {
+                        let replyText = '';
+
+                        if (isGroup) {
+                            replyText = `❌ Grup ini belum menyewa bot!\n\n` +
+                                `Untuk menggunakan fitur ini, admin grup harus menyewa bot terlebih dahulu.\n` +
+                                `Ketik *.sewa* untuk info penyewaan.\n\n` +
+                                `📞 Hubungi Owner: wa.me/6289528950624`;
+                        } else {
+                            replyText = `❌ Anda belum menyewa bot!\n\n` +
+                                `Untuk menggunakan fitur ini, Anda harus menyewa bot terlebih dahulu.\n` +
+                                `Ketik *.sewa* untuk info penyewaan.\n\n` +
+                                `📞 Hubungi Owner: wa.me/6289528950624`;
+                        }
+
+                        await sock.sendMessage(from, { text: replyText });
+                        return; // Stop eksekusi command
+                    }
+                }
+
                 // ---- VIDEO HD COMMAND ----
                 if (text === '.hd') {
                     const isVideo = msg.message?.videoMessage || msg.message?.documentMessage;
@@ -621,10 +668,11 @@ async function connectToWhatsApp() {
                 // ---- TOPUP COMMAND ----
                 if (text === '.topup' || text === '.harga') {
                     const photo = path.join(FOLDER, 'promo_topup.jpg');
-                    const promoText = `𝐒𝐚𝐦𝐀𝐥 | รักและรักคุณจริงๆ\n💎 TOPUP GAME MURAHHH!\n\n` +
-                        `🔥 Free Fire\n70 Diamond              : Rp7.951\n140 Diamond             : Rp15.502\n` +
-                        `🪪 Weekly Membership    : Rp26.127\n\n` +
-                        `Keterangan lebih lanjut langsung chat:\nwa.me/6289528950624\n#TopUpMurah`;
+                    const promoText = `RATE TOPUP PER-ITEM HARI INI
+FREE FIRE: 121p
+ML: 250p  
+ROBLOX: 190p                  `
+                        `Untuk Game Lainnya, Chat Saja!\n#SamSukabyone #TopUpMurah`;
 
                     if (fs.existsSync(photo)) {
                         await sock.sendMessage(from, {
