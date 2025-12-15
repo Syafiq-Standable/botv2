@@ -194,9 +194,9 @@ async function downloadTikTok(url, sock, from, msg) {
         const res = await axios.get(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}`);
         if (res.data.code === 0) {
             const videoUrl = res.data.data.play;
-            await sock.sendMessage(from, { 
-                video: { url: videoUrl }, 
-                caption: '✅ TikTok Download' 
+            await sock.sendMessage(from, {
+                video: { url: videoUrl },
+                caption: '✅ TikTok Download'
             }, { quoted: msg });
         } else {
             throw new Error('Gagal download');
@@ -248,9 +248,9 @@ async function createSticker(imageBuffer, sock, from, msg) {
 async function getWaifu(sock, from, msg) {
     try {
         const res = await axios.get('https://api.waifu.pics/sfw/waifu');
-        await sock.sendMessage(from, { 
-            image: { url: res.data.url }, 
-            caption: '🌸 Random waifu~' 
+        await sock.sendMessage(from, {
+            image: { url: res.data.url },
+            caption: '🌸 Random waifu~'
         }, { quoted: msg });
     } catch {
         await sock.sendMessage(from, { text: '❌ Gagal mendapatkan waifu.' }, { quoted: msg });
@@ -260,9 +260,9 @@ async function getWaifu(sock, from, msg) {
 async function getNeko(sock, from, msg) {
     try {
         const res = await axios.get('https://api.waifu.pics/sfw/neko');
-        await sock.sendMessage(from, { 
-            image: { url: res.data.url }, 
-            caption: '🐱 Neko girl~' 
+        await sock.sendMessage(from, {
+            image: { url: res.data.url },
+            caption: '🐱 Neko girl~'
         }, { quoted: msg });
     } catch {
         await sock.sendMessage(from, { text: '❌ Gagal mendapatkan neko.' }, { quoted: msg });
@@ -276,9 +276,9 @@ async function getNeko(sock, from, msg) {
 async function generateQR(text, sock, from, msg) {
     try {
         const url = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(text)}`;
-        await sock.sendMessage(from, { 
-            image: { url }, 
-            caption: `📱 QR Code: ${text}` 
+        await sock.sendMessage(from, {
+            image: { url },
+            caption: `📱 QR Code: ${text}`
         }, { quoted: msg });
     } catch {
         await sock.sendMessage(from, { text: '❌ Gagal membuat QR Code.' }, { quoted: msg });
@@ -312,7 +312,7 @@ function truthOrDare(type = 'truth') {
         "Apa hal paling memalukan yang pernah terjadi padamu?",
         "Jika harus memilih antara uang dan cinta, mana yang kamu pilih?"
     ];
-    
+
     const dares = [
         "Kirim pesan 'Aku sayang kamu' ke kontak terakhir di chat kamu",
         "Ubah nama WhatsApp kamu menjadi 'Aku Ganteng/Cantik' selama 1 jam",
@@ -320,7 +320,7 @@ function truthOrDare(type = 'truth') {
         "Telepon crush kamu dan bilang 'Halo sayang'",
         "Post status WhatsApp dengan kata-kata 'Aku butuh pacar'"
     ];
-    
+
     return type === 'truth' ? getRandom(truths) : getRandom(dares);
 }
 
@@ -486,10 +486,10 @@ async function connectToWhatsApp() {
 
                 if (needsRental) {
                     if (!hasAccessForCommand(textLower.split(' ')[0], isGroup, sender, groupId, sock)) {
-                        let replyText = isGroup 
+                        let replyText = isGroup
                             ? `❌ Grup ini belum menyewa bot!\nKetik .sewa untuk info penyewaan.`
                             : `❌ Anda belum menyewa bot!\nKetik .sewa untuk info penyewaan.`;
-                        
+
                         await sock.sendMessage(from, { text: replyText });
                         return;
                     }
@@ -548,8 +548,8 @@ async function connectToWhatsApp() {
                     const start = Date.now();
                     await sock.sendMessage(from, { text: '🏓 Pong!' });
                     const latency = Date.now() - start;
-                    await sock.sendMessage(from, { 
-                        text: `⚡ Latency: ${latency}ms\n🕐 Uptime: ${process.uptime().toFixed(2)}s` 
+                    await sock.sendMessage(from, {
+                        text: `⚡ Latency: ${latency}ms\n🕐 Uptime: ${process.uptime().toFixed(2)}s`
                     });
                     return;
                 }
@@ -576,8 +576,8 @@ async function connectToWhatsApp() {
 
                 // STICKER MAKER
                 if (textLower === '.sticker' || textLower === '.s') {
-                    const imgMsg = msg.message?.imageMessage || 
-                                  msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
+                    const imgMsg = msg.message?.imageMessage ||
+                        msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
 
                     if (!imgMsg) {
                         return sock.sendMessage(from, { text: '❌ Kirim atau reply gambar dengan caption .sticker' }, { quoted: msg });
@@ -676,13 +676,13 @@ _Support: @sukabyone_
                         const users = loadUsers();
                         const id = sender.split('@')[0];
                         const user = users[id] || { name: 'Unknown', count: 0, firstSeen: Date.now() };
-                        
+
                         let profileText = `👤 *PROFILE*\n\n`;
                         profileText += `📛 Nama: ${user.name}\n`;
                         profileText += `📞 Nomor: ${id}\n`;
                         profileText += `📊 Total Chat: ${user.count}\n`;
                         profileText += `📅 Bergabung: ${formatDate(user.firstSeen)}\n`;
-                        
+
                         await sock.sendMessage(from, { text: profileText });
                     } catch {
                         await sock.sendMessage(from, { text: '❌ Gagal mendapatkan profile.' });
@@ -700,20 +700,37 @@ _Support: @sukabyone_
                     const isBotAdmin = botAdmin === 'admin' || botAdmin === 'superadmin';
                     const isUserAdmin = userAdmin === 'admin' || userAdmin === 'superadmin';
 
+                    // HIDETAG BY BOT SAM
+                    if (textLower.startsWith('.hidetag') || textLower === '.h') {
+                        if (!isUserAdmin && !isOperator(sender, sock)) {
+                            return sock.sendMessage(from, { text: '❌ Hanya admin/operator yang bisa pakai ini, Bos!' });
+                        }
+
+                        // Ambil teks setelah command .hidetag
+                        const teks = text.slice(9) || 'Panggilan untuk warga grup! 📢';
+
+                        // Kirim pesan dengan mentions semua peserta tapi gak kelihatan nomornya
+                        await sock.sendMessage(from, {
+                            text: teks,
+                            mentions: participants.map(p => p.id)
+                        });
+                        return;
+                    }
+
                     // TAGALL
                     if (textLower === '.tagall') {
                         if (!isUserAdmin && !isOperator(sender, sock)) {
                             return sock.sendMessage(from, { text: '❌ Hanya admin/operator!' });
                         }
-                        
+
                         let tagText = '📢 *TAG ALL*\n\n';
                         participants.forEach((p, i) => {
                             tagText += `${i + 1}. @${p.id.split('@')[0]}\n`;
                         });
-                        
-                        await sock.sendMessage(from, { 
-                            text: tagText, 
-                            mentions: participants.map(p => p.id) 
+
+                        await sock.sendMessage(from, {
+                            text: tagText,
+                            mentions: participants.map(p => p.id)
                         });
                         return;
                     }
@@ -723,18 +740,18 @@ _Support: @sukabyone_
                         if (!isUserAdmin || !isBotAdmin) {
                             return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
                         }
-                        
+
                         let targets = [];
                         const ext = msg.message?.extendedTextMessage;
-                        
+
                         if (ext?.contextInfo?.mentionedJid) {
                             targets = ext.contextInfo.mentionedJid;
                         }
-                        
+
                         if (targets.length === 0) {
                             return sock.sendMessage(from, { text: '❌ Tag member yang ingin dikick!' });
                         }
-                        
+
                         try {
                             await sock.groupParticipantsUpdate(from, targets, 'remove');
                             await sock.sendMessage(from, {
@@ -751,16 +768,16 @@ _Support: @sukabyone_
                         if (!isUserAdmin || !isBotAdmin) {
                             return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
                         }
-                        
+
                         let target = null;
                         if (msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length) {
                             target = msg.message.extendedTextMessage.contextInfo.mentionedJid[0];
                         }
-                        
+
                         if (!target) {
                             return sock.sendMessage(from, { text: '❌ Tag member yang ingin diban!' });
                         }
-                        
+
                         try {
                             await sock.groupParticipantsUpdate(from, [target], 'remove');
                             const bans = loadBans();
@@ -769,7 +786,7 @@ _Support: @sukabyone_
                                 bans[from].push(target);
                                 saveBans(bans);
                             }
-                            
+
                             await sock.sendMessage(from, {
                                 text: `✅ @${target.split('@')[0]} berhasil dibanned!`,
                                 mentions: [target]
@@ -785,20 +802,20 @@ _Support: @sukabyone_
                         if (!isUserAdmin || !isBotAdmin) {
                             return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
                         }
-                        
+
                         let targets = [];
                         const ext = msg.message?.extendedTextMessage;
-                        
+
                         if (ext?.contextInfo?.mentionedJid) {
                             targets = ext.contextInfo.mentionedJid;
                         }
-                        
+
                         if (targets.length === 0) {
                             return sock.sendMessage(from, { text: '❌ Tag member!' });
                         }
-                        
+
                         const action = textLower.startsWith('.promote') ? 'promote' : 'demote';
-                        
+
                         try {
                             await sock.groupParticipantsUpdate(from, targets, action);
                             await sock.sendMessage(from, {
@@ -815,12 +832,12 @@ _Support: @sukabyone_
                         if (!isUserAdmin || !isBotAdmin) {
                             return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
                         }
-                        
+
                         const newName = text.slice(9);
                         if (!newName || newName.length > 25) {
                             return sock.sendMessage(from, { text: '❌ Nama grup maksimal 25 karakter!' });
                         }
-                        
+
                         try {
                             await sock.groupUpdateSubject(from, newName);
                             await sock.sendMessage(from, { text: `✅ Nama grup berhasil diubah!` });
