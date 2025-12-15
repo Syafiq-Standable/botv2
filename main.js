@@ -35,15 +35,6 @@ try {
 // ============================================================
 
 
-// --- YOUTUBE (.ytmp3 / .ytmp4) ---
-// Pake @distube/ytdl-core biar gak gampang limit
-if (text.startsWith('.ytmp3') || text.startsWith('.ytmp4')) {
-    const url = text.split(' ')[1];
-    const type = text.startsWith('.ytmp3') ? 'mp3' : 'mp4';
-    if (!url) return sock.sendMessage(from, { text: 'Linknya mana?' });
-    await handleDownload(sock, msg, from, url, type);
-}
-
 /**
  * Helper: Konversi video dokumen jadi video biasa
  */
@@ -539,7 +530,8 @@ async function connectToWhatsApp() {
 
                 // --- DOWNLOADER SECTION ---
 
-                // 1. YouTube Utama (.ytmp3 / .ytmp4)
+                // --- YOUTUBE (.ytmp3 / .ytmp4) ---
+
                 if (text.startsWith('.ytmp3') || text.startsWith('.ytmp4')) {
                     const url = text.split(' ')[1];
                     const type = text.startsWith('.ytmp3') ? 'mp3' : 'mp4';
@@ -1423,6 +1415,48 @@ _simple & functional._
     } catch (error) {
         console.error('Failed to connect:', error);
         setTimeout(connectToWhatsApp, 5000);
+    }
+
+    // ============================================================
+    // FUNGSI DOWNLOADER (MESIN UTAMA)
+    // ============================================================
+
+    async function handleDownload(sock, msg, from, url, type) {
+        try {
+            // Kasih notif biar user gak nyepam
+            await sock.sendMessage(from, { text: `Sabar ya, lagi download YouTube ${type}... ⏳` }, { quoted: msg });
+
+            if (!ytdl.validateURL(url)) {
+                throw new Error("Link YouTube-nya gak valid, Bang.");
+            }
+
+            const info = await ytdl.getInfo(url);
+            const title = info.videoDetails.title.replace(/[^\w\s]/gi, ''); // Bersihin judul dari karakter aneh
+
+            const options = type === 'mp4' ?
+                { quality: 'highest', filter: 'videoandaudio' } :
+                { quality: 'highestaudio', filter: 'audioonly' };
+
+            const stream = ytdl(url, options);
+
+            await sock.sendMessage(from, {
+                [type === 'mp4' ? 'video' : 'audio']: { stream: stream },
+                mimetype: type === 'mp4' ? 'video/mp4' : 'audio/mpeg',
+                fileName: `${title}.${type}`
+            }, { quoted: msg });
+
+        } catch (error) {
+            console.log("Ada masalah pas download:", error.message);
+
+            let pesanGagal = `*Waduh, Gagal!* 😭\n\n`;
+            if (error.message.includes('403')) {
+                pesanGagal += `Server YouTube lagi nolak bot (Error 403). Coba lagi nanti atau pake link lain ya.`;
+            } else {
+                pesanGagal += `Error: ${error.message}`;
+            }
+
+            await sock.sendMessage(from, { text: pesanGagal }, { quoted: msg });
+        }
     }
 }
 
