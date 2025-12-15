@@ -769,7 +769,7 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         // 1. CEK: Cuma ngetik .setalarm doang?
                         if (text.trim() === '.setalarm') {
                             return sock.sendMessage(from, {
-                                text: `⚠️ *FORMAT SALAH, BOS!*\\n\\nPenggunaan:\\n*.setalarm Jam | Pesan*\\n\\nContoh:\\n.setalarm 07:00 | Waktunya bangun!\\n\\n_Note: Pake format 24 jam ya._`
+                                text: `⚠️ *FORMAT SALAH, BOS!*\n\nPenggunaan:\n*.setalarm Jam | Pesan*\nContoh:\n.setalarm 07:00 | Waktunya bangun!\n_Note: Pake format 24 jam ya._`
                             });
                         }
 
@@ -777,7 +777,7 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         const input = text.slice(10).split('|');
                         if (input.length < 2) {
                             return sock.sendMessage(from, {
-                                text: `❌ *DATA KURANG LENGKAP!*\\n\\nJangan lupa kasih pembatas garis tegak (|) antara jam dan pesannya.\\nContoh: .setalarm 12:00 | Makan siang!`
+                                text: `❌ *DATA KURANG LENGKAP!*\n\nJangan lupa kasih pembatas garis tegak (|) antara jam dan pesannya.\nContoh: .setalarm 12:00 | Makan siang!`
                             });
                         }
 
@@ -787,7 +787,7 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         // 3. CEK: Format jam bener gak?
                         if (!/^\d{2}:\d{2}$/.test(time)) {
                             return sock.sendMessage(from, {
-                                text: `🕒 *FORMAT JAM SALAH!*\\n\\nPake format HH:mm (Contoh: 07:05 atau 21:00).`
+                                text: `🕒 *FORMAT JAM SALAH!*\n\nPake format HH:mm (Contoh: 07:05 atau 21:00).`
                             });
                         }
 
@@ -803,7 +803,7 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             saveJSON('scheduler.json', db);
 
                             await sock.sendMessage(from, {
-                                text: `✅ *ALARM BERHASIL DISET!*\\n\\n⏰ Jam: ${time}\\n📝 Pesan: ${msgAlarm}`
+                                text: `✅ *ALARM BERHASIL DISET!*\n\n⏰ Jam: ${time}\n📝 Pesan: ${msgAlarm}`
                             });
                         } catch (e) {
                             console.log('Error setalarm:', e.message);
