@@ -359,11 +359,11 @@ Minat? Chat aja: wa.me/6289528950624 #3DFreeFire #Jasa3D`
         {
             time: '41 7 * * *',
             photo: 'promo_topup.jpg',
-            caption: `RATE TOPUP PER-ITEM HARI INI`
-                `FREE FIRE: 121p`
-                `ML: 250p`
-                `ROBLOX: 190p`
-                `Untuk Game Lainnya, chat aja!\n#SamSukabyone #TopUpMurah`
+            caption: `Mau top up? Di sini aja yang murah.
+
+FF: 70💎 (8k) | 140💎 (15k) | Weekly (26k) ML: 3💎 (1k) | 1050💎 (262k) | Weekly (27k) Lainnya: Roblox, PUBG, Genshin ready.
+
+Detail lain tanya di wa.me/6289528950624 #TopUpMurah #Diamond`
         },
         {
             time: '42 7 * * *',
@@ -668,11 +668,11 @@ async function connectToWhatsApp() {
                 // ---- TOPUP COMMAND ----
                 if (text === '.topup' || text === '.harga') {
                     const photo = path.join(FOLDER, 'promo_topup.jpg');
-                    const promoText = `RATE TOPUP PER-ITEM HARI INI`
-                `FREE FIRE: 121p`
-                `ML: 250p`
-                `ROBLOX: 190p`
-                `Untuk Game Lainnya, Chat Saja!\n#SamSukabyone #TopUpMurah`;
+                    const promoText = `Mau top up? Di sini aja yang murah.
+
+FF: 70💎 (8k) | 140💎 (15k) | Weekly (26k) ML: 3💎 (1k) | 1050💎 (262k) | Weekly (27k) Lainnya: Roblox, PUBG, Genshin ready.
+
+Detail lain tanya di wa.me/6289528950624 #TopUpMurah #Diamond`;
 
                     if (fs.existsSync(photo)) {
                         await sock.sendMessage(from, {
