@@ -921,38 +921,47 @@ wa.me/6289528950624 - Sam @Sukabyone
                 return;
             }
 
-            // Fungsi SSSTik Downloader (Free, No Key)
-            const getSsStikUrl = async (url) => {
-                try {
-                    // Step 1: GET homepage buat ambil token 'tt'
-                    const homeRes = await axios.get('https://ssstik.io/en');
-                    const ttToken = homeRes.data.match(/tt:\'([\w\d]+)\'/)[1];  // Extract token
+            // Di event messages.upsert, ganti handler TikTok jadi ini:
+                if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tiktok ') || text.toLowerCase() === '.tt' || text.toLowerCase() === '.tiktok') {
+                    // Cek apakah hanya command tanpa URL
+                    const isCommandOnly = text.toLowerCase() === '.tt' || text.toLowerCase() === '.tiktok';
 
-                    // Step 2: POST ke endpoint
-                    const postRes = await axios.post('https://ssstik.io/abc?url=dl', {
-                        id: url,
-                        locale: 'en',
-                        tt: ttToken
-                    }, {
-                        headers: {
-                            'hx-current-url': 'https://ssstik.io/en',
-                            'hx-request': 'true',
-                            'hx-target': 'target',
-                            'hx-trigger': '_gcaptcha_pt',
-                            'origin': 'https://ssstik.io',
-                            'pragma': 'no-cache',
-                            'referer': 'https://ssstik.io/en',
-                            'content-type': 'application/x-www-form-urlencoded'
+                    if (isCommandOnly) {
+                        return sock.sendMessage(from, {
+                            text: 'apa? bisa gaa?\ngini loh caranyaa\n".tt https://vt.tiktok.com/abc" \n\ngitu aja gabisa'
+                        }, { quoted: msg });
+                    }
+
+                    const url = text.split(' ').slice(1).join(' ');
+                    if (!url.includes('tiktok')) return sock.sendMessage(from, { text: 'link TikTok-nya SALAAHHHHH!\ngini nih contoh yang bener: .tt https://vt.tiktok.com/abc' });
+
+                    await sock.sendMessage(from, { text: 'Sabar yaaa, lagi diprosess... ⏳' });
+
+                    try {
+                        // check access: rental required (single-tier)
+                        const fullSenderForTt = msg.key.participant || msg.key.remoteJid;
+                        const isGroup = from.endsWith('@g.us');
+                        const groupId = from;
+                        if (!hasAccessForCommand('.tt', isGroup, fullSenderForTt, groupId)) {
+                            return sock.sendMessage(from, { text: 'Fitur ini hanya tersedia untuk akun/grup yang menyewa bot. Ketik .sewa untuk info.' });
                         }
-                    });
+                        const res = await axios.get(`https://tikwm.com/api/?url=${url}`);
+                        if (res.data.code !== 0) throw new Error('API error: ' + res.data.msg);
 
-                    // Parse HTML response buat dapet video URL (no WM)
-                    const videoMatch = postRes.data.match(/hdsrc="([^"]+)"/);
-                    return videoMatch ? videoMatch[1] : null;
-                } catch (err) {
-                    throw new Error('SSSTik error: ' + err.message);
+                        const videoUrl = res.data.data.play;  // URL video no watermark HD
+                        const title = res.data.data.title || 'TikTok Video Gacor';
+                        const author = res.data.data.author.unique_id || 'unknown';
+
+                        await sock.sendMessage(from, {
+                            video: { url: videoUrl },
+                            caption: `✅ TikTok Video Downloaded!\n\n📌 Title: ${title}\n👤 Author: ${author}\n\n_Downloaded by SAM BOT🔥_`
+                        });
+                    } catch (err) {
+                        console.log('TikWM Error:', err.message);  // Buat debug di terminal
+                        await sock.sendMessage(from, { text: `yaahhh gagalll😭\nError: ${err.message}\ncoba link lain atau tunggu bentar.` });
+                    }
+                    return;
                 }
-            };
 
             // Di event messages.upsert, ganti handler TikTok jadi ini:
             if (text.toLowerCase().startsWith('.tt ') || text.toLowerCase().startsWith('.tiktok ') || text.toLowerCase() === '.tt' || text.toLowerCase() === '.tiktok') {
