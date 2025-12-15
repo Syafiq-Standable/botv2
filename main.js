@@ -421,8 +421,10 @@ async function connectToWhatsApp() {
                 if (!msg.message) return;
 
                 const from = msg.key.remoteJid;
+                const groupId = from;
                 const sender = msg.key.participant || from;
                 const isGroup = from.endsWith('@g.us');
+                const botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
 
                 // Ambil teks dulu sebelum dipake filter fromMe
                 const text = (
@@ -431,7 +433,6 @@ async function connectToWhatsApp() {
                     msg.message?.imageMessage?.caption ||
                     ''
                 ).trim();
-
                 const textLower = text.toLowerCase();
 
                 // Filter fromMe (Sekarang 'text' udah aman karena udah didefinisikan di atas)
@@ -1040,7 +1041,6 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
             } catch (e) {
                 console.error('Message handler error:', e);
             }
-            messages
         });
 
     } catch (error) {
