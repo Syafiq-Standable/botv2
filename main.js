@@ -1082,7 +1082,6 @@ async function connectToWhatsApp() {
         const sock = makeWASocket({
             auth: state,
             version: [2, 3000, 1027934701],
-            printQRInTerminal: true
         });
 
         // ======================
