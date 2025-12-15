@@ -418,7 +418,7 @@ async function connectToWhatsApp() {
         sock.ev.on('messages.upsert', async (m) => {
             try {
                 const msg = m.messages[0];
-                if (!msg.message || msg.key.fromMe) return;
+                if (msg.key.fromMe && !text.startsWith('.')) return;
 
                 const from = msg.key.remoteJid;
                 const text = (
@@ -660,7 +660,7 @@ wa.me/6289528950624
 
                 // SEWA INFO
                 if (textLower === '.sewa') {
-                   const promoText = `
+                    const promoText = `
 *SAM* — _Sewa BOT Pricelist!_
 ━━━━━━━━━━━━━━━━━━
 
@@ -701,7 +701,7 @@ wa.me/6289528950624
 Di BOT SAM, Kakak bisa request fitur buat bantu keseharian. Contohnya: — Catat Keuangan: Tinggal chat 'Beli kopi 20rb', nanti SAM otomatis rekap total pengeluaran Kakak sebulan. — Reminder Mager: Chat 'SAM, ingetin bayar kos besok jam 10', nanti SAM bakal tag Kakak tepat waktu. — Catatan Rahasia: Simpan data apa pun di SAM, tinggal panggil lagi kapan aja Kakak butuh.
 
 Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simpel, tinggal bilang. Saya buatkan sistemnya khusus buat Kakak."`
-                    
+
                     await sock.sendMessage(from, { text: customText });
                     return;
                 }
@@ -751,6 +751,91 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             mentions: participants.map(p => p.id)
                         });
                         return;
+                    }
+
+                    // FORMAT: .setalarm 07:00 | Pesan Lu
+                    if (textLower.startsWith('.setalarm ')) {
+                        if (!isUserAdmin && !isOperator(sender, sock)) return;
+
+                        const input = text.slice(10).split('|');
+                        if (input.length < 2) return sock.sendMessage(from, { text: 'Format: .setalarm Jam | Pesan\nContoh: .setalarm 21:00 | Waktunya absen!' });
+
+                        const time = input[0].trim(); // Format HH:mm (Misal: 07:00)
+                        const msg = input[1].trim();
+
+                        // Validasi format jam
+                        if (!/^\d{2}:\d{2}$/.test(time)) return sock.sendMessage(from, { text: 'Format jam salah. Pake HH:mm (Contoh: 07:00)' });
+
+                        let db = loadJSON('scheduler.json', []);
+                        db.push({
+                            id: Date.now(), // ID unik buat hapus spesifik
+                            groupId: from,
+                            time: time,
+                            message: msg
+                        });
+                        saveJSON('scheduler.json', db);
+
+                        await sock.sendMessage(from, { text: `✅ Alarm disetel jam ${time}.\n📝 Pesan: ${msg}` });
+                    }
+
+                    // FORMAT: .delalarm (Hapus alarm berdasarkan nomor urut)
+                    if (textLower.startsWith('.delalarm ')) {
+                        if (!isUserAdmin && !isOperator(sender, sock)) return;
+
+                        const index = parseInt(text.split(' ')[1]) - 1;
+                        if (isNaN(index)) return sock.sendMessage(from, { text: 'Masukin nomornya, Bos. Contoh: .delalarm 1' });
+
+                        let db = loadJSON('scheduler.json', []);
+                        let groupTasks = db.filter(item => item.groupId === from);
+
+                        if (index < 0 || index >= groupTasks.length) {
+                            return sock.sendMessage(from, { text: 'Nomor alarm nggak ketemu.' });
+                        }
+
+                        // Ambil ID dari alarm yang dipilih
+                        const targetId = groupTasks[index].id;
+
+                        // Hapus dari database global berdasarkan ID
+                        let newDb = db.filter(item => item.id !== targetId);
+                        saveJSON('scheduler.json', newDb);
+
+                        await sock.sendMessage(from, { text: `🗑️ Alarm nomor ${index + 1} berhasil dihapus.` });
+                    }
+
+                    // FORMAT: .listalarm (Tampilkan daftar alarm di grup)
+                    if (textLower === '.listalarm') {
+                        if (!isUserAdmin && !isOperator(sender, sock)) return;
+
+                        let db = loadJSON('scheduler.json', []);
+                        let groupTasks = db.filter(item => item.groupId === from);
+
+                        if (groupTasks.length === 0) return sock.sendMessage(from, { text: 'Gak ada jadwal alarm di grup ini, Bos.' });
+
+                        let listMsg = `*DAFTAR ALARM GRUP*\n━━━━━━━━━━━━━━\n`;
+                        groupTasks.forEach((task, i) => {
+                            listMsg += `${i + 1}. [${task.time}] ${task.message}\n`;
+                        });
+                        listMsg += `\n*Cara hapus:* .delalarm [nomor]`;
+
+                        await sock.sendMessage(from, { text: listMsg });
+                    }
+
+                    if (textLower.startsWith('.h ')) {
+                        if (!isUserAdmin && !isOperator(sender, sock)) return;
+
+                        // Ambil teks setelah ".h "
+                        const pesan = text.slice(3).trim();
+                        if (!pesan) return; // Kalau cuma ngetik ".h" doang, SAM diem aja
+
+                        // Ambil semua member buat dimention
+                        const groupMetadata = await sock.groupMetadata(from);
+                        const participants = groupMetadata.participants.map(p => p.id);
+
+                        // SAM kirim pesan lu sambil nge-ghost mention
+                        await sock.sendMessage(from, {
+                            text: pesan,
+                            mentions: participants
+                        });
                     }
 
                     // TAGALL
@@ -920,6 +1005,34 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             await sock.sendMessage(from, { text: `❌ Gagal: ${e.message}` });
                         }
                         return;
+                    }
+
+                    // Struktur sederhana buat Reminder
+                    let reminders = [];
+
+                    if (textLower.startsWith('.remind')) {
+                        const input = text.split(' '); // Contoh: .remind 10m bayar kos
+                        if (input.length < 3) return sock.sendMessage(from, { text: 'Format: .remind [durasi][s/m/h] [pesan]\nContoh: .remind 10m jemput adek' });
+
+                        const timeStr = input[1];
+                        const message = text.slice(text.indexOf(timeStr) + timeStr.length).trim();
+
+                        // Convert durasi (s = detik, m = menit, h = jam)
+                        const duration = parseInt(timeStr);
+                        let ms = 0;
+                        if (timeStr.endsWith('s')) ms = duration * 1000;
+                        else if (timeStr.endsWith('m')) ms = duration * 60 * 1000;
+                        else if (timeStr.endsWith('h')) ms = duration * 60 * 60 * 1000;
+                        else return sock.sendMessage(from, { text: 'Pake s/m/h Bos (Contoh: 10m)' });
+
+                        await sock.sendMessage(from, { text: `✅ Oke, SAM bakal ingetin "${message}" dalam ${timeStr}.` });
+
+                        setTimeout(async () => {
+                            await sock.sendMessage(from, {
+                                text: `⏰ *REMINDER:* ${message}\n\nHey @${sender.split('@')[0]}, waktunya tiba!`,
+                                mentions: [sender]
+                            });
+                        }, ms);
                     }
                 }
 
