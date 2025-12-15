@@ -568,6 +568,27 @@ async function connectToWhatsApp() {
                 const groupId = from;
 
                 // ======================
+                // YouTube Downloader Commands
+                // ======================
+                if (pesan.startsWith('.ytmp4 ')) {
+                    const url = pesan.split(' ')[1]; // Ambil link setelah spasi
+                    if (!url) return await client.sendMessage(from, { text: 'Mana linknya, Bang?' });
+
+                    // Panggil fungsi handleDownload yang tadi kamu buat
+                    await handleDownload(msg, url, 'mp4');
+                }
+
+                // 2. Cek command .ytmp3
+                if (pesan.startsWith('.ytmp3 ')) {
+                    const url = pesan.split(' ')[1];
+                    if (!url) return await client.sendMessage(from, { text: 'Mana linknya, Bang?' });
+
+                    // Panggil fungsi handleDownload, typenya ganti jadi 'mp3'
+                    await handleDownload(msg, url, 'mp3');
+                }
+
+
+                // ======================
                 // 7.4.1. UPDATE USER RECORD
                 // ======================
                 try {
