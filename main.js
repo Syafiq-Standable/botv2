@@ -17,7 +17,10 @@ const WELCOME_DB = path.join(FOLDER, 'welcome.json');
 const RENTALS_DB = path.join(FOLDER, 'rentals.json');
 const OPERATORS_DB = path.join(FOLDER, 'operators.json');
 const PREMIUM_DB = path.join(FOLDER, 'premium.json');
-const SETTINGS_DB = path.join(FOLDER, 'settings.json');
+const MUTE_DB = path.join(FOLDER, 'muted.json');
+
+const loadMuted = () => loadJSON(MUTE_DB, {});
+const saveMuted = (data) => saveJSON(MUTE_DB, data);
 
 // Buat folder data jika belum ada
 try {
@@ -430,6 +433,23 @@ async function connectToWhatsApp() {
                 const isGroup = from.endsWith('@g.us');
                 const groupId = from;
 
+                // MUTED USER CHECK
+                const muted = loadMuted();
+                if (isGroup && muted[from]?.includes(sender)) {
+                    try {
+                        const botAdmin = participants.find(p => p.id === botNumber)?.admin;
+                        if (botAdmin) {
+                            // Hapus pesan target secara instan
+                            await sock.sendMessage(from, {
+                                delete: msg.key
+                            });
+                        }
+                    } catch (e) {
+                        console.log('Mute delete error:', e.message);
+                    }
+                    return; // Stop proses pesan, jangan lanjut ke command
+                }
+
                 // Update user record
                 try {
                     const users = loadUsers();
@@ -501,44 +521,41 @@ async function connectToWhatsApp() {
 
                 // HELP/MENU
                 if (textLower === '.menu' || textLower === '.help') {
+                    const userNama = msg.pushName || 'User';
+
                     const menuText = `
-🤖 *BOT MENU* 🤖
+*SAM* — _v1.0_
+━━━━━━━━━━━━━━
 
-📥 *DOWNLOADER*
-• .tt [url] - Download TikTok
-• .ig [url] - Download Instagram
+*USER:* ${userNama.toUpperCase()}
 
-🎨 *STICKER*
-• .sticker - Buat sticker dari gambar
+*— MEDIA*
+.tt       tiktok
+.ig       instagram
+.s        stiker
+.qrgen    kode qr
 
-🌸 *ANIME*
-• .waifu - Random waifu
-• .neko - Random neko
+*— GRUP*
+.hidetag  tag silent
+.tagall   tag semua
+.kick     keluarkan
+.ban      blokir
+.mute     bungkam
+.setname  ganti nama
 
-🎮 *GAME*
-• .truth - Truth challenge
-• .dare - Dare challenge
+*— HIBURAN*
+.truth    .waifu
+.dare     .neko
+.sholat   jadwal
 
-🛠️ *UTILITY*
-• .qrgen [teks] - Generate QR Code
-• .sholat [kota] - Jadwal sholat
+*— INFO*
+.profile  .ping
+.sewa     .help
 
-👥 *GROUP* (Admin only)
-• .tagall - Tag semua member
-• .kick @user - Kick member
-• .ban @user - Ban member
-• .promote @user - Promote
-• .demote @user - Demote
-• .setname [nama] - Ubah nama grup
-
-ℹ️ *INFO*
-• .sewa - Info penyewaan
-• .profile - Lihat profile
-• .ping - Cek bot status
-
-📞 Owner: wa.me/6289528950624
-                    `.trim();
-
+━━━━━━━━━━━━━━
+_Managed by Sukabyone_
+wa.me/6289528950624
+`.trim();
                     await sock.sendMessage(from, { text: menuText }, { quoted: msg });
                     return;
                 }
@@ -643,30 +660,49 @@ async function connectToWhatsApp() {
 
                 // SEWA INFO
                 if (textLower === '.sewa') {
-                    const promoText = `
-🌟 *SISTEM PENYEWAAN BOT* 🌟 
+                   const promoText = `
+*SAM* — _Sewa BOT Pricelist!_
+━━━━━━━━━━━━━━━━━━
 
-💰 *PAKET:*
-• Rp 10.000 / 30 hari
-• Rp 25.000 / 90 hari  
+*CUSTOM FEATURE*
+Mulai dari — 50k
+_Punya ide BOT sendiri agar grup makin seru atau tertib? Silakan diskusikan, saya buatkan khusus untuk grup Anda._
 
-✅ *FITUR:*
-• Download TikTok & Instagram
-• Sticker Maker
-• Game & Utility
-• Group Management
-• 24/7 Online
+*GROUP PASS*
+7 Hari    —  10k
+15 Hari   —  15k
+30 Hari   —  20k
+90 Hari   —  50k
 
-📞 *CARA SEWA:*
-1. Hubungi: wa.me/6289528950624
-2. Pilih paket
-3. Transfer
-4. Bot akan diaktivasi
+*PRIVATE PASS*
+30 Hari   —  35k
+_Privasi total. Tanpa antrean. Respon prioritas._
 
-_Support: @sukabyone_
-                    `.trim();
+*CAPABILITIES*
+— *Security:* Mute System (Silent target), Anti-Link, Auto-Kick Banned.
+— *Group Tools:* Hidetag (Ghost mention), Tagall, Kick/Ban, Promote/Demote.
+— *Essentials:* Sticker maker, ToImage, Profile & Chat counter.
+— *System:* 24/7 Active, Zero Delay, No Ads.
+
+*KONTAK*
+wa.me/6289528950624
+━━━━━━━━━━━━━━━━━━
+*OWNER: SUKABYONE*
+`.trim();
 
                     await sock.sendMessage(from, { text: promoText });
+                    return;
+                }
+
+                // EXPLAINING CUSTOM FEATURES
+                if (textLower === '.customfeatures') {
+                    const customText = `"Fitur Custom itu ibarat Kakak punya asisten pribadi di WA. Kakak mager catat pengeluaran di buku? Atau repot mau ngatur jadwal tapi sering lupa?
+
+Di BOT SAM, Kakak bisa request fitur buat bantu keseharian. Contohnya: — Catat Keuangan: Tinggal chat 'Beli kopi 20rb', nanti SAM otomatis rekap total pengeluaran Kakak sebulan. — Reminder Mager: Chat 'SAM, ingetin bayar kos besok jam 10', nanti SAM bakal tag Kakak tepat waktu. — Catatan Rahasia: Simpan data apa pun di SAM, tinggal panggil lagi kapan aja Kakak butuh.
+
+Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simpel, tinggal bilang. Saya buatkan sistemnya khusus buat Kakak."`
+                    
+                    await sock.sendMessage(from, { text: customText });
                     return;
                 }
 
@@ -797,6 +833,45 @@ _Support: @sukabyone_
                         return;
                     }
 
+                    // COMMAND .MUTE
+                    if (textLower.startsWith('.mute')) {
+                        if (!isUserAdmin && !isOperator(sender, sock)) return;
+
+                        let target = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+                        if (!target && msg.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
+                            target = msg.message.extendedTextMessage.contextInfo.participant;
+                        }
+
+                        if (!target) return sock.sendMessage(from, { text: 'Tag targetnya, Bos.' });
+
+                        const muted = loadMuted();
+                        if (!muted[from]) muted[from] = [];
+                        if (!muted[from].includes(target)) {
+                            muted[from].push(target);
+                            saveMuted(muted);
+                        }
+
+                        await sock.sendMessage(from, { text: `🤐 @${target.split('@')[0]} has been silenced.`, mentions: [target] });
+                        return;
+                    }
+
+                    // COMMAND .UNMUTE
+                    if (textLower.startsWith('.unmute')) {
+                        if (!isUserAdmin && !isOperator(sender, sock)) return;
+
+                        let target = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+                        if (!target) return;
+
+                        const muted = loadMuted();
+                        if (muted[from]) {
+                            muted[from] = muted[from].filter(id => id !== target);
+                            saveMuted(muted);
+                        }
+
+                        await sock.sendMessage(from, { text: `🔊 @${target.split('@')[0]} can speak again.`, mentions: [target] });
+                        return;
+                    }
+
                     // PROMOTE/DEMOTE
                     if (textLower.startsWith('.promote') || textLower.startsWith('.demote')) {
                         if (!isUserAdmin || !isBotAdmin) {
@@ -851,6 +926,7 @@ _Support: @sukabyone_
             } catch (e) {
                 console.error('Message handler error:', e);
             }
+            messages
         });
 
     } catch (error) {
