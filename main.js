@@ -756,28 +756,52 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                     }
 
                     // FORMAT: .setalarm 07:00 | Pesan Lu
-                    if (textLower.startsWith('.setalarm ')) {
+                    if (textLower.startsWith('.setalarm')) { // Pakai startsWith tanpa spasi dulu buat nge-trap
                         if (!isUserAdmin && !isOperator(sender, sock)) return;
 
+                        // 1. CEK: Cuma ngetik .setalarm doang?
+                        if (text.trim() === '.setalarm') {
+                            return sock.sendMessage(from, {
+                                text: `⚠️ *FORMAT SALAH, BOS!*\\n\\nPenggunaan:\\n*.setalarm Jam | Pesan*\\n\\nContoh:\\n.setalarm 07:00 | Waktunya bangun!\\n\\n_Note: Pake format 24 jam ya._`
+                            });
+                        }
+
+                        // 2. CEK: Ada isinya tapi kurang lengkap (nggak pake '|')
                         const input = text.slice(10).split('|');
-                        if (input.length < 2) return sock.sendMessage(from, { text: 'Format: .setalarm Jam | Pesan\nContoh: .setalarm 21:00 | Waktunya absen!' });
+                        if (input.length < 2) {
+                            return sock.sendMessage(from, {
+                                text: `❌ *DATA KURANG LENGKAP!*\\n\\nJangan lupa kasih pembatas garis tegak (|) antara jam dan pesannya.\\nContoh: .setalarm 12:00 | Makan siang!`
+                            });
+                        }
 
-                        const time = input[0].trim(); // Format HH:mm (Misal: 07:00)
-                        const msg = input[1].trim();
+                        const time = input[0].trim();
+                        const msgAlarm = input[1].trim();
 
-                        // Validasi format jam
-                        if (!/^\d{2}:\d{2}$/.test(time)) return sock.sendMessage(from, { text: 'Format jam salah. Pake HH:mm (Contoh: 07:00)' });
+                        // 3. CEK: Format jam bener gak?
+                        if (!/^\d{2}:\d{2}$/.test(time)) {
+                            return sock.sendMessage(from, {
+                                text: `🕒 *FORMAT JAM SALAH!*\\n\\nPake format HH:mm (Contoh: 07:05 atau 21:00).`
+                            });
+                        }
 
-                        let db = loadJSON('scheduler.json', []);
-                        db.push({
-                            id: Date.now(), // ID unik buat hapus spesifik
-                            groupId: from,
-                            time: time,
-                            message: msg
-                        });
-                        saveJSON('scheduler.json', db);
+                        // Kalau semua aman, baru simpan ke DB
+                        try {
+                            let db = loadJSON('scheduler.json', []);
+                            db.push({
+                                id: Date.now(),
+                                groupId: from,
+                                time: time,
+                                message: msgAlarm
+                            });
+                            saveJSON('scheduler.json', db);
 
-                        await sock.sendMessage(from, { text: `✅ Alarm disetel jam ${time}.\n📝 Pesan: ${msg}` });
+                            await sock.sendMessage(from, {
+                                text: `✅ *ALARM BERHASIL DISET!*\\n\\n⏰ Jam: ${time}\\n📝 Pesan: ${msgAlarm}`
+                            });
+                        } catch (e) {
+                            console.log('Error setalarm:', e.message);
+                            await sock.sendMessage(from, { text: '❌ Waduh, sistem database lagi error nih, Bos.' });
+                        }
                     }
 
                     // FORMAT: .delalarm (Hapus alarm berdasarkan nomor urut)
