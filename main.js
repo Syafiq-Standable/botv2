@@ -334,44 +334,41 @@ async function fetchInstagramMedia(url) {
 }
 
 async function downloadInstagram(url, sock, from, msg) {
-    // FORMAT HANDLER LAMA
-    await sock.sendMessage(from, { text: '⏳ Download Instagram menggunakan scrapper baru...' }, { quoted: msg });
-
+    await sock.sendMessage(from, { text: '⏳ Memeriksa tipe media dari scrapper baru...' }, { quoted: msg });
+    
     try {
-        // Panggil FUNGSI SCRAPPER BARU
-        const media = await fetchInstagramMedia(url); // media = { title: '...', url: '...' }
+        const media = await fetchInstagramMedia(url);
+        const mediaUrl = media.url; 
 
-        // mediaUrl adalah link download dari hasil scrapper baru
-        const mediaUrl = media.url;
-
-        if (!mediaUrl) {
-            throw new Error('Scrapper baru gagal mengembalikan URL media.');
-        }
-
-        // Tentukan tipe file berdasarkan ekstensi atau logic lain
-        // Jika URL dari scrapper baru tidak memiliki ekstensi, ini mungkin perlu penyesuaian.
-        // Asumsi: Jika media.title mengandung 'video' atau ekstensi .mp4
-        const isVideo = mediaUrl.includes('.mp4') || media.title.toLowerCase().includes('video');
+        // =======================================================
+        // LANGKAH BARU: MEMERIKSA TIPE FILE DENGAN HEAD REQUEST
+        // =======================================================
+        const headResponse = await axios.head(mediaUrl);
+        const contentType = headResponse.headers['content-type'];
+        
+        // Logika penentuan: Apakah Content-Type adalah video?
+        const isVideo = contentType && contentType.startsWith('video/');
 
         if (isVideo) {
-            // Pengiriman Video
-            await sock.sendMessage(from, {
-                video: { url: mediaUrl },
-                caption: `✅ Instagram Video`
-                // TIP: Anda bisa mencoba menonaktifkan thumbnail jika sering error
-                // Mungkn coba tambahkan: mimetype: 'video/mp4' (jika tidak ada)
+            // KIRIM SEBAGAI VIDEO
+            await sock.sendMessage(from, { 
+                video: { url: mediaUrl, mimetype: contentType }, 
+                caption: `✅ Instagram Video [Tipe: ${contentType}]` 
+            }, { quoted: msg });
+        } else if (contentType && contentType.startsWith('image/')) {
+            // KIRIM SEBAGAI FOTO
+             await sock.sendMessage(from, { 
+                image: { url: mediaUrl, mimetype: contentType }, 
+                caption: `✅ Instagram Photo [Tipe: ${contentType}]` 
             }, { quoted: msg });
         } else {
-            // Pengiriman Gambar/Foto
-            await sock.sendMessage(from, {
-                image: { url: mediaUrl },
-                caption: `✅ Instagram Photo`
-            }, { quoted: msg });
+            // Jika tipe tidak terdeteksi (atau text/html, dsb)
+            throw new Error(`Tipe media tidak dikenali (${contentType}).`);
         }
-
+        
     } catch (error) {
         console.error('Download Instagram Error:', error.message);
-        await sock.sendMessage(from, { text: '❌ Gagal download Instagram. Cek link atau API scrapper baru.' }, { quoted: msg });
+        await sock.sendMessage(from, { text: `❌ Gagal download Instagram. Error: ${error.message}` }, { quoted: msg });
     }
 }
 
