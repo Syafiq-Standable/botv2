@@ -53,6 +53,27 @@ function saveJSON(filePath, data) {
     }
 }
 
+function listRentals() {
+    const rentals = loadRentals();
+    const now = Date.now();
+    const activeRentals = [];
+
+    for (const jid in rentals) {
+        const rental = rentals[jid];
+        // Hanya masukkan yang masih aktif (belum kedaluwarsa)
+        if (rental.expires > now) {
+            const timeLeft = rental.expires - now;
+            activeRentals.push({
+                jid,
+                ...rental,
+                duration: formatDuration(timeLeft),
+                expiryDate: formatDate(rental.expires)
+            });
+        }
+    }
+    return activeRentals;
+}
+
 // Database functions
 const loadBans = () => loadJSON(BANNED_DB, {});
 const saveBans = (data) => saveJSON(BANNED_DB, data);
@@ -189,7 +210,7 @@ function setupBackgroundJobs(sock) {
                     const meta = await sock.groupMetadata(task.groupId);
                     const members = meta.participants.map(p => p.id);
                     await sock.sendMessage(task.groupId, {
-                        text: `📢 *PENGINGAT OTOMATIS*\n\n${task.message}`,
+                        text: `${task.message}\n\n_alarm otomatis dari SAM_`,
                         mentions: members
                     });
                     executed = true;
@@ -1221,6 +1242,33 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
 
                 if (isOperator(senderId)) {
                     switch (command) {
+
+                        // --- FITUR BARU: LIST RENTALS (Operator Only) ---
+                        case prefix + 'listrent':
+                        case prefix + 'ceksewaall':
+                            const activeRentals = listRentals();
+
+                            if (activeRentals.length === 0) {
+                                await sock.sendMessage(from, { text: 'Bot lagi *santai*. Belum ada yang aktif sewa saat ini.' }, { quoted: msg });
+                                return;
+                            }
+
+                            let listText = '📄 *CATATAN OPERATOR* 📄\n_Hanya untuk internal.\n\n';
+
+                            activeRentals.forEach((r, i) => {
+                                // Format yang lowkey/nonchalant
+                                listText += `*${i + 1}. ${r.jid.includes('@g.us') ? 'Grup' : 'PC'}*:\n`;
+                                listText += ` > ID: ${r.jid}\n`;
+                                listText += ` > Level: ${r.tier}\n`;
+                                listText += ` > Habis: ${r.expiryDate} (Sisa ${r.duration})\n`;
+                                listText += ` > Diberi: ${r.grantedBy}\n\n`;
+                            });
+
+                            listText += `_Total ${activeRentals.length} akses aktif. Keep it lowkey._`;
+
+                            await sock.sendMessage(from, { text: listText.trim() }, { quoted: msg });
+                            return;
+
                         case prefix + 'addrent':
                             // 1. Dapatkan ID target dan durasi
                             const argsRent = textLower.split(' ');
