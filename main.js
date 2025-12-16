@@ -17,7 +17,6 @@ const WELCOME_DB = path.join(FOLDER, 'welcome.json');
 const RENTALS_DB = path.join(FOLDER, 'rentals.json');
 const OPERATORS_DB = path.join(FOLDER, 'operators.json');
 const MUTE_DB = path.join(FOLDER, 'muted.json');
-// PREMIUM_DB sudah Dihapus.
 
 const loadMuted = () => loadJSON(MUTE_DB, {});
 const saveMuted = (data) => saveJSON(MUTE_DB, data);
@@ -94,8 +93,9 @@ function grantRental(scope, id, tier, days, grantedBy) {
     
     // Tentukan waktu kedaluwarsa baru (dimulai dari sisa sewa yang ada atau dari sekarang)
     let currentExpiryTime = Date.now();
+    // Ambil tanggal kadaluarsa saat ini jika ada dan belum expired
     if (rentals[key] && rentals[key].expires > Date.now()) {
-        currentExpiryTime = rentals[key].expires; // Mulai dari sisa sewa
+        currentExpiryTime = rentals[key].expires; 
     }
 
     const expires = currentExpiryTime + (Number(days) || 0) * 24 * 60 * 60 * 1000;
@@ -117,12 +117,16 @@ function revokeRental(id) {
     saveRentals(rentals);
 }
 
-// Diperbaiki: Mengakses property 'expires' (milidetik) dari objek rental
+// FIX KRITIS: Fungsi getRental diperbaiki agar mengembalikan objek rental jika aktif
 const getRental = (id) => {
     let rentals = loadRentals();
-    if (!rentals[id]) return false;
-    // Cek apakah waktu kedaluwarsa (milidetik) sudah lebih besar dari waktu sekarang (milidetik)
-    return rentals[id].expires > Date.now();
+    const rentalData = rentals[id];
+    if (!rentalData || rentalData.expires <= Date.now()) { 
+        // Jika tidak ada data atau sudah kadaluarsa
+        return false;
+    }
+    // Jika masih aktif, kembalikan objek lengkapnya
+    return rentalData;
 };
 
 const hasAccessForCommand = (command, isGroup, sender, groupId, sock) => {
@@ -390,6 +394,8 @@ async function connectToWhatsApp() {
         sock.ev.on('messages.upsert', async (m) => {
             try {
                 const msg = m.messages[0];
+                
+                // FIX UTAMA: Cegah error 'fromMe' jika msg itu sendiri undefined/null (non-message event)
                 if (!msg || !msg.message) return;
 
                 const from = msg.key.remoteJid;
@@ -403,8 +409,8 @@ async function connectToWhatsApp() {
                     msg.message?.conversation ||
                     msg.message?.extendedTextMessage?.text ||
                     msg.message?.imageMessage?.caption ||
-                    msg.message?.videoMessage?.caption || // Tambahkan ini jika ada
-                    '' // Pastikan hasil akhirnya selalu string kosong, bukan undefined
+                    msg.message?.videoMessage?.caption || // Tambahkan ini agar lebih aman
+                    ''
                 ).trim();
                 const textLower = text.toLowerCase();
 
@@ -480,7 +486,7 @@ async function connectToWhatsApp() {
                     return;
                 }
 
-                const freeCommands = ['.sewa', '.ping', '.help', '.menu', '.profile'];
+                const freeCommands = ['.sewa', '.ping', '.help', '.menu', '.profile', '.ceksewa']; // Tambahkan .ceksewa ke free command
                 const commandUtama = textLower.split(' ')[0];
 
 
@@ -490,6 +496,7 @@ async function connectToWhatsApp() {
 
 
                 if (!isFreeCommand) {
+                    // Pengecekan akses bot hanya untuk command berbayar
                     if (!hasAccessForCommand(commandUtama, isGroup, sender, groupId, sock)) {
                         let replyText = isGroup
                             ? `❌ Grup ini belum menyewa bot!\nKetik .sewa untuk info penyewaan.`
@@ -506,11 +513,11 @@ async function connectToWhatsApp() {
 
                 if (textLower === '.ceksewa') {
                     const idToCheck = isGroup ? groupId : sender.split('@')[0];
-                    const rentalData = loadRentals();
-                    const access = rentalData[idToCheck];
+                    // getRental sekarang mengembalikan objek rental jika masih aktif
+                    const access = getRental(idToCheck); 
 
                     let replyText;
-                    if (access && access.expires > Date.now()) {
+                    if (access) {
                         const remainingMs = access.expires - Date.now();
                         const duration = formatDuration(remainingMs);
 
@@ -1126,21 +1133,21 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         }, ms);
                     }
                 }
-                
+
                 // ============================================
                 // OPERATOR COMMANDS (DILUAR IF GROUP)
                 // ============================================
-
+                
                 const command = textLower.split(' ')[0];
                 const senderId = sender.split('@')[0];
-                
+
                 if (isOperator(senderId)) {
                     switch (command) {
                         case prefix + 'addrent':
                             // 1. Dapatkan ID target dan durasi
                             const argsRent = textLower.split(' ');
                             if (argsRent.length < 3) {
-                                await sock.sendMessage(from, { text: `Format salah! Gunakan: ${prefix}addrent [ID JID/Group] [Hari]` }, { quoted: m });
+                                await sock.sendMessage(from, { text: `Format salah! Gunakan: ${prefix}addrent [ID JID/Group] [Hari]` }, { quoted: msg });
                                 return;
                             }
 
@@ -1148,7 +1155,7 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             const days = parseInt(argsRent[2]);
 
                             if (isNaN(days) || days <= 0) {
-                                await sock.sendMessage(from, { text: 'Durasi hari harus angka positif.' }, { quoted: m });
+                                await sock.sendMessage(from, { text: 'Durasi hari harus angka positif.' }, { quoted: msg });
                                 return;
                             }
 
@@ -1158,9 +1165,9 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             const rentalInfo = grantRental('MANUAL', targetId, 'A', days, grantedBy);
 
                             if (rentalInfo) {
-                                await sock.sendMessage(from, { text: `✅ Berhasil menambahkan sewa untuk ID: *${targetId}* selama *${days} hari*.\nKedaluwarsa: ${formatDate(rentalInfo.expires)}` }, { quoted: m });
+                                await sock.sendMessage(from, { text: `✅ Berhasil menambahkan sewa untuk ID: *${targetId}* selama *${days} hari*.\nKedaluwarsa: ${formatDate(rentalInfo.expires)}` }, { quoted: msg });
                             } else {
-                                await sock.sendMessage(from, { text: `❌ Gagal menambahkan sewa. Terjadi kesalahan database.` }, { quoted: m });
+                                await sock.sendMessage(from, { text: `❌ Gagal menambahkan sewa. Terjadi kesalahan database.` }, { quoted: msg });
                             }
                             return;
 
@@ -1168,7 +1175,7 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             // 1. Dapatkan ID target
                             const argsDel = textLower.split(' ');
                             if (argsDel.length < 2) {
-                                await sock.sendMessage(from, { text: `Format salah! Gunakan: ${prefix}delrent [ID JID/Group]` }, { quoted: m });
+                                await sock.sendMessage(from, { text: `Format salah! Gunakan: ${prefix}delrent [ID JID/Group]` }, { quoted: msg });
                                 return;
                             }
                             const idToRevoke = argsDel[1].replace('@', ''); // Bersihkan '@'
@@ -1178,16 +1185,19 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
 
                             // Cek lagi untuk konfirmasi
                             if (!loadRentals()[idToRevoke] || !getRental(idToRevoke)) {
-                                await sock.sendMessage(from, { text: `✅ Berhasil mencabut/menghapus sewa dari ID: *${idToRevoke}*.` }, { quoted: m });
+                                await sock.sendMessage(from, { text: `✅ Berhasil mencabut/menghapus sewa dari ID: *${idToRevoke}*.` }, { quoted: msg });
                             } else {
-                                await sock.sendMessage(from, { text: `❌ Gagal mencabut. Mungkin ID *${idToRevoke}* tidak memiliki sewa aktif sebelumnya.` }, { quoted: m });
+                                await sock.sendMessage(from, { text: `❌ Gagal mencabut. Mungkin ID *${idToRevoke}* tidak memiliki sewa aktif sebelumnya.` }, { quoted: msg });
                             }
                             return;
-
-                        // Perintah Premium (.addprem, .delprem) sudah dihapus dari menu.
+                            
+                        case prefix + 'addprem':
+                        case prefix + 'delprem':
+                            // Perintah premium sudah dihapus dari menu, tapi jika operator masih mencoba
+                            await sock.sendMessage(from, { text: `⚠️ Perintah ${command} sudah diganti dengan *${prefix}addrent* dan *${prefix}delrent*.` }, { quoted: msg });
+                            return;
                     }
                 }
-
 
             } catch (e) {
                 console.error('Message handler error:', e);
@@ -1236,9 +1246,3 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
 // ============================================================
 
 connectToWhatsApp();
-
-// Handle process exit
-process.on('SIGINT', () => {
-    console.log('\nBot shutting down...');
-    process.exit(0);
-});
