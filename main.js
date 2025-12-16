@@ -510,13 +510,13 @@ async function connectToWhatsApp() {
                 const freeCommands = ['.sewa', '.ping', '.help', '.menu', '.profile'];
                 const commandUtama = textLower.split(' ')[0];
 
-               
+
                 const isFreeCommand = freeCommands.some(freeCmd =>
                     commandUtama === freeCmd
                 );
 
-            
-                if (!isFreeCommand) {          
+
+                if (!isFreeCommand) {
                     if (!hasAccessForCommand(commandUtama, isGroup, sender, groupId, sock)) {
                         let replyText = isGroup
                             ? `❌ Grup ini belum menyewa bot!\nKetik .sewa untuk info penyewaan.`
@@ -531,12 +531,39 @@ async function connectToWhatsApp() {
                 // COMMAND HANDLER
                 // ============================================
 
+                if (textLower === '.ceksewa') {
+                    const idToCheck = isGroup ? groupId : sender.split('@')[0];
+                    const access = getRental(idToCheck);
+
+                    let replyText;
+                    if (access) {
+                        const remainingMs = access.expires - Date.now();
+                        const duration = formatDuration(remainingMs);
+
+                        replyText = `✅ *STATUS SEWA*\n\n`;
+                        replyText += `ID: ${idToCheck}\n`;
+                        replyText += `Scope: ${access.scope.toUpperCase()}\n`;
+                        replyText += `Tier: ${access.tier}\n`;
+                        replyText += `Expired: ${formatDate(access.expires)}\n`;
+                        replyText += `Sisa Waktu: ${duration}\n\n`;
+                        replyText += `_Terima kasih sudah menyewa BOT SAM!_`;
+
+                    } else {
+                        replyText = isGroup
+                            ? `❌ Grup ini *belum* memiliki akses sewa.\nKetik .sewa untuk info penyewaan.`
+                            : `❌ Anda *belum* memiliki akses sewa.\nKetik .sewa untuk info penyewaan.`;
+                    }
+
+                    await sock.sendMessage(from, { text: replyText }, { quoted: msg });
+                    return;
+                }
+
                 // HELP/MENU
                 if (textLower === '.menu' || textLower === '.help') {
                     const userNama = msg.pushName || 'User';
 
                     const menuText = `
-*SAM* — _v1.1 (Stable)_
+*SAM* — _v1.2 (Stable)_
 ━━━━━━━━━━━━━━
 
 *USER:* ${userNama.toUpperCase()}
@@ -555,11 +582,18 @@ async function connectToWhatsApp() {
 .ban       (blokir)
 .mute      (bungkam)
 .setname   (ganti nama)
+.setdesc   (ganti deskripsi)
+.opengroup (buka grup)
+.closegroup (tutup grup)
 
 *— SCHEDULER (ALARM)*
 .setalarm  (set jam|pesan)
 .listalarm (cek jadwal)
 .delalarm  (hapus jadwal)
+
+*— OPERATOR ONLY*
+.addprem   (tambah premium)
+.delprem   (hapus premium)
 
 *— HIBURAN & LAINNYA*
 .truth     .waifu
@@ -569,6 +603,7 @@ async function connectToWhatsApp() {
 *— INFO SYSTEM*
 .profile   .ping
 .sewa      .help
+.ceksewa   .cekidgroup
 
 ━━━━━━━━━━━━━━
 _Managed by Sukabyone_
@@ -725,6 +760,50 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                     return;
                 }
 
+                // ADD PREMIUM (OPERATOR ONLY)
+                if (textLower.startsWith('.addprem ')) {
+                    if (!isOperator(sender, sock)) {
+                        return sock.sendMessage(from, { text: '❌ Command ini hanya untuk Operator!' });
+                    }
+
+                    const target = text.split(' ')[1]; // Ambil nomor JID saja (628xxxx)
+                    if (!target) {
+                        return sock.sendMessage(from, { text: '❌ Format: .addprem 628xxxx' });
+                    }
+
+                    // Pastikan target adalah JID penuh
+                    const targetJid = target.includes('@s.whatsapp.net') ? target : `${target}@s.whatsapp.net`;
+
+                    // Ambil ID numerik saja
+                    const targetId = targetJid.split('@')[0];
+
+                    addPremium(targetId);
+                    await sock.sendMessage(from, { text: `✅ Nomor *${targetId}* berhasil ditambahkan ke daftar Premium.` });
+                    return;
+                }
+
+                // DELETE PREMIUM (OPERATOR ONLY)
+                if (textLower.startsWith('.delprem ')) {
+                    if (!isOperator(sender, sock)) {
+                        return sock.sendMessage(from, { text: '❌ Command ini hanya untuk Operator!' });
+                    }
+
+                    const target = text.split(' ')[1]; // Ambil nomor JID saja (628xxxx)
+                    if (!target) {
+                        return sock.sendMessage(from, { text: '❌ Format: .delprem 628xxxx' });
+                    }
+
+                    // Pastikan target adalah JID penuh
+                    const targetJid = target.includes('@s.whatsapp.net') ? target : `${target}@s.whatsapp.net`;
+
+                    // Ambil ID numerik saja
+                    const targetId = targetJid.split('@')[0];
+
+                    removePremium(targetId);
+                    await sock.sendMessage(from, { text: `✅ Nomor *${targetId}* berhasil dihapus dari daftar Premium.` });
+                    return;
+                }
+
                 // PROFILE
                 if (textLower === '.profile') {
                     try {
@@ -754,6 +833,13 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                     const userAdmin = participants.find(p => p.id === sender)?.admin;
                     const isBotAdmin = botAdmin === 'admin' || botAdmin === 'superadmin';
                     const isUserAdmin = userAdmin === 'admin' || userAdmin === 'superadmin';
+
+                    // CEK GROUP ID (BARU DITAMBAHKAN)
+                    if (textLower === '.cekidgroup') {
+                        const idGroupText = `🌐 *ID GRUP*\n\nID: ${from}\n_Gunakan ID ini untuk keperluan sewa atau operator._`;
+                        await sock.sendMessage(from, { text: idGroupText }, { quoted: msg });
+                        return;
+                    }
 
                     // HIDETAG BY BOT SAM
                     if (textLower.startsWith('.hidetag') || textLower === '.h') {
@@ -1025,6 +1111,38 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             });
                         } catch (e) {
                             await sock.sendMessage(from, { text: `❌ Gagal: ${e.message}` });
+                        }
+                        return;
+                    }
+
+                    // OpenGroup
+                    if (textLower === '.opengroup') {
+                        if (!isUserAdmin || !isBotAdmin) {
+                            return sock.sendMessage(from, { text: '❌ Bot dan user harus admin grup!' });
+                        }
+
+                        try {
+                            // Mengubah ke pengaturan normal (semua member bisa mengirim pesan)
+                            await sock.groupSettingUpdate(from, 'not_announcement');
+                            await sock.sendMessage(from, { text: '✅ Grup berhasil *DIBUKA*! Semua member kini bisa mengirim pesan.' });
+                        } catch (e) {
+                            await sock.sendMessage(from, { text: `❌ Gagal membuka grup: ${e.message}` });
+                        }
+                        return;
+                    }
+
+                    // CLOSE GROUP (Hanya Admin yang Bisa Mengirim Pesan = 'announcement')
+                    if (textLower === '.closegroup') {
+                        if (!isUserAdmin || !isBotAdmin) {
+                            return sock.sendMessage(from, { text: '❌ Bot dan user harus admin grup!' });
+                        }
+
+                        try {
+                            // Mengubah ke pengaturan restricted (hanya admin yang bisa mengirim pesan)
+                            await sock.groupSettingUpdate(from, 'announcement');
+                            await sock.sendMessage(from, { text: '✅ Grup berhasil *DITUTUP*! Hanya admin yang bisa mengirim pesan.' });
+                        } catch (e) {
+                            await sock.sendMessage(from, { text: `❌ Gagal menutup grup: ${e.message}` });
                         }
                         return;
                     }
