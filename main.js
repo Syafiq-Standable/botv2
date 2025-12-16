@@ -5,6 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
 const cheerio = require('cheerio');
+const { exec } = require('child_process');
+const ytdl = require('ytdl-core');
 
 // ============================================================
 // KONFIGURASI AWAL & DEKLARASI PATH
@@ -17,9 +19,6 @@ const WELCOME_DB = path.join(FOLDER, 'welcome.json');
 const RENTALS_DB = path.join(FOLDER, 'rentals.json');
 const OPERATORS_DB = path.join(FOLDER, 'operators.json');
 const MUTE_DB = path.join(FOLDER, 'muted.json');
-
-const loadMuted = () => loadJSON(MUTE_DB, {});
-const saveMuted = (data) => saveJSON(MUTE_DB, data);
 
 // Buat folder data jika belum ada
 try {
@@ -61,33 +60,31 @@ async function listRentals(sock) {
     for (const jid in rentals) {
         const rental = rentals[jid];
 
-        // Hanya masukkan yang masih aktif (belum kedaluwarsa)
-        if (rental.expires > now) {
-            const timeLeft = rental.expires - now;
+        if (rental.expires <= now) continue; // Skip expired
 
-            let groupName = 'N/A'; // Default untuk PC atau jika gagal
-            const type = jid.endsWith('@g.us') ? 'Grup' : 'PC';
+        const timeLeft = rental.expires - now;
+        const type = jid.endsWith('@g.us') ? 'Grup' : 'PC';
+        let groupName = 'N/A';
 
-            if (type === 'Grup') {
-                try {
-                    // Ambil metadata grup dari WhatsApp
-                    const metadata = await sock.groupMetadata(jid);
-                    groupName = metadata.subject; // Ambil nama grup
-                } catch (e) {
-                    groupName = 'Gagal ambil nama/Grup tidak dikenal';
-                }
+        if (type === 'Grup') {
+            try {
+                const metadata = await sock.groupMetadata(jid).catch(() => null);
+                groupName = metadata?.subject || 'Grup Tidak Dikenal';
+            } catch (e) {
+                groupName = 'Error: ' + e.message.substring(0, 50);
             }
-
-            activeRentals.push({
-                jid,
-                type, // Tambahkan tipe untuk display
-                name: groupName, // Tambahkan nama grup
-                ...rental,
-                duration: formatDuration(timeLeft),
-                expiryDate: formatDate(rental.expires)
-            });
         }
+
+        activeRentals.push({
+            jid,
+            type,
+            name: groupName,
+            ...rental,
+            duration: formatDuration(timeLeft),
+            expiryDate: formatDate(rental.expires)
+        });
     }
+
     return activeRentals;
 }
 
@@ -101,24 +98,52 @@ const saveUsers = (data) => saveJSON(USERS_DB, data);
 const loadRentals = () => loadJSON(RENTALS_DB, {});
 const saveRentals = (data) => saveJSON(RENTALS_DB, data);
 const loadOperators = () => loadJSON(OPERATORS_DB, []);
+const loadMuted = () => loadJSON(MUTE_DB, {});
+const saveMuted = (data) => saveJSON(MUTE_DB, data);
 
-function isOperator(fullJid, sock) {
-    if (!fullJid) return false;
+function isOperator(senderJid) {
+    if (!senderJid) return false;
+
     try {
         const list = loadOperators();
-        const numeric = fullJid.split('@')[0];
+        const numericId = senderJid.split('@')[0];
 
-        // Cek di list operator
-        for (const op of list) {
-            if (!op) continue;
-            if (String(op) === numeric) return true;
-            if (fullJid.includes(String(op))) return true;
-            if (fullJid.endsWith(`${op}@s.whatsapp.net`)) return true;
-        }
+        return list.some(op => {
+            if (!op) return false;
+            // Cek berbagai format
+            const opStr = String(op).replace('@s.whatsapp.net', '');
+            return opStr === numericId ||
+                senderJid.includes(opStr) ||
+                senderJid.endsWith(`${opStr}@s.whatsapp.net`);
+        });
     } catch (e) {
-        console.log('isOperator error:', e.message);
+        console.error('isOperator error:', e.message);
+        return false;
     }
-    return false;
+}
+
+function isValidJid(jid) {
+    const regex = /^(\d+@(s\.whatsapp\.net|g\.us))$/;
+    return regex.test(jid);
+}
+
+function formatDate(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+}
+
+function formatDuration(ms) {
+    const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    return `${days} hari ${hours} jam`;
+}
+
+function getRandom(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
 }
 
 // ============================================================
@@ -129,9 +154,7 @@ function grantRental(scope, id, tier, days, grantedBy) {
     const rentals = loadRentals();
     const key = id;
 
-    // Tentukan waktu kedaluwarsa baru (dimulai dari sisa sewa yang ada atau dari sekarang)
     let currentExpiryTime = Date.now();
-    // Ambil tanggal kadaluarsa saat ini jika ada dan belum expired
     if (rentals[key] && rentals[key].expires > Date.now()) {
         currentExpiryTime = rentals[key].expires;
     }
@@ -155,59 +178,51 @@ function revokeRental(id) {
     saveRentals(rentals);
 }
 
-// FIX KRITIS: Fungsi getRental diperbaiki agar mengembalikan objek rental jika aktif
-const getRental = (jid) => { // Ganti ID menjadi JID
+const getRental = (jid) => {
     let rentals = loadRentals();
-    const rentalData = rentals[jid]; // Gunakan JID LENGKAP sebagai kunci
+    const rentalData = rentals[jid];
     if (!rentalData || rentalData.expires <= Date.now()) {
-        // Jika tidak ada data atau sudah kadaluarsa
         return false;
     }
-    // Jika masih aktif, kembalikan objek lengkapnya
     return rentalData;
 };
 
 const hasAccessForCommand = (command, isGroup, sender, groupId, sock) => {
-    // sender dan groupId sudah berupa JID LENGKAP di main handler
-    const senderFullJid = sender; // 'sender' sudah full JID (participant)
-    const senderId = senderFullJid.split('@')[0];
+    const senderId = sender.split('@')[0];
 
-    // 1. Operator selalu lolos (WAJIB ADA untuk Owner/Pengelola Bot)
-    if (isOperator(senderId)) { // isOperator tetap cek ID numerik
+    // 1. Operator selalu lolos
+    if (isOperator(senderId)) {
         return true;
     }
 
-    // 2. Pengecekan Sewa (Rental)
+    // 2. Pengecekan Sewa
     if (isGroup) {
-        // Cek sewa grup menggunakan JID GRUP (groupId/from)
         return getRental(groupId);
     } else {
-        // Cek sewa private chat menggunakan JID PENGIRIM (sender)
-        return getRental(sender); // PENTING: Gunakan sender JID LENGKAP
+        return getRental(sender);
     }
-}
-
-function formatDate(timestamp) {
-    const date = new Date(timestamp);
-    return date.toLocaleDateString('id-ID', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-    });
-}
-
-function formatDuration(ms) {
-    const days = Math.floor(ms / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    return `${days} hari ${hours} jam`;
-}
+};
 
 // ============================================================
 // FUNGSI BACKGROUND JOBS (Scheduler & Reminder)
 // ============================================================
 
 function setupBackgroundJobs(sock) {
-    // --- MESIN JAM ALARM (SAM JAGA MALEM) ---
+    // Cache system untuk scheduler
+    let schedulerCache = null;
+    let lastCacheUpdate = 0;
+    const CACHE_TTL = 60000;
+
+    function getSchedulerData() {
+        const now = Date.now();
+        if (!schedulerCache || (now - lastCacheUpdate) > CACHE_TTL) {
+            schedulerCache = loadJSON('scheduler.json', []);
+            lastCacheUpdate = now;
+        }
+        return schedulerCache;
+    }
+
+    // Alarm scheduler
     let lastRun = "";
     setInterval(async () => {
         const now = new Date().toLocaleTimeString('en-GB', {
@@ -216,14 +231,13 @@ function setupBackgroundJobs(sock) {
 
         if (lastRun === now) return;
 
-        let db = loadJSON('scheduler.json', []);
+        let db = getSchedulerData();
         if (db.length === 0) return;
 
         let executed = false;
         for (let task of db) {
             if (task.time === now) {
                 try {
-                    // Di sini 'sock' pasti terdefinisi karena dilewatkan sebagai argumen
                     const meta = await sock.groupMetadata(task.groupId);
                     const members = meta.participants.map(p => p.id);
                     await sock.sendMessage(task.groupId, {
@@ -232,19 +246,19 @@ function setupBackgroundJobs(sock) {
                     });
                     executed = true;
                 } catch (e) {
-                    console.log(`Gagal kirim alarm: ${e.message}`); // Error ini akan hilang
+                    console.log(`Gagal kirim alarm: ${e.message}`);
                 }
             }
         }
         if (executed) lastRun = now;
-    }, 30000); // Check setiap 30 detik
+    }, 30000);
 
-    // --- MESIN PENGINGAT SEWA (REMINDER RENTAL) ---
+    // Rental reminder
     setInterval(async () => {
         console.log('--- Running Daily Rental Reminder Check ---');
         const rentals = loadRentals();
         const now = Date.now();
-        const reminderThreshold = 3 * 24 * 60 * 60 * 1000; // 3 hari
+        const reminderThreshold = 3 * 24 * 60 * 60 * 1000;
 
         for (const jid in rentals) {
             const rental = rentals[jid];
@@ -274,12 +288,82 @@ Ketik *.sewa* untuk info perpanjangan.
                 }
             }
         }
-    }, 43200000); // Check setiap 12 jam
+    }, 43200000);
 }
 
 // ============================================================
 // FITUR DOWNLOADER SEDERHANA
 // ============================================================
+
+async function ytMp4(url, options) {
+    const getUrl = await ytdl.getInfo(url, options);
+    
+    const sampahDir = path.join(__dirname, 'database', 'sampah');
+    if (!fs.existsSync(sampahDir)) {
+        fs.mkdirSync(sampahDir, { recursive: true });
+    }
+
+    const timestamp = Date.now();
+    const audioPath = path.join(sampahDir, `audio_${timestamp}.mp4`);
+    const videoPath = path.join(sampahDir, `video_${timestamp}.mp4`);
+    const outputPath = path.join(sampahDir, `output_${timestamp}.mp4`);
+    
+    try {
+        // 1. Download Audio
+        await new Promise((resolv, rejectt) => {
+            ytdl(url, { format: ytdl.chooseFormat(getUrl.formats, { quality: 'highestaudio', filter: 'audioonly' }) })
+                .pipe(fs.createWriteStream(audioPath))
+                .on('finish', resolv)
+                .on('error', rejectt);
+        });
+
+        // 2. Download Video
+        await new Promise((resolv, rejectt) => {
+            ytdl(url, { format: ytdl.chooseFormat(getUrl.formats, { quality: 'highestvideo', filter: 'videoonly' }) })
+                .pipe(fs.createWriteStream(videoPath))
+                .on('finish', resolv)
+                .on('error', rejectt);
+        });
+
+        // 3. Gabungkan Audio dan Video
+        await new Promise((resolv, rejectt) => {
+            exec(`ffmpeg -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac "${outputPath}"`, (error) => {
+                if (error) {
+                    rejectt(new Error(`FFmpeg Error: ${error.message}`));
+                    return;
+                }
+                resolv();
+            });
+        });
+
+        // 4. Baca Hasil dan Hapus Sampah
+        const result = fs.readFileSync(outputPath);
+        await fs.promises.unlink(audioPath);
+        await fs.promises.unlink(videoPath);
+        await fs.promises.unlink(outputPath);
+
+        // 5. Kembalikan Metadata
+        const details = getUrl.videoDetails;
+        return {
+            title: details.title,
+            result,
+            thumb: getUrl.player_response.microformat.playerMicroformatRenderer.thumbnail.thumbnails[0].url,
+            views: details.viewCount,
+            likes: details.likes,
+            dislike: details.dislikes,
+            channel: details.ownerChannelName,
+            uploadDate: details.uploadDate,
+            desc: details.description
+        };
+
+    } catch (e) {
+        // Cleanup semua file
+        [audioPath, videoPath, outputPath].forEach(async (p) => {
+            if (fs.existsSync(p)) await fs.promises.unlink(p).catch(() => {});
+        });
+        throw e;
+    }
+}
 
 async function downloadTikTok(url, sock, from, msg) {
     await sock.sendMessage(from, { text: '⏳ Download TikTok...' }, { quoted: msg });
@@ -294,22 +378,18 @@ async function downloadTikTok(url, sock, from, msg) {
         } else {
             throw new Error('Gagal download');
         }
-    } catch {
+    } catch (error) {
+        console.error('TikTok download error:', error.message);
         await sock.sendMessage(from, { text: '❌ Gagal download TikTok.' }, { quoted: msg });
     }
 }
 
 async function fetchInstagramMedia(url) {
     try {
-        // Otomatis akan menunggu (await) hasil dari axios.post
         const { data } = await axios.post(
             'https://yt1s.io/api/ajaxSearch',
             new URLSearchParams({ q: url, w: '', p: 'home', lang: 'en' }),
-            {
-                headers: {
-                    // ... headers yang diperlukan
-                }
-            }
+            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
         );
 
         const $ = cheerio.load(data.data);
@@ -319,17 +399,14 @@ async function fetchInstagramMedia(url) {
         })).get();
 
         if (result.length > 0) {
-            // Mengembalikan data. Karena fungsi ini 'async', 
-            // ini secara implisit akan menjadi Promise yang 'Resolved'.
             return {
                 title: result[0].title,
                 url: result[0].url
             };
         }
+        throw new Error('Media tidak ditemukan');
 
     } catch (e) {
-        // Melemparkan error. Karena fungsi ini 'async', 
-        // ini secara implisit akan menjadi Promise yang 'Rejected'.
         throw e;
     }
 }
@@ -338,8 +415,6 @@ async function downloadInstagram(url, sock, from, msg) {
     await sock.sendMessage(from, { text: '⏳ Mengambil link scrapper dan mengunduh media...' }, { quoted: msg });
 
     try {
-        // --- 1. Panggil Scrapper untuk mendapatkan URL Download ---
-        // Ini adalah fungsi yang mengandung axios.post dan cheerio.load
         const media = await fetchInstagramMedia(url);
         const mediaUrl = media.url;
 
@@ -347,44 +422,36 @@ async function downloadInstagram(url, sock, from, msg) {
             throw new Error('Scrapper gagal menemukan link download media.');
         }
 
-        // --- 2. Mengunduh Konten File ke Buffer ---
-        // Kita menggunakan axios.get di sini untuk mengunduh media yang sudah terdeteksi
         const mediaResponse = await axios.get(mediaUrl, {
-            responseType: 'arraybuffer', // Kunci untuk mendapatkan data biner
-            // Tambahkan header opsional jika link download membutuhkan User-Agent tertentu
+            responseType: 'arraybuffer',
+            timeout: 30000
         });
 
         const mediaBuffer = mediaResponse.data;
         const contentType = mediaResponse.headers['content-type'];
 
-        // --- 3. Logika Penentuan Tipe yang Akurat ---
         const isVideo = contentType && contentType.startsWith('video/');
         const isImage = contentType && contentType.startsWith('image/');
 
         if (isVideo) {
-            // KIRIM SEBAGAI VIDEO DARI BUFFER
             await sock.sendMessage(from, {
                 video: mediaBuffer,
                 mimetype: contentType,
                 caption: `✅ Instagram Video (Tipe: ${contentType})`
             }, { quoted: msg });
         } else if (isImage) {
-            // KIRIM SEBAGAI FOTO DARI BUFFER
             await sock.sendMessage(from, {
                 image: mediaBuffer,
                 mimetype: contentType,
                 caption: `✅ Instagram Photo (Tipe: ${contentType})`
             }, { quoted: msg });
         } else {
-            // Jika Content-Type adalah text/html (misal: error page, diblokir, dsb)
-            // Log URL dan ContentType untuk debug
             console.error(`[DOWNLOAD FAIL] URL: ${mediaUrl}, Content-Type: ${contentType}`);
-            throw new Error(`Tipe media tidak dikenali (${contentType}). Scrapper mungkin mengembalikan tautan yang salah.`);
+            throw new Error(`Tipe media tidak dikenali (${contentType})`);
         }
 
     } catch (error) {
         console.error('Download Instagram Error:', error.message);
-        // Kirim error yang lebih jelas ke pengguna
         await sock.sendMessage(from, { text: `❌ Gagal download Instagram. Error: ${error.message}` }, { quoted: msg });
     }
 }
@@ -401,7 +468,8 @@ async function createSticker(imageBuffer, sock, from, msg) {
             .webp({ quality: 80 })
             .toBuffer();
         await sock.sendMessage(from, { sticker }, { quoted: msg });
-    } catch {
+    } catch (error) {
+        console.error('Sticker error:', error.message);
         await sock.sendMessage(from, { text: '❌ Gagal buat sticker.' }, { quoted: msg });
     }
 }
@@ -417,7 +485,8 @@ async function getWaifu(sock, from, msg) {
             image: { url: res.data.url },
             caption: '🌸 Random waifu~'
         }, { quoted: msg });
-    } catch {
+    } catch (error) {
+        console.error('Waifu error:', error.message);
         await sock.sendMessage(from, { text: '❌ Gagal mendapatkan waifu.' }, { quoted: msg });
     }
 }
@@ -429,7 +498,8 @@ async function getNeko(sock, from, msg) {
             image: { url: res.data.url },
             caption: '🐱 Neko girl~'
         }, { quoted: msg });
-    } catch {
+    } catch (error) {
+        console.error('Neko error:', error.message);
         await sock.sendMessage(from, { text: '❌ Gagal mendapatkan neko.' }, { quoted: msg });
     }
 }
@@ -445,7 +515,8 @@ async function generateQR(text, sock, from, msg) {
             image: { url },
             caption: `📱 QR Code: ${text}`
         }, { quoted: msg });
-    } catch {
+    } catch (error) {
+        console.error('QR error:', error.message);
         await sock.sendMessage(from, { text: '❌ Gagal membuat QR Code.' }, { quoted: msg });
     }
 }
@@ -456,17 +527,10 @@ async function getPrayerTime(city, sock, from, msg) {
         const t = res.data.data.timings;
         const text = `🕌 Jadwal Sholat ${city.toUpperCase()}\n\nSubuh: ${t.Fajr}\nDzuhur: ${t.Dhuhr}\nAshar: ${t.Asr}\nMaghrib: ${t.Maghrib}\nIsya: ${t.Isha}`;
         await sock.sendMessage(from, { text }, { quoted: msg });
-    } catch {
+    } catch (error) {
+        console.error('Sholat error:', error.message);
         await sock.sendMessage(from, { text: '❌ Gagal ambil jadwal sholat.' }, { quoted: msg });
     }
-}
-
-// ============================================================
-// FUNGSI GAME SEDERHANA
-// ============================================================
-
-function getRandom(arr) {
-    return arr[Math.floor(Math.random() * arr.length)];
 }
 
 function truthOrDare(type = 'truth') {
@@ -490,7 +554,7 @@ function truthOrDare(type = 'truth') {
 }
 
 // ============================================================
-// WELCOME HANDLER
+// HANDLER GRUP
 // ============================================================
 
 function setupWelcomeHandler(sock) {
@@ -509,10 +573,6 @@ function setupWelcomeHandler(sock) {
         }
     });
 }
-
-// ============================================================
-// BAN HANDLER
-// ============================================================
 
 function setupBanHandler(sock) {
     sock.ev.on('group-participants.update', async (update) => {
@@ -547,11 +607,9 @@ async function connectToWhatsApp() {
             printQRInTerminal: true
         });
 
-        // Setup handlers
         setupWelcomeHandler(sock);
         setupBanHandler(sock);
 
-        // Connection handlers
         sock.ev.on('connection.update', (update) => {
             const { connection, lastDisconnect, qr } = update;
 
@@ -580,8 +638,6 @@ async function connectToWhatsApp() {
         sock.ev.on('messages.upsert', async (m) => {
             try {
                 const msg = m.messages[0];
-
-                // FIX UTAMA: Cegah error 'fromMe' jika msg itu sendiri undefined/null (non-message event)
                 if (!msg || !msg.message) return;
 
                 const from = msg.key.remoteJid;
@@ -590,25 +646,22 @@ async function connectToWhatsApp() {
                 const isGroup = from.endsWith('@g.us');
                 const botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
 
-                // Ambil teks dulu sebelum dipake filter fromMe
                 const text = (
                     msg.message?.conversation ||
                     msg.message?.extendedTextMessage?.text ||
                     msg.message?.imageMessage?.caption ||
-                    msg.message?.videoMessage?.caption || // Tambahkan ini agar lebih aman
+                    msg.message?.videoMessage?.caption ||
                     ''
                 ).trim();
                 const textLower = text.toLowerCase();
 
-                // Filter fromMe (Sekarang 'text' udah aman karena udah didefinisikan di atas)
                 if (msg.key.fromMe && !text.startsWith('.')) return;
 
-                // --- SISTEM MUTE (FIXED) ---
+                // Sistem Mute
                 const muted = loadMuted();
                 if (isGroup && muted[from]?.includes(sender)) {
-                    const groupMetadata = await sock.groupMetadata(from); // Ambil metadata dulu
+                    const groupMetadata = await sock.groupMetadata(from);
                     const participants = groupMetadata.participants;
-                    const botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
                     const botAdmin = participants.find(p => p.id === botNumber)?.admin;
 
                     if (botAdmin) {
@@ -656,7 +709,7 @@ async function connectToWhatsApp() {
                 if (isGroup && groupLinkRegex.test(textLower)) {
                     const groupMetadata = await sock.groupMetadata(from);
                     const participants = groupMetadata.participants;
-                    const botAdmin = participants.find(p => p.id === (sock.user.id.split(':')[0] + '@s.whatsapp.net'))?.admin;
+                    const botAdmin = participants.find(p => p.id === botNumber)?.admin;
                     const userAdmin = participants.find(p => p.id === sender)?.admin;
 
                     if (botAdmin && !userAdmin) {
@@ -665,24 +718,17 @@ async function connectToWhatsApp() {
                     }
                 }
 
-                //cek akses sewa
+                // Cek akses sewa
                 const prefix = '.';
-
                 if (!textLower.startsWith(prefix)) {
                     return;
                 }
 
-                const freeCommands = ['.sewa', '.ping', '.help', '.menu', '.profile', '.ceksewa']; // Tambahkan .ceksewa ke free command
+                const freeCommands = ['.sewa', '.ping', '.help', '.menu', '.profile', '.ceksewa'];
                 const commandUtama = textLower.split(' ')[0];
-
-
-                const isFreeCommand = freeCommands.some(freeCmd =>
-                    commandUtama === freeCmd
-                );
-
+                const isFreeCommand = freeCommands.some(freeCmd => commandUtama === freeCmd);
 
                 if (!isFreeCommand) {
-                    // Pengecekan akses bot hanya untuk command berbayar
                     if (!hasAccessForCommand(commandUtama, isGroup, sender, groupId, sock)) {
                         let replyText = isGroup
                             ? `❌ Grup ini belum menyewa bot!\nKetik .sewa untuk info penyewaan.`
@@ -697,13 +743,8 @@ async function connectToWhatsApp() {
                 // COMMAND HANDLER
                 // ============================================
 
-
-
                 if (textLower === '.ceksewa') {
-                    // ID yang harus dicek adalah JID LENGKAP (Group ID untuk grup, Sender JID untuk PC)
                     const idToCheck = isGroup ? groupId : sender;
-
-                    // getRental sekarang mengembalikan objek rental jika masih aktif
                     const access = getRental(idToCheck);
 
                     let replyText;
@@ -729,10 +770,8 @@ async function connectToWhatsApp() {
                     return;
                 }
 
-                // HELP/MENU
                 if (textLower === '.menu' || textLower === '.help') {
                     const userNama = msg.pushName || 'User';
-
                     const menuText = `
 *SAM* — _v1.2 (Stable)_
 ━━━━━━━━━━━━━━
@@ -785,7 +824,6 @@ _Managed by Sukabyone_
                     return;
                 }
 
-                // PING
                 if (textLower === '.ping') {
                     const start = Date.now();
                     await sock.sendMessage(from, { text: '🏓 Pong!' });
@@ -796,7 +834,6 @@ _Managed by Sukabyone_
                     return;
                 }
 
-                // TIKTOK DOWNLOADER
                 if (textLower.startsWith('.tt ')) {
                     const url = text.split(' ')[1];
                     if (!url.includes('tiktok')) {
@@ -806,7 +843,6 @@ _Managed by Sukabyone_
                     return;
                 }
 
-                // INSTAGRAM DOWNLOADER
                 if (textLower.startsWith('.ig ')) {
                     const url = text.split(' ')[1];
                     if (!url.includes('instagram.com')) {
@@ -816,7 +852,6 @@ _Managed by Sukabyone_
                     return;
                 }
 
-                // STICKER MAKER
                 if (textLower === '.sticker' || textLower === '.s') {
                     const imgMsg = msg.message?.imageMessage ||
                         msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
@@ -832,25 +867,23 @@ _Managed by Sukabyone_
                             buffer = Buffer.concat([buffer, chunk]);
                         }
                         await createSticker(buffer, sock, from, msg);
-                    } catch {
+                    } catch (error) {
+                        console.error('Sticker error:', error.message);
                         await sock.sendMessage(from, { text: '❌ Gagal membuat sticker.' }, { quoted: msg });
                     }
                     return;
                 }
 
-                // WAIFU
                 if (textLower === '.waifu') {
                     await getWaifu(sock, from, msg);
                     return;
                 }
 
-                // NEKO
                 if (textLower === '.neko') {
                     await getNeko(sock, from, msg);
                     return;
                 }
 
-                // TRUTH OR DARE
                 if (textLower === '.truth') {
                     const truth = truthOrDare('truth');
                     await sock.sendMessage(from, { text: `🤔 *TRUTH*\n\n${truth}` }, { quoted: msg });
@@ -863,7 +896,6 @@ _Managed by Sukabyone_
                     return;
                 }
 
-                // QR CODE GENERATOR
                 if (textLower.startsWith('.qrgen ')) {
                     const data = text.split(' ').slice(1).join(' ');
                     if (!data) {
@@ -873,7 +905,6 @@ _Managed by Sukabyone_
                     return;
                 }
 
-                // SHOLAT TIME
                 if (textLower.startsWith('.sholat ')) {
                     const city = text.split(' ').slice(1).join(' ');
                     if (!city) {
@@ -883,7 +914,6 @@ _Managed by Sukabyone_
                     return;
                 }
 
-                // SEWA INFO
                 if (textLower === '.sewa') {
                     const promoText = `
 *SAM* — _Sewa BOT Pricelist!_
@@ -919,20 +949,6 @@ wa.me/6289528950624
                     return;
                 }
 
-                // EXPLAINING CUSTOM FEATURES
-                if (textLower === '.customfeatures') {
-                    const customText = `"Fitur Custom itu ibarat Kakak punya asisten pribadi di WA. Kakak mager catat pengeluaran di buku? Atau repot mau ngatur jadwal tapi sering lupa?
-
-Di BOT SAM, Kakak bisa request fitur buat bantu keseharian. Contohnya: — Catat Keuangan: Tinggal chat 'Beli kopi 20rb', nanti SAM otomatis rekap total pengeluaran Kakak sebulan. — Reminder Mager: Chat 'SAM, ingetin bayar kos besok jam 10', nanti SAM bakal tag Kakak tepat waktu. — Catatan Rahasia: Simpan data apa pun di SAM, tinggal panggil lagi kapan aja Kakak butuh.
-
-Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simpel, tinggal bilang. Saya buatkan sistemnya khusus buat Kakak."`
-
-                    await sock.sendMessage(from, { text: customText });
-                    return;
-                }
-
-
-                // PROFILE
                 if (textLower === '.profile') {
                     try {
                         const users = loadUsers();
@@ -946,7 +962,8 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         profileText += `📅 Bergabung: ${formatDate(user.firstSeen)}\n`;
 
                         await sock.sendMessage(from, { text: profileText });
-                    } catch {
+                    } catch (error) {
+                        console.error('Profile error:', error.message);
                         await sock.sendMessage(from, { text: '❌ Gagal mendapatkan profile.' });
                     }
                     return;
@@ -956,29 +973,23 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                 if (isGroup) {
                     const groupMetadata = await sock.groupMetadata(from);
                     const participants = groupMetadata.participants;
-                    const botNumber = sock.user.id.split(':')[0] + '@s.whatsapp.net';
                     const botAdmin = participants.find(p => p.id === botNumber)?.admin;
                     const userAdmin = participants.find(p => p.id === sender)?.admin;
                     const isBotAdmin = botAdmin === 'admin' || botAdmin === 'superadmin';
                     const isUserAdmin = userAdmin === 'admin' || userAdmin === 'superadmin';
 
-                    // CEK GROUP ID (BARU DITAMBAHKAN)
                     if (textLower === '.cekidgroup') {
                         const idGroupText = `🌐 *ID GRUP*\n\nID: ${from}\n_Gunakan ID ini untuk keperluan sewa atau operator._`;
                         await sock.sendMessage(from, { text: idGroupText }, { quoted: msg });
                         return;
                     }
 
-                    // HIDETAG BY BOT SAM
                     if (textLower.startsWith('.hidetag') || textLower === '.h') {
-                        if (!isUserAdmin && !isOperator(sender, sock)) {
+                        if (!isUserAdmin && !isOperator(sender)) {
                             return sock.sendMessage(from, { text: '❌ Hanya admin/operator yang bisa pakai ini, Bos!' });
                         }
 
-                        // Ambil teks setelah command .hidetag
                         const teks = text.slice(9) || 'Panggilan untuk warga grup! 📢';
-
-                        // Kirim pesan dengan mentions semua peserta tapi gak kelihatan nomornya
                         await sock.sendMessage(from, {
                             text: teks,
                             mentions: participants.map(p => p.id)
@@ -986,18 +997,16 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         return;
                     }
 
-                    // FORMAT: .setalarm 07:00 | Pesan Lu
-                    if (textLower.startsWith('.setalarm')) { // Pakai startsWith tanpa spasi dulu buat nge-trap
-                        if (!isUserAdmin && !isOperator(sender, sock)) return;
+                    // ALARM COMMANDS
+                    if (textLower.startsWith('.setalarm')) {
+                        if (!isUserAdmin && !isOperator(sender)) return;
 
-                        // 1. CEK: Cuma ngetik .setalarm doang?
                         if (text.trim() === '.setalarm') {
                             return sock.sendMessage(from, {
                                 text: `⚠️ *FORMAT SALAH, BOS!*\n\nPenggunaan:\n*.setalarm Jam | Pesan*\nContoh:\n.setalarm 07:00 | Waktunya bangun!\n_Note: Pake format 24 jam ya._`
                             });
                         }
 
-                        // 2. CEK: Ada isinya tapi kurang lengkap (nggak pake '|')
                         const input = text.slice(10).split('|');
                         if (input.length < 2) {
                             return sock.sendMessage(from, {
@@ -1008,14 +1017,12 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         const time = input[0].trim();
                         const msgAlarm = input[1].trim();
 
-                        // 3. CEK: Format jam bener gak?
                         if (!/^\d{2}:\d{2}$/.test(time)) {
                             return sock.sendMessage(from, {
                                 text: `🕒 *FORMAT JAM SALAH!*\n\nPake format HH:mm (Contoh: 07:05 atau 21:00).`
                             });
                         }
 
-                        // Kalau semua aman, baru simpan ke DB
                         try {
                             let db = loadJSON('scheduler.json', []);
                             db.push({
@@ -1035,9 +1042,8 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         }
                     }
 
-                    // FORMAT: .delalarm (Hapus alarm berdasarkan nomor urut)
                     if (textLower.startsWith('.delalarm ')) {
-                        if (!isUserAdmin && !isOperator(sender, sock)) return;
+                        if (!isUserAdmin && !isOperator(sender)) return;
 
                         const index = parseInt(text.split(' ')[1]) - 1;
                         if (isNaN(index)) return sock.sendMessage(from, { text: 'Masukin nomornya, Bos. Contoh: .delalarm 1' });
@@ -1057,7 +1063,6 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         return;
                     }
 
-                    // FORMAT: .listalarm (Cek semua jadwal di grup ini)
                     if (textLower === '.listalarm') {
                         let db = loadJSON('scheduler.json', []);
                         let groupTasks = db.filter(item => item.groupId === from);
@@ -1077,26 +1082,19 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                     }
 
                     if (textLower.startsWith('.h ')) {
-                        if (!isUserAdmin && !isOperator(sender, sock)) return;
+                        if (!isUserAdmin && !isOperator(sender)) return;
 
-                        // Ambil teks setelah ".h "
                         const pesan = text.slice(3).trim();
-                        if (!pesan) return; // Kalau cuma ngetik ".h" doang, SAM diem aja
+                        if (!pesan) return;
 
-                        // Ambil semua member buat dimention
-                        const groupMetadata = await sock.groupMetadata(from);
-                        const participants = groupMetadata.participants.map(p => p.id);
-
-                        // SAM kirim pesan lu sambil nge-ghost mention
                         await sock.sendMessage(from, {
                             text: pesan,
-                            mentions: participants
+                            mentions: participants.map(p => p.id)
                         });
                     }
 
-                    // TAGALL
                     if (textLower === '.tagall') {
-                        if (!isUserAdmin && !isOperator(sender, sock)) {
+                        if (!isUserAdmin && !isOperator(sender)) {
                             return sock.sendMessage(from, { text: '❌ Hanya admin/operator!' });
                         }
 
@@ -1112,7 +1110,6 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         return;
                     }
 
-                    // KICK
                     if (textLower.startsWith('.kick')) {
                         if (!isUserAdmin || !isBotAdmin) {
                             return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
@@ -1140,7 +1137,6 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         return;
                     }
 
-                    // BAN
                     if (textLower.startsWith('.ban ')) {
                         if (!isUserAdmin || !isBotAdmin) {
                             return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
@@ -1174,9 +1170,8 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         return;
                     }
 
-                    // COMMAND .MUTE
                     if (textLower.startsWith('.mute')) {
-                        if (!isUserAdmin && !isOperator(sender, sock)) return;
+                        if (!isUserAdmin && !isOperator(sender)) return;
 
                         let target = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
                         if (!target && msg.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
@@ -1196,9 +1191,8 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         return;
                     }
 
-                    // COMMAND .UNMUTE
                     if (textLower.startsWith('.unmute')) {
-                        if (!isUserAdmin && !isOperator(sender, sock)) return;
+                        if (!isUserAdmin && !isOperator(sender)) return;
 
                         let target = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
                         if (!target) return;
@@ -1213,7 +1207,6 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         return;
                     }
 
-                    // PROMOTE/DEMOTE
                     if (textLower.startsWith('.promote') || textLower.startsWith('.demote')) {
                         if (!isUserAdmin || !isBotAdmin) {
                             return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
@@ -1243,14 +1236,12 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         return;
                     }
 
-                    // OpenGroup
                     if (textLower === '.opengroup') {
                         if (!isUserAdmin || !isBotAdmin) {
                             return sock.sendMessage(from, { text: '❌ Bot dan user harus admin grup!' });
                         }
 
                         try {
-                            // Mengubah ke pengaturan normal (semua member bisa mengirim pesan)
                             await sock.groupSettingUpdate(from, 'not_announcement');
                             await sock.sendMessage(from, { text: '✅ Grup berhasil *DIBUKA*! Semua member kini bisa mengirim pesan.' });
                         } catch (e) {
@@ -1259,14 +1250,12 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         return;
                     }
 
-                    // CLOSE GROUP (Hanya Admin yang Bisa Mengirim Pesan = 'announcement')
                     if (textLower === '.closegroup') {
                         if (!isUserAdmin || !isBotAdmin) {
                             return sock.sendMessage(from, { text: '❌ Bot dan user harus admin grup!' });
                         }
 
                         try {
-                            // Mengubah ke pengaturan restricted (hanya admin yang bisa mengirim pesan)
                             await sock.groupSettingUpdate(from, 'announcement');
                             await sock.sendMessage(from, { text: '✅ Grup berhasil *DITUTUP*! Hanya admin yang bisa mengirim pesan.' });
                         } catch (e) {
@@ -1275,7 +1264,6 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         return;
                     }
 
-                    // SET GROUP NAME
                     if (textLower.startsWith('.setname ')) {
                         if (!isUserAdmin || !isBotAdmin) {
                             return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
@@ -1295,17 +1283,13 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         return;
                     }
 
-                    // Struktur sederhana buat Reminder
-                    let reminders = [];
-
                     if (textLower.startsWith('.remind')) {
-                        const input = text.split(' '); // Contoh: .remind 10m bayar kos
+                        const input = text.split(' ');
                         if (input.length < 3) return sock.sendMessage(from, { text: 'Format: .remind [durasi][s/m/h] [pesan]\nContoh: .remind 10m jemput adek' });
 
                         const timeStr = input[1];
                         const message = text.slice(text.indexOf(timeStr) + timeStr.length).trim();
 
-                        // Convert durasi (s = detik, m = menit, h = jam)
                         const duration = parseInt(timeStr);
                         let ms = 0;
                         if (timeStr.endsWith('s')) ms = duration * 1000;
@@ -1325,7 +1309,7 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                 }
 
                 // ============================================
-                // OPERATOR COMMANDS (DILUAR IF GROUP)
+                // OPERATOR COMMANDS
                 // ============================================
 
                 const command = textLower.split(' ')[0];
@@ -1333,11 +1317,8 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
 
                 if (isOperator(senderId)) {
                     switch (command) {
-
-                        // --- FITUR BARU: LIST RENTALS (Operator Only) ---
                         case prefix + 'listrent':
                         case prefix + 'ceksewaall':
-                            // Panggil fungsi listRentals yang baru dengan 'sock'
                             const activeRentals = await listRentals(sock);
 
                             if (activeRentals.length === 0) {
@@ -1348,10 +1329,7 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             let listText = '📄 *CATATAN OPERATOR* 📄\n_Hanya untuk internal._\n\n';
 
                             activeRentals.forEach((r, i) => {
-                                // Tampilkan Nama Grup jika itu Grup
                                 const nameDisplay = r.type === 'Grup' ? ` (${r.name})` : '';
-
-                                // Format yang lowkey/nonchalant
                                 listText += `*${i + 1}. ${r.type}${nameDisplay}*:\n`;
                                 listText += ` > ID: ${r.jid}\n`;
                                 listText += ` > Level: ${r.tier}\n`;
@@ -1365,18 +1343,23 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             return;
 
                         case prefix + 'addrent':
-                            // 1. Dapatkan ID target dan durasi
                             const argsRent = textLower.split(' ');
                             if (argsRent.length < 3) {
                                 await sock.sendMessage(from, { text: `Format salah! Gunakan: ${prefix}addrent [JID/Group ID LENGKAP] [Hari]` }, { quoted: msg });
                                 return;
                             }
 
-                            // PENTING: ID target harus ditambahkan @s.whatsapp.net atau @g.us jika belum ada
                             let targetId = argsRent[1].trim();
                             if (!targetId.includes('@')) {
-                                // Asumsi: jika user, maka PC. Jika grup, harusnya operator sudah pakai ID lengkap
                                 targetId = targetId.length < 18 ? `${targetId}@s.whatsapp.net` : `${targetId}@g.us`;
+                            }
+
+                            // VALIDASI JID
+                            if (!isValidJid(targetId)) {
+                                await sock.sendMessage(from, {
+                                    text: '❌ Format JID tidak valid. Contoh: 628123456789@s.whatsapp.net atau 123456789012345@g.us'
+                                }, { quoted: msg });
+                                return;
                             }
 
                             const days = parseInt(argsRent[2]);
@@ -1386,9 +1369,7 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                                 return;
                             }
 
-                            // 2. Beri Sewa (Menggunakan 5 argumen: scope, id, tier, days, grantedBy)
                             const grantedBy = senderId;
-                            // Asumsi scope 'MANUAL' dan tier 'A' untuk operator
                             const rentalInfo = grantRental('MANUAL', targetId, 'A', days, grantedBy);
 
                             if (rentalInfo) {
@@ -1399,18 +1380,28 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             return;
 
                         case prefix + 'delrent':
-                            // 1. Dapatkan ID target
                             const argsDel = textLower.split(' ');
                             if (argsDel.length < 2) {
                                 await sock.sendMessage(from, { text: `Format salah! Gunakan: ${prefix}delrent [ID JID/Group]` }, { quoted: msg });
                                 return;
                             }
-                            const idToRevoke = argsDel[1].replace('@', ''); // Bersihkan '@'
+                            
+                            let idToRevoke = argsDel[1].trim();
+                            // Normalisasi JID
+                            if (!idToRevoke.includes('@')) {
+                                idToRevoke = idToRevoke.length < 18 ? `${idToRevoke}@s.whatsapp.net` : `${idToRevoke}@g.us`;
+                            }
+                            
+                            // Validasi JID
+                            if (!isValidJid(idToRevoke)) {
+                                await sock.sendMessage(from, {
+                                    text: '❌ Format JID tidak valid. Contoh: 628123456789@s.whatsapp.net atau 123456789012345@g.us'
+                                }, { quoted: msg });
+                                return;
+                            }
 
-                            // 2. Cabut Sewa
                             revokeRental(idToRevoke);
 
-                            // Cek lagi untuk konfirmasi
                             if (!loadRentals()[idToRevoke] || !getRental(idToRevoke)) {
                                 await sock.sendMessage(from, { text: `✅ Berhasil mencabut/menghapus sewa dari ID: *${idToRevoke}*.` }, { quoted: msg });
                             } else {
@@ -1420,7 +1411,6 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
 
                         case prefix + 'addprem':
                         case prefix + 'delprem':
-                            // Perintah premium sudah dihapus dari menu, tapi jika operator masih mencoba
                             await sock.sendMessage(from, { text: `⚠️ Perintah ${command} sudah diganti dengan *${prefix}addrent* dan *${prefix}delrent*.` }, { quoted: msg });
                             return;
                     }
@@ -1437,7 +1427,6 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
         console.error('Failed to connect:', error);
         setTimeout(connectToWhatsApp, 5000);
     }
-
 }
 
 // ============================================================
