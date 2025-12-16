@@ -16,8 +16,8 @@ const BANNED_DB = path.join(FOLDER, 'banned.json');
 const WELCOME_DB = path.join(FOLDER, 'welcome.json');
 const RENTALS_DB = path.join(FOLDER, 'rentals.json');
 const OPERATORS_DB = path.join(FOLDER, 'operators.json');
-const PREMIUM_DB = path.join(FOLDER, 'premium.json');
 const MUTE_DB = path.join(FOLDER, 'muted.json');
+// PREMIUM_DB sudah Dihapus.
 
 const loadMuted = () => loadJSON(MUTE_DB, {});
 const saveMuted = (data) => saveJSON(MUTE_DB, data);
@@ -64,8 +64,6 @@ const saveUsers = (data) => saveJSON(USERS_DB, data);
 const loadRentals = () => loadJSON(RENTALS_DB, {});
 const saveRentals = (data) => saveJSON(RENTALS_DB, data);
 const loadOperators = () => loadJSON(OPERATORS_DB, []);
-const loadPremium = () => loadJSON(PREMIUM_DB, []);
-const savePremium = (data) => saveJSON(PREMIUM_DB, data);
 
 function isOperator(fullJid, sock) {
     if (!fullJid) return false;
@@ -86,28 +84,6 @@ function isOperator(fullJid, sock) {
     return false;
 }
 
-function isPremium(userId) {
-    const premium = loadPremium();
-    return premium.includes(userId);
-}
-
-function addPremium(userId) {
-    const premium = loadPremium();
-    if (!premium.includes(userId)) {
-        premium.push(userId);
-        savePremium(premium);
-    }
-}
-
-function removePremium(userId) {
-    const premium = loadPremium();
-    const index = premium.indexOf(userId);
-    if (index > -1) {
-        premium.splice(index, 1);
-        savePremium(premium);
-    }
-}
-
 // ============================================================
 // SISTEM SEWA (RENTAL)
 // ============================================================
@@ -115,7 +91,15 @@ function removePremium(userId) {
 function grantRental(scope, id, tier, days, grantedBy) {
     const rentals = loadRentals();
     const key = id;
-    const expires = Date.now() + (Number(days) || 0) * 24 * 60 * 60 * 1000;
+    
+    // Tentukan waktu kedaluwarsa baru (dimulai dari sisa sewa yang ada atau dari sekarang)
+    let currentExpiryTime = Date.now();
+    if (rentals[key] && rentals[key].expires > Date.now()) {
+        currentExpiryTime = rentals[key].expires; // Mulai dari sisa sewa
+    }
+
+    const expires = currentExpiryTime + (Number(days) || 0) * 24 * 60 * 60 * 1000;
+    
     rentals[key] = {
         scope,
         tier,
@@ -133,42 +117,30 @@ function revokeRental(id) {
     saveRentals(rentals);
 }
 
-function getRental(id) {
-    const rentals = loadRentals();
-    const r = rentals[id];
-    if (!r) return null;
-    if (r.expires && Date.now() > r.expires) {
-        revokeRental(id);
-        return null;
+// Diperbaiki: Mengakses property 'expires' (milidetik) dari objek rental
+const getRental = (id) => {
+    let rentals = loadRentals();
+    if (!rentals[id]) return false;
+    // Cek apakah waktu kedaluwarsa (milidetik) sudah lebih besar dari waktu sekarang (milidetik)
+    return rentals[id].expires > Date.now();
+};
+
+const hasAccessForCommand = (command, isGroup, sender, groupId, sock) => {
+    const senderFullJid = sender + '@s.whatsapp.net';
+    const senderId = senderFullJid.split('@')[0];
+
+    // 1. Operator selalu lolos (WAJIB ADA untuk Owner/Pengelola Bot)
+    if (isOperator(senderId)) {
+        return true;
     }
-    return r;
-}
 
-function hasAccessForCommand(command, isGroup, senderFullJid, groupId, sock) {
-    const cmd = command.toLowerCase();
-
-    // Selalu izinkan command dasar
-    if (cmd === '.sewa' || cmd === '.menu' || cmd === '.help' || cmd === '.ping' || cmd === '.profile') return true;
-
-    // Operator selalu diizinkan
-    if (isOperator(senderFullJid, sock)) return true;
-
-    // Premium user diizinkan
-    if (isPremium(senderFullJid.split('@')[0])) return true;
-
-    // Jika di grup
+    // 2. Pengecekan Sewa (Rental)
     if (isGroup) {
-        const rental = getRental(groupId);
-        if (rental) {
-            return true;
-        } else {
-            return false;
-        }
+        // Di dalam Grup, akses diberikan jika GRUP tersebut menyewa.
+        return getRental(groupId);
     } else {
-        // Jika private chat
-        const senderId = (senderFullJid || '').split('@')[0];
-        const rental = getRental(senderId);
-        return !!rental;
+        // Di Private Chat, akses diberikan jika PENGIRIM (sender) tersebut menyewa.
+        return getRental(senderId);
     }
 }
 
@@ -533,10 +505,11 @@ async function connectToWhatsApp() {
 
                 if (textLower === '.ceksewa') {
                     const idToCheck = isGroup ? groupId : sender.split('@')[0];
-                    const access = getRental(idToCheck);
+                    const rentalData = loadRentals();
+                    const access = rentalData[idToCheck];
 
                     let replyText;
-                    if (access) {
+                    if (access && access.expires > Date.now()) {
                         const remainingMs = access.expires - Date.now();
                         const duration = formatDuration(remainingMs);
 
@@ -592,8 +565,8 @@ async function connectToWhatsApp() {
 .delalarm  (hapus jadwal)
 
 *— OPERATOR ONLY*
-.addprem   (tambah premium)
-.delprem   (hapus premium)
+.addrent   (tambah sewa)
+.delrent   (hapus sewa)
 
 *— HIBURAN & LAINNYA*
 .truth     .waifu
@@ -760,49 +733,6 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                     return;
                 }
 
-                // ADD PREMIUM (OPERATOR ONLY)
-                if (textLower.startsWith('.addprem ')) {
-                    if (!isOperator(sender, sock)) {
-                        return sock.sendMessage(from, { text: '❌ Command ini hanya untuk Operator!' });
-                    }
-
-                    const target = text.split(' ')[1]; // Ambil nomor JID saja (628xxxx)
-                    if (!target) {
-                        return sock.sendMessage(from, { text: '❌ Format: .addprem 628xxxx' });
-                    }
-
-                    // Pastikan target adalah JID penuh
-                    const targetJid = target.includes('@s.whatsapp.net') ? target : `${target}@s.whatsapp.net`;
-
-                    // Ambil ID numerik saja
-                    const targetId = targetJid.split('@')[0];
-
-                    addPremium(targetId);
-                    await sock.sendMessage(from, { text: `✅ Nomor *${targetId}* berhasil ditambahkan ke daftar Premium.` });
-                    return;
-                }
-
-                // DELETE PREMIUM (OPERATOR ONLY)
-                if (textLower.startsWith('.delprem ')) {
-                    if (!isOperator(sender, sock)) {
-                        return sock.sendMessage(from, { text: '❌ Command ini hanya untuk Operator!' });
-                    }
-
-                    const target = text.split(' ')[1]; // Ambil nomor JID saja (628xxxx)
-                    if (!target) {
-                        return sock.sendMessage(from, { text: '❌ Format: .delprem 628xxxx' });
-                    }
-
-                    // Pastikan target adalah JID penuh
-                    const targetJid = target.includes('@s.whatsapp.net') ? target : `${target}@s.whatsapp.net`;
-
-                    // Ambil ID numerik saja
-                    const targetId = targetJid.split('@')[0];
-
-                    removePremium(targetId);
-                    await sock.sendMessage(from, { text: `✅ Nomor *${targetId}* berhasil dihapus dari daftar Premium.` });
-                    return;
-                }
 
                 // PROFILE
                 if (textLower === '.profile') {
@@ -1195,6 +1125,68 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         }, ms);
                     }
                 }
+                
+                // ============================================
+                // OPERATOR COMMANDS (DILUAR IF GROUP)
+                // ============================================
+
+                const command = textLower.split(' ')[0];
+                const senderId = sender.split('@')[0];
+                
+                if (isOperator(senderId)) {
+                    switch (command) {
+                        case prefix + 'addrent':
+                            // 1. Dapatkan ID target dan durasi
+                            const argsRent = textLower.split(' ');
+                            if (argsRent.length < 3) {
+                                await sock.sendMessage(from, { text: `Format salah! Gunakan: ${prefix}addrent [ID JID/Group] [Hari]` }, { quoted: m });
+                                return;
+                            }
+
+                            const targetId = argsRent[1].replace('@', ''); // Bersihkan '@'
+                            const days = parseInt(argsRent[2]);
+
+                            if (isNaN(days) || days <= 0) {
+                                await sock.sendMessage(from, { text: 'Durasi hari harus angka positif.' }, { quoted: m });
+                                return;
+                            }
+
+                            // 2. Beri Sewa (Menggunakan 5 argumen: scope, id, tier, days, grantedBy)
+                            const grantedBy = senderId;
+                            // Asumsi scope 'MANUAL' dan tier 'A' untuk operator
+                            const rentalInfo = grantRental('MANUAL', targetId, 'A', days, grantedBy);
+
+                            if (rentalInfo) {
+                                await sock.sendMessage(from, { text: `✅ Berhasil menambahkan sewa untuk ID: *${targetId}* selama *${days} hari*.\nKedaluwarsa: ${formatDate(rentalInfo.expires)}` }, { quoted: m });
+                            } else {
+                                await sock.sendMessage(from, { text: `❌ Gagal menambahkan sewa. Terjadi kesalahan database.` }, { quoted: m });
+                            }
+                            return;
+
+                        case prefix + 'delrent':
+                            // 1. Dapatkan ID target
+                            const argsDel = textLower.split(' ');
+                            if (argsDel.length < 2) {
+                                await sock.sendMessage(from, { text: `Format salah! Gunakan: ${prefix}delrent [ID JID/Group]` }, { quoted: m });
+                                return;
+                            }
+                            const idToRevoke = argsDel[1].replace('@', ''); // Bersihkan '@'
+
+                            // 2. Cabut Sewa
+                            revokeRental(idToRevoke);
+
+                            // Cek lagi untuk konfirmasi
+                            if (!loadRentals()[idToRevoke] || !getRental(idToRevoke)) {
+                                await sock.sendMessage(from, { text: `✅ Berhasil mencabut/menghapus sewa dari ID: *${idToRevoke}*.` }, { quoted: m });
+                            } else {
+                                await sock.sendMessage(from, { text: `❌ Gagal mencabut. Mungkin ID *${idToRevoke}* tidak memiliki sewa aktif sebelumnya.` }, { quoted: m });
+                            }
+                            return;
+
+                        // Perintah Premium (.addprem, .delprem) sudah dihapus dari menu.
+                    }
+                }
+
 
             } catch (e) {
                 console.error('Message handler error:', e);
