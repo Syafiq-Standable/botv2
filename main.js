@@ -299,79 +299,67 @@ async function downloadTikTok(url, sock, from, msg) {
     }
 }
 
+async function fetchInstagramMedia(url) {
+    try {
+        // Otomatis akan menunggu (await) hasil dari axios.post
+        const { data } = await axios.post(
+            'https://yt1s.io/api/ajaxSearch',
+            new URLSearchParams({ q: url, w: '', p: 'home', lang: 'en' }),
+            {
+                headers: {
+                    // ... headers yang diperlukan
+                }
+            }
+        );
+
+        const $ = cheerio.load(data.data);
+        const result = $('a.abutton.is-success.is-fullwidth.btn-premium').map((_, b) => ({
+            title: $(b).attr('title'),
+            url: $(b).attr('href')
+        })).get();
+
+        if (result.length > 0) {
+            // Mengembalikan data. Karena fungsi ini 'async', 
+            // ini secara implisit akan menjadi Promise yang 'Resolved'.
+            return {
+                title: result[0].title,
+                url: result[0].url
+            };
+        }
+
+    } catch (e) {
+        // Melemparkan error. Karena fungsi ini 'async', 
+        // ini secara implisit akan menjadi Promise yang 'Rejected'.
+        throw e;
+    }
+}
+
 async function downloadInstagram(url, sock, from, msg) {
     await sock.sendMessage(from, { text: '⏳ Mengambil link scrapper dan mengunduh media...' }, { quoted: msg });
-    
+
     try {
         // --- 1. Panggil Scrapper untuk mendapatkan URL Download ---
         // Ini adalah fungsi yang mengandung axios.post dan cheerio.load
-        const media = await fetchInstagramMedia(url); 
-        const mediaUrl = media.url; 
-        
+        const media = await fetchInstagramMedia(url);
+        const mediaUrl = media.url;
+
         if (!mediaUrl) {
             throw new Error('Scrapper gagal menemukan link download media.');
         }
 
         // --- 2. Mengunduh Konten File ke Buffer ---
         // Kita menggunakan axios.get di sini untuk mengunduh media yang sudah terdeteksi
-        const mediaResponse = await axios.get(mediaUrl, { 
+        const mediaResponse = await axios.get(mediaUrl, {
             responseType: 'arraybuffer', // Kunci untuk mendapatkan data biner
             // Tambahkan header opsional jika link download membutuhkan User-Agent tertentu
         });
-        
+
         const mediaBuffer = mediaResponse.data;
         const contentType = mediaResponse.headers['content-type'];
-        
+
         // --- 3. Logika Penentuan Tipe yang Akurat ---
         const isVideo = contentType && contentType.startsWith('video/');
         const isImage = contentType && contentType.startsWith('image/');
-
-        if (isVideo) {
-            // KIRIM SEBAGAI VIDEO DARI BUFFER
-            await sock.sendMessage(from, { 
-                video: mediaBuffer, 
-                mimetype: contentType,
-                caption: `✅ Instagram Video (Tipe: ${contentType})` 
-            }, { quoted: msg });
-        } else if (isImage) {
-            // KIRIM SEBAGAI FOTO DARI BUFFER
-             await sock.sendMessage(from, { 
-                image: mediaBuffer, 
-                mimetype: contentType,
-                caption: `✅ Instagram Photo (Tipe: ${contentType})` 
-            }, { quoted: msg });
-        } else {
-            // Jika Content-Type adalah text/html (misal: error page, diblokir, dsb)
-            // Log URL dan ContentType untuk debug
-            console.error(`[DOWNLOAD FAIL] URL: ${mediaUrl}, Content-Type: ${contentType}`);
-            throw new Error(`Tipe media tidak dikenali (${contentType}). Scrapper mungkin mengembalikan tautan yang salah.`);
-        }
-        
-    } catch (error) {
-        console.error('Download Instagram Error:', error.message);
-        // Kirim error yang lebih jelas ke pengguna
-        await sock.sendMessage(from, { text: `❌ Gagal download Instagram. Error: ${error.message}` }, { quoted: msg });
-    }
-}
-
-async function downloadInstagram(url, sock, from, msg) {
-    await sock.sendMessage(from, { text: '⏳ Mengunduh media ke memori dan mendeteksi tipe file...' }, { quoted: msg });
-
-    try {
-        const media = await fetchInstagramMedia(url);
-        const mediaUrl = media.url;
-
-        // --- 1. Mendownload Konten File ke Buffer ---
-        const mediaResponse = await axios.get(mediaUrl, {
-            responseType: 'arraybuffer' // Kunci: Mengunduh sebagai data biner
-        });
-
-        const mediaBuffer = mediaResponse.data;
-        // --- 2. Mengambil Tipe Konten dari Header Respon ---
-        const contentType = mediaResponse.headers['content-type'];
-
-        // --- 3. Logika Penentuan Tipe yang Akurat ---
-        const isVideo = contentType && contentType.startsWith('video/');
 
         if (isVideo) {
             // KIRIM SEBAGAI VIDEO DARI BUFFER
@@ -380,7 +368,7 @@ async function downloadInstagram(url, sock, from, msg) {
                 mimetype: contentType,
                 caption: `✅ Instagram Video (Tipe: ${contentType})`
             }, { quoted: msg });
-        } else if (contentType && contentType.startsWith('image/')) {
+        } else if (isImage) {
             // KIRIM SEBAGAI FOTO DARI BUFFER
             await sock.sendMessage(from, {
                 image: mediaBuffer,
@@ -388,13 +376,15 @@ async function downloadInstagram(url, sock, from, msg) {
                 caption: `✅ Instagram Photo (Tipe: ${contentType})`
             }, { quoted: msg });
         } else {
-            // Jika Content-Type adalah text/html (misal: error page) atau tidak dikenal
-            throw new Error(`Tipe media tidak dikenali (${contentType}).`);
+            // Jika Content-Type adalah text/html (misal: error page, diblokir, dsb)
+            // Log URL dan ContentType untuk debug
+            console.error(`[DOWNLOAD FAIL] URL: ${mediaUrl}, Content-Type: ${contentType}`);
+            throw new Error(`Tipe media tidak dikenali (${contentType}). Scrapper mungkin mengembalikan tautan yang salah.`);
         }
 
     } catch (error) {
-        // Logika penanganan error...
         console.error('Download Instagram Error:', error.message);
+        // Kirim error yang lebih jelas ke pengguna
         await sock.sendMessage(from, { text: `❌ Gagal download Instagram. Error: ${error.message}` }, { quoted: msg });
     }
 }
