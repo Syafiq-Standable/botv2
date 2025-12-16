@@ -53,18 +53,35 @@ function saveJSON(filePath, data) {
     }
 }
 
-function listRentals() {
+async function listRentals(sock) {
     const rentals = loadRentals();
     const now = Date.now();
     const activeRentals = [];
 
     for (const jid in rentals) {
         const rental = rentals[jid];
+        
         // Hanya masukkan yang masih aktif (belum kedaluwarsa)
         if (rental.expires > now) {
             const timeLeft = rental.expires - now;
+            
+            let groupName = 'N/A'; // Default untuk PC atau jika gagal
+            const type = jid.endsWith('@g.us') ? 'Grup' : 'PC';
+
+            if (type === 'Grup') {
+                try {
+                    // Ambil metadata grup dari WhatsApp
+                    const metadata = await sock.groupMetadata(jid);
+                    groupName = metadata.subject; // Ambil nama grup
+                } catch (e) {
+                    groupName = 'Gagal ambil nama/Grup tidak dikenal';
+                }
+            }
+            
             activeRentals.push({
                 jid,
+                type, // Tambahkan tipe untuk display
+                name: groupName, // Tambahkan nama grup
                 ...rental,
                 duration: formatDuration(timeLeft),
                 expiryDate: formatDate(rental.expires)
@@ -1246,18 +1263,22 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                         // --- FITUR BARU: LIST RENTALS (Operator Only) ---
                         case prefix + 'listrent':
                         case prefix + 'ceksewaall':
-                            const activeRentals = listRentals();
-
+                            // Panggil fungsi listRentals yang baru dengan 'sock'
+                            const activeRentals = await listRentals(sock);
+                            
                             if (activeRentals.length === 0) {
                                 await sock.sendMessage(from, { text: 'Bot lagi *santai*. Belum ada yang aktif sewa saat ini.' }, { quoted: msg });
                                 return;
                             }
 
-                            let listText = '📄 *CATATAN OPERATOR* 📄\n_Hanya untuk internal.\n\n';
-
+                            let listText = '📄 *CATATAN OPERATOR* 📄\n_Hanya untuk internal._\n\n';
+                            
                             activeRentals.forEach((r, i) => {
+                                // Tampilkan Nama Grup jika itu Grup
+                                const nameDisplay = r.type === 'Grup' ? ` (${r.name})` : ''; 
+                                
                                 // Format yang lowkey/nonchalant
-                                listText += `*${i + 1}. ${r.jid.includes('@g.us') ? 'Grup' : 'PC'}*:\n`;
+                                listText += `*${i + 1}. ${r.type}${nameDisplay}*:\n`;
                                 listText += ` > ID: ${r.jid}\n`;
                                 listText += ` > Level: ${r.tier}\n`;
                                 listText += ` > Habis: ${r.expiryDate} (Sisa ${r.duration})\n`;
