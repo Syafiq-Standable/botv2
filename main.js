@@ -390,7 +390,7 @@ async function connectToWhatsApp() {
         sock.ev.on('messages.upsert', async (m) => {
             try {
                 const msg = m.messages[0];
-                if (!msg.message) return;
+                if (!msg || !msg.message) return;
 
                 const from = msg.key.remoteJid;
                 const groupId = from;
@@ -403,7 +403,8 @@ async function connectToWhatsApp() {
                     msg.message?.conversation ||
                     msg.message?.extendedTextMessage?.text ||
                     msg.message?.imageMessage?.caption ||
-                    ''
+                    msg.message?.videoMessage?.caption || // Tambahkan ini jika ada
+                    '' // Pastikan hasil akhirnya selalu string kosong, bukan undefined
                 ).trim();
                 const textLower = text.toLowerCase();
 
