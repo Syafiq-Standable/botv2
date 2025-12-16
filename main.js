@@ -500,14 +500,24 @@ async function connectToWhatsApp() {
                     }
                 }
 
-                // Cek akses command
+                //cek akses sewa
+                const prefix = '.';
+
+                if (!textLower.startsWith(prefix)) {
+                    return;
+                }
+
                 const freeCommands = ['.sewa', '.ping', '.help', '.menu', '.profile'];
-                const needsRental = !freeCommands.some(freeCmd =>
-                    textLower === freeCmd || textLower.startsWith(freeCmd + ' ')
+                const commandUtama = textLower.split(' ')[0];
+
+               
+                const isFreeCommand = freeCommands.some(freeCmd =>
+                    commandUtama === freeCmd
                 );
 
-                if (needsRental) {
-                    if (!hasAccessForCommand(textLower.split(' ')[0], isGroup, sender, groupId, sock)) {
+            
+                if (!isFreeCommand) {          
+                    if (!hasAccessForCommand(commandUtama, isGroup, sender, groupId, sock)) {
                         let replyText = isGroup
                             ? `❌ Grup ini belum menyewa bot!\nKetik .sewa untuk info penyewaan.`
                             : `❌ Anda belum menyewa bot!\nKetik .sewa untuk info penyewaan.`;
