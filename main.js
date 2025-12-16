@@ -90,16 +90,16 @@ function isOperator(fullJid, sock) {
 function grantRental(scope, id, tier, days, grantedBy) {
     const rentals = loadRentals();
     const key = id;
-    
+
     // Tentukan waktu kedaluwarsa baru (dimulai dari sisa sewa yang ada atau dari sekarang)
     let currentExpiryTime = Date.now();
     // Ambil tanggal kadaluarsa saat ini jika ada dan belum expired
     if (rentals[key] && rentals[key].expires > Date.now()) {
-        currentExpiryTime = rentals[key].expires; 
+        currentExpiryTime = rentals[key].expires;
     }
 
     const expires = currentExpiryTime + (Number(days) || 0) * 24 * 60 * 60 * 1000;
-    
+
     rentals[key] = {
         scope,
         tier,
@@ -121,7 +121,7 @@ function revokeRental(id) {
 const getRental = (jid) => { // Ganti ID menjadi JID
     let rentals = loadRentals();
     const rentalData = rentals[jid]; // Gunakan JID LENGKAP sebagai kunci
-    if (!rentalData || rentalData.expires <= Date.now()) { 
+    if (!rentalData || rentalData.expires <= Date.now()) {
         // Jika tidak ada data atau sudah kadaluarsa
         return false;
     }
@@ -162,6 +162,81 @@ function formatDuration(ms) {
     const days = Math.floor(ms / (1000 * 60 * 60 * 24));
     const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     return `${days} hari ${hours} jam`;
+}
+
+// ============================================================
+// FUNGSI BACKGROUND JOBS (Scheduler & Reminder)
+// ============================================================
+
+function setupBackgroundJobs(sock) {
+    // --- MESIN JAM ALARM (SAM JAGA MALEM) ---
+    let lastRun = "";
+    setInterval(async () => {
+        const now = new Date().toLocaleTimeString('en-GB', {
+            hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta'
+        });
+
+        if (lastRun === now) return;
+
+        let db = loadJSON('scheduler.json', []);
+        if (db.length === 0) return;
+
+        let executed = false;
+        for (let task of db) {
+            if (task.time === now) {
+                try {
+                    // Di sini 'sock' pasti terdefinisi karena dilewatkan sebagai argumen
+                    const meta = await sock.groupMetadata(task.groupId);
+                    const members = meta.participants.map(p => p.id);
+                    await sock.sendMessage(task.groupId, {
+                        text: `📢 *PENGINGAT OTOMATIS*\n\n${task.message}`,
+                        mentions: members
+                    });
+                    executed = true;
+                } catch (e) {
+                    console.log(`Gagal kirim alarm: ${e.message}`); // Error ini akan hilang
+                }
+            }
+        }
+        if (executed) lastRun = now;
+    }, 30000); // Check setiap 30 detik
+
+    // --- MESIN PENGINGAT SEWA (REMINDER RENTAL) ---
+    setInterval(async () => {
+        console.log('--- Running Daily Rental Reminder Check ---');
+        const rentals = loadRentals();
+        const now = Date.now();
+        const reminderThreshold = 3 * 24 * 60 * 60 * 1000; // 3 hari
+
+        for (const jid in rentals) {
+            const rental = rentals[jid];
+
+            if (rental.expires <= now) continue;
+
+            const timeLeft = rental.expires - now;
+
+            if (timeLeft <= reminderThreshold) {
+                const duration = formatDuration(timeLeft);
+
+                const reminderMessage = `
+🔔 *PENGINGAT SEWA BOT SAM* 🔔
+ID *${jid}* memiliki masa sewa yang akan *KEDALUWARSA*.
+Sisa Waktu: *${duration}*
+Tanggal Kedaluwarsa: ${formatDate(rental.expires)}
+
+Segera perpanjang untuk menghindari bot terhenti!
+Ketik *.sewa* untuk info perpanjangan.
+`.trim();
+
+                try {
+                    await sock.sendMessage(jid, { text: reminderMessage });
+                    console.log(`Sent rental reminder to: ${jid}`);
+                } catch (e) {
+                    console.log(`Gagal kirim reminder ke ${jid}: ${e.message}`);
+                }
+            }
+        }
+    }, 43200000); // Check setiap 12 jam
 }
 
 // ============================================================
@@ -395,7 +470,7 @@ async function connectToWhatsApp() {
         sock.ev.on('messages.upsert', async (m) => {
             try {
                 const msg = m.messages[0];
-                
+
                 // FIX UTAMA: Cegah error 'fromMe' jika msg itu sendiri undefined/null (non-message event)
                 if (!msg || !msg.message) return;
 
@@ -514,10 +589,10 @@ async function connectToWhatsApp() {
 
                 if (textLower === '.ceksewa') {
                     // ID yang harus dicek adalah JID LENGKAP (Group ID untuk grup, Sender JID untuk PC)
-                    const idToCheck = isGroup ? groupId : sender; 
-                    
+                    const idToCheck = isGroup ? groupId : sender;
+
                     // getRental sekarang mengembalikan objek rental jika masih aktif
-                    const access = getRental(idToCheck); 
+                    const access = getRental(idToCheck);
 
                     let replyText;
                     if (access) {
@@ -1140,7 +1215,7 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                 // ============================================
                 // OPERATOR COMMANDS (DILUAR IF GROUP)
                 // ============================================
-                
+
                 const command = textLower.split(' ')[0];
                 const senderId = sender.split('@')[0];
 
@@ -1159,8 +1234,8 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             if (!targetId.includes('@')) {
                                 // Asumsi: jika user, maka PC. Jika grup, harusnya operator sudah pakai ID lengkap
                                 targetId = targetId.length < 18 ? `${targetId}@s.whatsapp.net` : `${targetId}@g.us`;
-                            } 
-                            
+                            }
+
                             const days = parseInt(argsRent[2]);
 
                             if (isNaN(days) || days <= 0) {
@@ -1199,7 +1274,7 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                                 await sock.sendMessage(from, { text: `❌ Gagal mencabut. Mungkin ID *${idToRevoke}* tidak memiliki sewa aktif sebelumnya.` }, { quoted: msg });
                             }
                             return;
-                            
+
                         case prefix + 'addprem':
                         case prefix + 'delprem':
                             // Perintah premium sudah dihapus dari menu, tapi jika operator masih mencoba
@@ -1213,41 +1288,13 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
             }
         });
 
+        setupBackgroundJobs(sock);
+
     } catch (error) {
         console.error('Failed to connect:', error);
         setTimeout(connectToWhatsApp, 5000);
     }
 
-    // --- MESIN JAM ALARM (SAM JAGA MALEM) ---
-    let lastRun = "";
-    setInterval(async () => {
-        const now = new Date().toLocaleTimeString('en-GB', {
-            hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta'
-        });
-
-        if (lastRun === now) return;
-
-        let db = loadJSON('scheduler.json', []);
-        if (db.length === 0) return;
-
-        let executed = false;
-        for (let task of db) {
-            if (task.time === now) {
-                try {
-                    const meta = await sock.groupMetadata(task.groupId);
-                    const members = meta.participants.map(p => p.id);
-                    await sock.sendMessage(task.groupId, {
-                        text: `📢 *PENGINGAT OTOMATIS*\n\n${task.message}`,
-                        mentions: members
-                    });
-                    executed = true;
-                } catch (e) {
-                    console.log(`Gagal kirim alarm: ${e.message}`);
-                }
-            }
-        }
-        if (executed) lastRun = now;
-    }, 30000);
 }
 
 // ============================================================
