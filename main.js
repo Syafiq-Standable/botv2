@@ -1358,7 +1358,7 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             return;
                     }
                 }
-            }
+            
             } catch (e) {
             console.error('Message handler error:', e);
         }
