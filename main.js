@@ -118,9 +118,9 @@ function revokeRental(id) {
 }
 
 // FIX KRITIS: Fungsi getRental diperbaiki agar mengembalikan objek rental jika aktif
-const getRental = (id) => {
+const getRental = (jid) => { // Ganti ID menjadi JID
     let rentals = loadRentals();
-    const rentalData = rentals[id];
+    const rentalData = rentals[jid]; // Gunakan JID LENGKAP sebagai kunci
     if (!rentalData || rentalData.expires <= Date.now()) { 
         // Jika tidak ada data atau sudah kadaluarsa
         return false;
@@ -130,21 +130,22 @@ const getRental = (id) => {
 };
 
 const hasAccessForCommand = (command, isGroup, sender, groupId, sock) => {
-    const senderFullJid = sender + '@s.whatsapp.net';
+    // sender dan groupId sudah berupa JID LENGKAP di main handler
+    const senderFullJid = sender; // 'sender' sudah full JID (participant)
     const senderId = senderFullJid.split('@')[0];
 
     // 1. Operator selalu lolos (WAJIB ADA untuk Owner/Pengelola Bot)
-    if (isOperator(senderId)) {
+    if (isOperator(senderId)) { // isOperator tetap cek ID numerik
         return true;
     }
 
     // 2. Pengecekan Sewa (Rental)
     if (isGroup) {
-        // Di dalam Grup, akses diberikan jika GRUP tersebut menyewa.
+        // Cek sewa grup menggunakan JID GRUP (groupId/from)
         return getRental(groupId);
     } else {
-        // Di Private Chat, akses diberikan jika PENGIRIM (sender) tersebut menyewa.
-        return getRental(senderId);
+        // Cek sewa private chat menggunakan JID PENGIRIM (sender)
+        return getRental(sender); // PENTING: Gunakan sender JID LENGKAP
     }
 }
 
@@ -512,7 +513,9 @@ async function connectToWhatsApp() {
                 // ============================================
 
                 if (textLower === '.ceksewa') {
-                    const idToCheck = isGroup ? groupId : sender.split('@')[0];
+                    // ID yang harus dicek adalah JID LENGKAP (Group ID untuk grup, Sender JID untuk PC)
+                    const idToCheck = isGroup ? groupId : sender; 
+                    
                     // getRental sekarang mengembalikan objek rental jika masih aktif
                     const access = getRental(idToCheck); 
 
@@ -1147,11 +1150,17 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             // 1. Dapatkan ID target dan durasi
                             const argsRent = textLower.split(' ');
                             if (argsRent.length < 3) {
-                                await sock.sendMessage(from, { text: `Format salah! Gunakan: ${prefix}addrent [ID JID/Group] [Hari]` }, { quoted: msg });
+                                await sock.sendMessage(from, { text: `Format salah! Gunakan: ${prefix}addrent [JID/Group ID LENGKAP] [Hari]` }, { quoted: msg });
                                 return;
                             }
 
-                            const targetId = argsRent[1].replace('@', ''); // Bersihkan '@'
+                            // PENTING: ID target harus ditambahkan @s.whatsapp.net atau @g.us jika belum ada
+                            let targetId = argsRent[1].trim();
+                            if (!targetId.includes('@')) {
+                                // Asumsi: jika user, maka PC. Jika grup, harusnya operator sudah pakai ID lengkap
+                                targetId = targetId.length < 18 ? `${targetId}@s.whatsapp.net` : `${targetId}@g.us`;
+                            } 
+                            
                             const days = parseInt(argsRent[2]);
 
                             if (isNaN(days) || days <= 0) {
