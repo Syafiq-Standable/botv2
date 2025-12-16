@@ -299,29 +299,80 @@ async function downloadTikTok(url, sock, from, msg) {
     }
 }
 
-async function downloadInstagram(url) {
-    return new Promise(async (resolve, reject) => {
-        try {
-            const { data } = await axios.post('https://yt1s.io/api/ajaxSearch', new URLSearchParams({ q: url, w: '', p: 'home', lang: 'en' }), {
+async function fetchInstagramMedia(url) {
+    try {
+        // Otomatis akan menunggu (await) hasil dari axios.post
+        const { data } = await axios.post(
+            'https://yt1s.io/api/ajaxSearch', 
+            new URLSearchParams({ q: url, w: '', p: 'home', lang: 'en' }), 
+            {
                 headers: {
-                    'Accept': 'application/json, text/plain, */*',
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                    'Origin': 'https://yt1s.io',
-                    'Referer': 'https://yt1s.io/',
-                    'User-Agent': 'Postify/1.0.0',
+                    // ... headers yang diperlukan
                 }
-            });
-            const $ = cheerio.load(data.data);
-            let anu = $('a.abutton.is-success.is-fullwidth.btn-premium').map((_, b) => ({
-                title: $(b).attr('title'),
-                url: $(b).attr('href')
-            })).get()
-            resolve(anu)
-        } catch (e) {
-            reject(e)
+            }
+        );
+        
+        const $ = cheerio.load(data.data);
+        const result = $('a.abutton.is-success.is-fullwidth.btn-premium').map((_, b) => ({
+            title: $(b).attr('title'),
+            url: $(b).attr('href')
+        })).get();
+
+        if (result.length > 0) {
+            // Mengembalikan data. Karena fungsi ini 'async', 
+            // ini secara implisit akan menjadi Promise yang 'Resolved'.
+            return result[0]; 
+        } else {
+            throw new Error('Tidak ada link download ditemukan oleh scrapper baru.');
         }
-    })
+
+    } catch (e) {
+        // Melemparkan error. Karena fungsi ini 'async', 
+        // ini secara implisit akan menjadi Promise yang 'Rejected'.
+        throw e;
+    }
 }
+
+async function downloadInstagram(url, sock, from, msg) {
+    // FORMAT HANDLER LAMA
+    await sock.sendMessage(from, { text: '⏳ Download Instagram menggunakan scrapper baru...' }, { quoted: msg });
+    
+    try {
+        // Panggil FUNGSI SCRAPPER BARU
+        const media = await fetchInstagramMedia(url); // media = { title: '...', url: '...' }
+
+        // mediaUrl adalah link download dari hasil scrapper baru
+        const mediaUrl = media.url; 
+
+        if (!mediaUrl) {
+            throw new Error('Scrapper baru gagal mengembalikan URL media.');
+        }
+
+        // Tentukan tipe file berdasarkan ekstensi atau logic lain
+        // Jika URL dari scrapper baru tidak memiliki ekstensi, ini mungkin perlu penyesuaian.
+        // Asumsi: Jika media.title mengandung 'video' atau ekstensi .mp4
+        const isVideo = mediaUrl.includes('.mp4') || media.title.toLowerCase().includes('video');
+
+        if (isVideo) {
+            // KIRIM SEBAGAI VIDEO
+            await sock.sendMessage(from, { 
+                video: { url: mediaUrl }, 
+                caption: `✅ Instagram Video (via ${media.title || 'Scrapper Baru'})` 
+            }, { quoted: msg });
+        } else {
+            // KIRIM SEBAGAI FOTO (atau default)
+            await sock.sendMessage(from, { 
+                image: { url: mediaUrl }, 
+                caption: `✅ Instagram Photo (via ${media.title || 'Scrapper Baru'})` 
+            }, { quoted: msg });
+        }
+        
+    } catch (error) {
+        console.error('Download Instagram Error:', error.message);
+        await sock.sendMessage(from, { text: '❌ Gagal download Instagram. Cek link atau API scrapper baru.' }, { quoted: msg });
+    }
+}
+
 // ============================================================
 // FITUR STICKER
 // ============================================================
