@@ -303,15 +303,15 @@ async function fetchInstagramMedia(url) {
     try {
         // Otomatis akan menunggu (await) hasil dari axios.post
         const { data } = await axios.post(
-            'https://yt1s.io/api/ajaxSearch', 
-            new URLSearchParams({ q: url, w: '', p: 'home', lang: 'en' }), 
+            'https://yt1s.io/api/ajaxSearch',
+            new URLSearchParams({ q: url, w: '', p: 'home', lang: 'en' }),
             {
                 headers: {
                     // ... headers yang diperlukan
                 }
             }
         );
-        
+
         const $ = cheerio.load(data.data);
         const result = $('a.abutton.is-success.is-fullwidth.btn-premium').map((_, b) => ({
             title: $(b).attr('title'),
@@ -321,7 +321,7 @@ async function fetchInstagramMedia(url) {
         if (result.length > 0) {
             // Mengembalikan data. Karena fungsi ini 'async', 
             // ini secara implisit akan menjadi Promise yang 'Resolved'.
-            return result[0]; 
+            return result[0];
         } else {
             throw new Error('Tidak ada link download ditemukan oleh scrapper baru.');
         }
@@ -336,13 +336,13 @@ async function fetchInstagramMedia(url) {
 async function downloadInstagram(url, sock, from, msg) {
     // FORMAT HANDLER LAMA
     await sock.sendMessage(from, { text: '⏳ Download Instagram menggunakan scrapper baru...' }, { quoted: msg });
-    
+
     try {
         // Panggil FUNGSI SCRAPPER BARU
         const media = await fetchInstagramMedia(url); // media = { title: '...', url: '...' }
 
         // mediaUrl adalah link download dari hasil scrapper baru
-        const mediaUrl = media.url; 
+        const mediaUrl = media.url;
 
         if (!mediaUrl) {
             throw new Error('Scrapper baru gagal mengembalikan URL media.');
@@ -354,19 +354,21 @@ async function downloadInstagram(url, sock, from, msg) {
         const isVideo = mediaUrl.includes('.mp4') || media.title.toLowerCase().includes('video');
 
         if (isVideo) {
-            // KIRIM SEBAGAI VIDEO
-            await sock.sendMessage(from, { 
-                video: { url: mediaUrl }, 
-                caption: `✅ Instagram Video (via ${media.title || 'Scrapper Baru'})` 
+            // Pengiriman Video
+            await sock.sendMessage(from, {
+                video: { url: mediaUrl },
+                caption: `✅ Instagram Video`
+                // TIP: Anda bisa mencoba menonaktifkan thumbnail jika sering error
+                // Mungkn coba tambahkan: mimetype: 'video/mp4' (jika tidak ada)
             }, { quoted: msg });
         } else {
-            // KIRIM SEBAGAI FOTO (atau default)
-            await sock.sendMessage(from, { 
-                image: { url: mediaUrl }, 
-                caption: `✅ Instagram Photo (via ${media.title || 'Scrapper Baru'})` 
+            // Pengiriman Gambar/Foto
+            await sock.sendMessage(from, {
+                image: { url: mediaUrl },
+                caption: `✅ Instagram Photo`
             }, { quoted: msg });
         }
-        
+
     } catch (error) {
         console.error('Download Instagram Error:', error.message);
         await sock.sendMessage(from, { text: '❌ Gagal download Instagram. Cek link atau API scrapper baru.' }, { quoted: msg });
@@ -1409,18 +1411,18 @@ Intinya, apa yang Kakak pengen SAM lakuin buat bantu hidup Kakak jadi lebih simp
                             return;
                     }
                 }
-            
+
             } catch (e) {
-            console.error('Message handler error:', e);
-        }
-    });
+                console.error('Message handler error:', e);
+            }
+        });
 
-    setupBackgroundJobs(sock);
+        setupBackgroundJobs(sock);
 
-} catch (error) {
-    console.error('Failed to connect:', error);
-    setTimeout(connectToWhatsApp, 5000);
-}
+    } catch (error) {
+        console.error('Failed to connect:', error);
+        setTimeout(connectToWhatsApp, 5000);
+    }
 
 }
 
