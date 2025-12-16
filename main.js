@@ -334,40 +334,46 @@ async function fetchInstagramMedia(url) {
 }
 
 async function downloadInstagram(url, sock, from, msg) {
-    await sock.sendMessage(from, { text: '⏳ Memeriksa tipe media dari scrapper baru...' }, { quoted: msg });
+    await sock.sendMessage(from, { text: '⏳ Mengunduh media ke memori...' }, { quoted: msg });
     
     try {
         const media = await fetchInstagramMedia(url);
         const mediaUrl = media.url; 
 
         // =======================================================
-        // LANGKAH BARU: MEMERIKSA TIPE FILE DENGAN HEAD REQUEST
+        // LANGKAH PENTING: DOWNLOAD KE BUFFER DENGAN AXIOS.GET
         // =======================================================
-        const headResponse = await axios.head(mediaUrl);
-        const contentType = headResponse.headers['content-type'];
+        const mediaResponse = await axios.get(mediaUrl, { 
+            responseType: 'arraybuffer' // Download sebagai binary data/buffer
+        });
         
-        // Logika penentuan: Apakah Content-Type adalah video?
+        const mediaBuffer = mediaResponse.data;
+        const contentType = mediaResponse.headers['content-type']; // Ambil tipe file yang sebenarnya
+        
+        // Logika penentuan tipe:
         const isVideo = contentType && contentType.startsWith('video/');
 
         if (isVideo) {
-            // KIRIM SEBAGAI VIDEO
+            // KIRIM SEBAGAI VIDEO DARI BUFFER
             await sock.sendMessage(from, { 
-                video: { url: mediaUrl, mimetype: contentType }, 
-                caption: `✅ Instagram Video [Tipe: ${contentType}]` 
+                video: mediaBuffer, // Mengirim buffer, BUKAN URL
+                mimetype: contentType,
+                caption: `✅ Instagram Video (Tipe: ${contentType})` 
             }, { quoted: msg });
         } else if (contentType && contentType.startsWith('image/')) {
-            // KIRIM SEBAGAI FOTO
+            // KIRIM SEBAGAI FOTO DARI BUFFER
              await sock.sendMessage(from, { 
-                image: { url: mediaUrl, mimetype: contentType }, 
-                caption: `✅ Instagram Photo [Tipe: ${contentType}]` 
+                image: mediaBuffer, // Mengirim buffer, BUKAN URL
+                mimetype: contentType,
+                caption: `✅ Instagram Photo (Tipe: ${contentType})` 
             }, { quoted: msg });
         } else {
-            // Jika tipe tidak terdeteksi (atau text/html, dsb)
-            throw new Error(`Tipe media tidak dikenali (${contentType}).`);
+            throw new Error(`Tipe media tidak dikenali (${contentType}). Scrapper mungkin mengembalikan tautan yang salah.`);
         }
         
     } catch (error) {
         console.error('Download Instagram Error:', error.message);
+        // Kirim error yang lebih jelas ke pengguna
         await sock.sendMessage(from, { text: `❌ Gagal download Instagram. Error: ${error.message}` }, { quoted: msg });
     }
 }
