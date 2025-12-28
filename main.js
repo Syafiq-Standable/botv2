@@ -1073,60 +1073,44 @@ wa.me/6289528950624
                 // ============================================================
                 if (textLower === '.hd') {
                     try {
-                        // 1. Ambil data pesan (apakah dari chat langsung atau reply/quoted)
+                        // Ambil pesan yang di-reply atau pesan itu sendiri
                         const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
 
-                        // Cek semua kemungkinan posisi documentMessage
-                        const docMsg = msg.message?.documentWithCaptionMessage?.message?.documentMessage ||
+                        // Cari documentMessage di berbagai kemungkinan struktur
+                        const doc = msg.message?.documentWithCaptionMessage?.message?.documentMessage ||
                             msg.message?.documentMessage ||
                             quoted?.documentMessage ||
                             quoted?.documentWithCaptionMessage?.message?.documentMessage;
 
-                        // 2. Validasi: Harus berupa dokumen
-                        if (!docMsg) {
-                            return await sock.sendMessage(from, {
-                                text: `Tag atau kirim video dokumen dengan caption *${prefix}hd* ya ngab!`
-                            }, { quoted: msg });
-                        }
+                        if (!doc) return sock.sendMessage(from, { text: '❌ Mana file videonya ngab? Tag/reply dokumen videonya ya.' });
+                        if (!doc.mimetype.includes('video')) return sock.sendMessage(from, { text: '❌ Itu bukan video, SAM gak bisa proses.' });
 
-                        // 3. Validasi: Harus format video
-                        if (!docMsg.mimetype || !docMsg.mimetype.includes('video')) {
-                            return await sock.sendMessage(from, {
-                                text: '❌ Itu bukan file video, BOT SAM nggak bisa proses jadi HD.'
-                            }, { quoted: msg });
-                        }
+                        await sock.sendMessage(from, { text: '⏳ Sedang memproses HD... Kalau error "bad decrypt", coba kirim ulang filenya ya!' });
 
-                        // 4. Validasi: Size Limit 25MB (Biar VPS nggak sesek)
-                        const sizeInMB = docMsg.fileLength / (1024 * 1024);
-                        if (sizeInMB > 25) {
-                            return await sock.sendMessage(from, {
-                                text: `⚠️ Kegedean ngab! Maksimal 25MB, file kamu sekitar ${sizeInMB.toFixed(2)}MB.`
-                            }, { quoted: msg });
-                        }
+                        // DOWNLOAD CONTENT
+                        // Tips: downloadContentFromMessage butuh object message yang utuh
+                        const stream = await downloadContentFromMessage(doc, 'document');
+                        // Ubah 'video' jadi 'document' kalau filenya dikirim sebagai dokumen
 
-                        // Beri feedback biar user nggak ngira bot mati
-                        await sock.sendMessage(from, { text: '⏳ Sedang memproses kualitas HD... Mohon tunggu.' }, { quoted: msg });
-
-                        // 5. Download konten dari server WhatsApp
-                        const stream = await downloadContentFromMessage(docMsg, 'video');
                         let buffer = Buffer.from([]);
                         for await (const chunk of stream) {
                             buffer = Buffer.concat([buffer, chunk]);
                         }
 
-                        // 6. Kirim balik sebagai pesan Video biasa
+                        if (buffer.length === 0) throw new Error('Buffer kosong');
+
                         await sock.sendMessage(from, {
                             video: buffer,
-                            caption: `✅ *Video HD Success*\n\nFile: ${docMsg.fileName || 'Video_HD.mp4'}\nSize: ${sizeInMB.toFixed(2)}MB\n\n_Silakan simpan ke galeri dan upload ke SW!_`,
-                            mimetype: 'video/mp4',
-                            fileName: docMsg.fileName || 'video.mp4'
+                            caption: '✅ *Video HD Sukses!*',
+                            mimetype: 'video/mp4'
                         }, { quoted: msg });
 
                     } catch (err) {
                         console.error('Error Fitur HD:', err);
+                        // Pesan edukasi buat user
                         await sock.sendMessage(from, {
-                            text: '❌ Waduh, sistem BOT SAM lagi error pas mau convert video HD.'
-                        }, { quoted: msg });
+                            text: '❌ Gagal dekripsi file. Biasanya karena filenya udah kelamaan atau corrupt. Coba kirim ulang (upload baru) dokumen videonya terus ketik .hd lagi.'
+                        });
                     }
                 }
 
