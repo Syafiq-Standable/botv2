@@ -166,41 +166,35 @@ function normalizeJid(inputJid, context = 'auto') {
         return jid + (jid.length >= 15 ? '@g.us' : '@s.whatsapp.net');
     }
 }
+
 function revokeRental(id) {
     const rentals = loadRentals();
-    if (rentals[id]) delete rentals[id];
-    saveRentals(rentals);
-}
+    let deleted = false;
 
-const getRental = (jid) => {
-    let rentals = loadRentals();
-    let rentalData = rentals[jid];
+    // Coba hapus dengan berbagai format
+    const formatsToTry = [
+        id, // Format lengkap
+        id.split('@')[0], // Tanpa domain
+        id.includes('@g.us') ? id.replace('@g.us', '') : id.replace('@s.whatsapp.net', '') // Balik domain
+    ];
 
-    // Jika tidak ketemu dengan JID lengkap, coba tanpa domain
-    if (!rentalData && jid.includes('@')) {
-        const jidWithoutDomain = jid.split('@')[0];
-        rentalData = rentals[jidWithoutDomain];
-    }
-
-    // Jika masih tidak ketemu, coba cari semua kemungkinan
-    if (!rentalData) {
-        for (const key in rentals) {
-            if (!key.includes('@') && jid.includes('@')) {
-                // Jika key tanpa domain (16793439609075) dan jid lengkap
-                const normalizedKey = key + (jid.endsWith('@g.us') ? '@g.us' : '@s.whatsapp.net');
-                if (normalizedKey === jid) {
-                    rentalData = rentals[key];
-                    break;
-                }
-            }
+    for (const format of formatsToTry) {
+        if (rentals[format]) {
+            console.log(`[REVOKE] Menghapus rental dengan format: ${format}`);
+            delete rentals[format];
+            deleted = true;
         }
     }
 
-    if (!rentalData || rentalData.expires <= Date.now()) {
+    if (deleted) {
+        saveRentals(rentals);
+        console.log(`[REVOKE SUCCESS] ${id} dihapus dari database`);
+        return true;
+    } else {
+        console.log(`[REVOKE FAILED] ${id} tidak ditemukan di database`);
         return false;
     }
-    return rentalData;
-};
+}
 
 function grantRental(scope, id, tier, days, grantedBy, context = 'auto') {
     const rentals = loadRentals();
@@ -1521,59 +1515,74 @@ wa.me/6289528950624
                             return;
 
                         case prefix + 'delrent':
-                            const argsDel = textLower.split(' ');
-                            if (argsDel.length < 2) {
-                                await sock.sendMessage(from, { text: `Format salah! Gunakan: ${prefix}delrent [ID JID/Group]` }, { quoted: msg });
+                            // Fix: Gunakan variable yang konsisten
+                            const delArgs = text.split(' ');
+
+                            if (delArgs.length < 2) {
+                                await sock.sendMessage(from, {
+                                    text: `Format salah! Gunakan: ${prefix}delrent [ID JID/Group]\n\nContoh:\n.delrent 628123456789\n.delrent 120363423805458918@g.us`
+                                }, { quoted: msg });
                                 return;
                             }
 
-                            // Di dalam case prefix + 'addrent', setelah help text
-                            if (args[1].toLowerCase() === 'list') {
-                                const activeRentals = await listRentals(sock);
+                            let idToRevoke = delArgs[1].trim();
 
-                                if (activeRentals.length === 0) {
-                                    return sock.sendMessage(from, { text: '📭 Belum ada sewa aktif.' }, { quoted: msg });
-                                }
-
-                                let listText = `📋 *DAFTAR SEWA AKTIF* (${activeRentals.length})\n\n`;
-
-                                activeRentals.slice(0, 10).forEach((r, i) => {
-                                    const nameDisplay = r.type === 'Grup' ? ` (${r.name.substring(0, 20)}...)` : '';
-                                    listText += `${i + 1}. *${r.type}${nameDisplay}*\n`;
-                                    listText += `   ⏳ ${r.duration} lagi\n`;
-                                    listText += `   📅 ${r.expiryDate}\n`;
-                                    listText += `   🆔 ${r.jid.substring(0, 20)}...\n\n`;
-                                });
-
-                                if (activeRentals.length > 10) {
-                                    listText += `...dan ${activeRentals.length - 10} lainnya.\n`;
-                                }
-
-                                listText += `\nGunakan \`.addrent [ID] [hari]\` untuk menambah.`;
-
-                                await sock.sendMessage(from, { text: listText }, { quoted: msg });
-                                return;
+                            // Handle ".delrent group" (hapus sewa grup saat ini)
+                            if (idToRevoke.toLowerCase() === 'group' && isGroup) {
+                                idToRevoke = from; // ID grup sekarang
+                                console.log(`[DELRENT] Auto-targeting current group: ${idToRevoke}`);
                             }
 
-                            let idToRevoke = argsDel[1].trim();
-                            // Normalisasi JID
+                            // Normalisasi JID jika belum lengkap
                             if (!idToRevoke.includes('@')) {
-                                idToRevoke = idToRevoke.length < 18 ? `${idToRevoke}@s.whatsapp.net` : `${idToRevoke}@g.us`;
+                                // Auto-detect: angka panjang = grup, pendek = private
+                                idToRevoke = idToRevoke.length >= 15 ?
+                                    `${idToRevoke}@g.us` :
+                                    `${idToRevoke}@s.whatsapp.net`;
                             }
 
                             // Validasi JID
-                            function isValidJid(jid) {
-                                // Terima format: 628xx@s.whatsapp.net atau 123456@g.us
-                                const regex = /^(\d{10,}@s\.whatsapp\.net|\d{12,}@g\.us)$/;
-                                return regex.test(jid);
+                            if (!isValidJid(idToRevoke)) {
+                                await sock.sendMessage(from, {
+                                    text: `❌ Format JID tidak valid.\n\nFormat yang benar:\n• Private: 628123456789@s.whatsapp.net\n• Group: 120363423805458918@g.us\n\nID yang dimasukkan: ${idToRevoke}`
+                                }, { quoted: msg });
+                                return;
                             }
 
+                            // Cek apakah ada sewa aktif sebelum dihapus
+                            const existingRental = getRental(idToRevoke);
+
+                            if (!existingRental) {
+                                await sock.sendMessage(from, {
+                                    text: `❌ ID *${idToRevoke}* tidak memiliki sewa aktif.`
+                                }, { quoted: msg });
+                                return;
+                            }
+
+                            // Hapus sewa
                             revokeRental(idToRevoke);
 
-                            if (!loadRentals()[idToRevoke] || !getRental(idToRevoke)) {
-                                await sock.sendMessage(from, { text: `✅ Berhasil mencabut/menghapus sewa dari ID: *${idToRevoke}*.` }, { quoted: msg });
+                            // Verifikasi penghapusan
+                            const afterDelete = getRental(idToRevoke);
+
+                            if (!afterDelete) {
+                                const response = `✅ *SEWA DIHAPUS* ✅\n\n` +
+                                    `📌 *ID:* ${idToRevoke}\n` +
+                                    `🗑️ *Dihapus oleh:* @${senderId.split('@')[0]}\n` +
+                                    `📅 *Data sewa sebelumnya:*\n` +
+                                    `   - Tier: ${existingRental.tier}\n` +
+                                    `   - Expired: ${formatDate(existingRental.expires)}\n` +
+                                    `   - Scope: ${existingRental.scope}\n\n` +
+                                    `_Status: TERHAPUS ✅_`;
+
+                                await sock.sendMessage(from, {
+                                    text: response,
+                                    mentions: [sender]
+                                }, { quoted: msg });
                             } else {
-                                await sock.sendMessage(from, { text: `❌ Gagal mencabut. Mungkin ID *${idToRevoke}* tidak memiliki sewa aktif sebelumnya.` }, { quoted: msg });
+                                await sock.sendMessage(from, {
+                                    text: `⚠️ Peringatan: Penghapusan mungkin gagal. ID masih terdeteksi memiliki akses.`
+                                }, { quoted: msg });
                             }
                             return;
 
