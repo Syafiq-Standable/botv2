@@ -1091,95 +1091,72 @@ wa.me/6289528950624
 
                 // GROUP COMMANDS
                 if (isGroup) {
-                    // Ambil Metadata Grup Terbaru
+                    // 1. Ambil Metadata Grup Terbaru
                     const groupMetadata = await sock.groupMetadata(from);
                     const participants = groupMetadata.participants;
 
-                    // --- PERBAIKAN LOGIKA ADMIN DI SINI ---
+                    // 2. TEKNIK PENCOCOKAN NOMOR (NUMBER ONLY)
+                    // Kita ambil angkanya saja (misal: 628123456) biar pasti cocok
+                    const myNumber = sock.user.id.split(':')[0].split('@')[0];
+                    const senderNumber = sender.split(':')[0].split('@')[0];
 
-                    // 1. Ambil ID Bot yang bersih (tanpa kode device :2, :10, dll)
-                    //    Contoh: 628xx:5@s.wa.net -> 628xx@s.wa.net
-                    const myId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-
-                    // 2. Cari Bot di daftar member
-                    const botParticipant = participants.find(p => p.id === myId);
-
-                    // 3. Cari Pengirim di daftar member
-                    const senderParticipant = participants.find(p => p.id === sender);
+                    // 3. Cari object peserta berdasarkan nomor HP saja
+                    const botParticipant = participants.find(p => p.id.split('@')[0].split(':')[0] === myNumber);
+                    const senderParticipant = participants.find(p => p.id.split('@')[0].split(':')[0] === senderNumber);
 
                     // 4. Tentukan Status Admin (Lebih Akurat)
+                    // Kita pakai '?.' biar gak error kalau bot/sender gak ketemu di list
                     const isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
                     const isUserAdmin = senderParticipant?.admin === 'admin' || senderParticipant?.admin === 'superadmin';
+
+                    // Cek Operator (Bypass)
+                    const isOp = isOperator(senderNumber);
 
                     // ============================================================
                     // COMMAND MODERASI (ADMIN ONLY)
                     // ============================================================
 
                     // --- ANTI LINK ---
-                    if (isGroup) {
-                        // Ambil Metadata Grup Terbaru
-                        const groupMetadata = await sock.groupMetadata(from);
-                        const participants = groupMetadata.participants;
-
-                        // --- PERBAIKAN LOGIKA ADMIN DI SINI ---
-
-                        // 1. Ambil ID Bot yang bersih (tanpa kode device :2, :10, dll)
-                        //    Contoh: 628xx:5@s.wa.net -> 628xx@s.wa.net
-                        const myId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-
-                        // 2. Cari Bot di daftar member
-                        const botParticipant = participants.find(p => p.id === myId);
-
-                        // 3. Cari Pengirim di daftar member
-                        const senderParticipant = participants.find(p => p.id === sender);
-
-                        // 4. Tentukan Status Admin (Lebih Akurat)
-                        const isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
-                        const isUserAdmin = senderParticipant?.admin === 'admin' || senderParticipant?.admin === 'superadmin';
-
-                        // ============================================================
-                        // COMMAND MODERASI (ADMIN ONLY)
-                        // ============================================================
-
-                        // --- ANTI LINK ---
-                        if (textLower.startsWith('.antilink')) {
-                            const isOp = isOperator(sender.split('@')[0]);
-
-                            if (!isUserAdmin && !isOp) return sock.sendMessage(from, { text: '❌ Khusus Admin Grup!' }, { quoted: msg });
-                            if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ Jadikan saya Admin dulu biar bisa hapus pesan!' }, { quoted: msg });
-
-                            const args = text.split(' ')[1];
-                            if (args === 'on') {
-                                updateGroupSettings(from, 'antilink', true);
-                                await sock.sendMessage(from, { text: '🛡️ Anti-Link AKTIF!' }, { quoted: msg });
-                            } else if (args === 'off') {
-                                updateGroupSettings(from, 'antilink', false);
-                                await sock.sendMessage(from, { text: '🛡️ Anti-Link MATI.' }, { quoted: msg });
-                            } else {
-                                await sock.sendMessage(from, { text: 'Ketik: .antilink on atau .antilink off' }, { quoted: msg });
-                            }
-                            return;
+                    if (textLower.startsWith('.antilink')) {
+                        // Debugging: Kalau bot dibilang bukan admin, kasih tau user
+                        if (!isBotAdmin) {
+                            return sock.sendMessage(from, {
+                                text: `❌ Gagal Bos.\nDi mata WhatsApp, status saya masih: *${botParticipant?.admin || 'Member Biasa'}*.\n\n*Solusi:* Coba Admin-kan ulang saya (Demote -> Promote).`
+                            }, { quoted: msg });
                         }
 
-                        // --- ANTI TOXIC ---
-                        if (textLower.startsWith('.antitoxic')) {
-                            const isOp = isOperator(sender.split('@')[0]);
+                        if (!isUserAdmin && !isOp) return sock.sendMessage(from, { text: '❌ Ente bukan Admin Grup!' }, { quoted: msg });
 
-                            if (!isUserAdmin && !isOp) return sock.sendMessage(from, { text: '❌ Khusus Admin Grup!' }, { quoted: msg });
-                            if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ Jadikan saya Admin dulu!' }, { quoted: msg });
-
-                            const args = text.split(' ')[1];
-                            if (args === 'on') {
-                                updateGroupSettings(from, 'antitoxic', true);
-                                await sock.sendMessage(from, { text: '🤬 Anti-Toxic AKTIF!' }, { quoted: msg });
-                            } else if (args === 'off') {
-                                updateGroupSettings(from, 'antitoxic', false);
-                                await sock.sendMessage(from, { text: '🤬 Anti-Toxic MATI.' }, { quoted: msg });
-                            } else {
-                                await sock.sendMessage(from, { text: 'Ketik: .antitoxic on atau .antitoxic off' }, { quoted: msg });
-                            }
-                            return;
+                        const args = text.split(' ')[1];
+                        if (args === 'on') {
+                            updateGroupSettings(from, 'antilink', true);
+                            await sock.sendMessage(from, { text: '🛡️ Anti-Link AKTIF!' }, { quoted: msg });
+                        } else if (args === 'off') {
+                            updateGroupSettings(from, 'antilink', false);
+                            await sock.sendMessage(from, { text: '🛡️ Anti-Link MATI.' }, { quoted: msg });
+                        } else {
+                            await sock.sendMessage(from, { text: 'Ketik: .antilink on atau .antilink off' }, { quoted: msg });
                         }
+                        return;
+                    }
+
+                    // --- ANTI TOXIC ---
+                    if (textLower.startsWith('.antitoxic')) {
+                        if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ Jadikan Bot Admin dulu!' }, { quoted: msg });
+                        if (!isUserAdmin && !isOp) return sock.sendMessage(from, { text: '❌ Ente bukan Admin Grup!' }, { quoted: msg });
+
+                        const args = text.split(' ')[1];
+                        if (args === 'on') {
+                            updateGroupSettings(from, 'antitoxic', true);
+                            await sock.sendMessage(from, { text: '🤬 Anti-Toxic AKTIF!' }, { quoted: msg });
+                        } else if (args === 'off') {
+                            updateGroupSettings(from, 'antitoxic', false);
+                            await sock.sendMessage(from, { text: '🤬 Anti-Toxic MATI.' }, { quoted: msg });
+                        } else {
+                            await sock.sendMessage(from, { text: 'Ketik: .antitoxic on atau .antitoxic off' }, { quoted: msg });
+                        }
+                        return;
+
                     }
 
 
