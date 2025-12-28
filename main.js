@@ -1630,7 +1630,7 @@ wa.me/6289528950624
 
                     // --- MANUAL SEARCH REAL NSFW ---
                     if (textLower.startsWith('.18 ')) {
-                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
 
                         const tag = text.slice(4).trim(); // Ambil tag setelah .18 
                         if (!tag) return sock.sendMessage(from, { text: 'Tag apa bos? Contoh: .18 pussy' }, { quoted: msg });
@@ -1641,25 +1641,25 @@ wa.me/6289528950624
 
                     if (['.boobs', '.tits', '.dada'].includes(textLower)) {
                         if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await redditRealNSFW('boobs', sock, from, msg);
+                        await nekobotManualSearch('boobs', sock, from, msg);
                         return;
                     }
 
                     if (['.ass', '.bokong', '.pantat'].includes(textLower)) {
                         if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await redditRealNSFW('ass', sock, from, msg);
+                        await nekobotManualSearch('ass', sock, from, msg);
                         return;
                     }
 
                     if (['.gonewild', '.amateur', '.gw'].includes(textLower)) {
                         if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await redditRealNSFW('gonewild', sock, from, msg);
+                        await nekobotManualSearch('gonewild', sock, from, msg);
                         return;
                     }
 
                     if (['.gif', '.nsfwgif', '.clip'].includes(textLower)) {
                         if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await redditRealNSFW('gif', sock, from, msg);
+                        await nekobotManualSearch('gif', sock, from, msg);
                         return;
                     }
 
