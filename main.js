@@ -19,7 +19,6 @@ const WELCOME_DB = path.join(FOLDER, 'welcome.json');
 const RENTALS_DB = path.join(FOLDER, 'rentals.json');
 const OPERATORS_DB = path.join(FOLDER, 'operators.json');
 const MUTE_DB = path.join(FOLDER, 'muted.json');
-const GROUPS_DB = path.join(FOLDER, 'groups.json');
 
 // Buat folder data jika belum ada
 try {
@@ -31,94 +30,6 @@ try {
 // ============================================================
 // HELPER FUNCTIONS
 // ============================================================
-
-function addRental(groupId, groupName, days) {
-    if (!fs.existsSync(RENTALS_DB)) fs.writeFileSync(RENTALS_DB, '[]');
-    const rentals = JSON.parse(fs.readFileSync(RENTALS_DB));
-
-    // VALIDASI: Pastikan days itu angka valid. Kalau aneh-aneh, paksa jadi 30 hari.
-    let validDays = parseInt(days);
-    if (isNaN(validDays) || validDays <= 0) validDays = 30;
-
-    // Konversi hari ke milidetik
-    const milliseconds = validDays * 24 * 60 * 60 * 1000;
-    const expiredDate = Date.now() + milliseconds;
-
-    const index = rentals.findIndex(r => r.id === groupId);
-    if (index !== -1) {
-        rentals[index].expired = expiredDate;
-        rentals[index].name = groupName;
-    } else {
-        rentals.push({ id: groupId, name: groupName, expired: expiredDate });
-    }
-    fs.writeFileSync(RENTALS_DB, JSON.stringify(rentals, null, 2));
-    return expiredDate;
-}
-
-function checkRental(groupId) {
-    if (!fs.existsSync(RENTALS_DB)) return false;
-    const rentals = JSON.parse(fs.readFileSync(RENTALS_DB));
-
-    const index = rentals.findIndex(r => r.id === groupId);
-    if (index === -1) return false;
-
-    // VALIDASI: Kalau datanya rusak (null/NaN), jangan dihapus, anggap aktif dulu biar bisa diperbaiki owner
-    if (!rentals[index].expired || isNaN(rentals[index].expired)) {
-        return true; // Safe mode: Tetap izinkan
-    }
-
-    const now = Date.now();
-    if (now > rentals[index].expired) {
-        // Hapus hanya jika benar-benar expired
-        rentals.splice(index, 1);
-        fs.writeFileSync(RENTALS_DB, JSON.stringify(rentals, null, 2));
-        return false;
-    }
-
-    return true;
-}
-
-function getRentalDays(groupId) {
-    if (!fs.existsSync(RENTALS_DB)) return 0;
-    const rentals = JSON.parse(fs.readFileSync(RENTALS_DB));
-    const data = rentals.find(r => r.id === groupId);
-    if (!data) return 0;
-
-    // Kalau expirednya error/unlimited
-    if (!data.expired) return 999;
-
-    const timeLeft = data.expired - Date.now();
-    if (timeLeft <= 0) return 0;
-
-    return Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
-}
-
-function getGroupSettings(groupId) {
-    if (!fs.existsSync(GROUPS_DB)) fs.writeFileSync(GROUPS_DB, '[]');
-    const groups = JSON.parse(fs.readFileSync(GROUPS_DB));
-    const group = groups.find(g => g.id === groupId);
-    // Default settings: mati semua
-    if (!group) return { id: groupId, antilink: false, antitoxic: false };
-    return group;
-}
-
-// Helper buat save database grup
-function updateGroupSettings(groupId, setting, value) {
-    if (!fs.existsSync(GROUPS_DB)) fs.writeFileSync(GROUPS_DB, '[]');
-    const groups = JSON.parse(fs.readFileSync(GROUPS_DB));
-    const index = groups.findIndex(g => g.id === groupId);
-
-    if (index === -1) {
-        // Kalau belum ada, bikin baru
-        const newGroup = { id: groupId, antilink: false, antitoxic: false };
-        newGroup[setting] = value;
-        groups.push(newGroup);
-    } else {
-        // Update yang udah ada
-        groups[index][setting] = value;
-    }
-    fs.writeFileSync(GROUPS_DB, JSON.stringify(groups, null, 2));
-}
 
 function loadJSON(filePath, defaultValue = {}) {
     try {
@@ -795,52 +706,17 @@ async function connectToWhatsApp() {
                     }
                 }
 
-                // ============================================================
-                // LOGIKA SATPAM (MODERASI OTOMATIS)
-                // ============================================================
+                // Anti link
+                const groupLinkRegex = /chat.whatsapp.com\/(?:invite\/)?([0-9a-zA-Z]{20,26})/i;
+                if (isGroup && groupLinkRegex.test(textLower)) {
+                    const groupMetadata = await sock.groupMetadata(from);
+                    const participants = groupMetadata.participants;
+                    const botAdmin = participants.find(p => p.id === botNumber)?.admin;
+                    const userAdmin = participants.find(p => p.id === sender)?.admin;
 
-                const isOp = isOperator(sender.split('@')[0]); // Cek status operator
-                const groupSettings = isGroup ? getGroupSettings(from) : null; // Load database grup
-
-                // 1. CEK ANTI-LINK
-                if (isGroup && groupSettings?.antilink) {
-                    if (text.includes('chat.whatsapp.com')) {
-                        // Cek Admin/Bot Admin
-                        const groupMetadata = await sock.groupMetadata(from);
-                        const participants = groupMetadata.participants;
-                        const botAdmin = participants.find(p => p.id === botNumber)?.admin;
-                        const userAdmin = participants.find(p => p.id === sender)?.admin;
-
-                        // Kalau User BUKAN Admin & BUKAN Operator, tapi Bot ADMIN -> Sikat
-                        if (botAdmin && !userAdmin && !isOp) {
-                            await sock.sendMessage(from, { delete: msg.key }); // Hapus pesan
-                            await sock.sendMessage(from, {
-                                text: `⚠️ Dilarang kirim link grup lain!`,
-                                mentions: [sender]
-                            });
-                            return; // Stop proses biar command lain gak jalan
-                        }
-                    }
-                }
-
-                // 2. CEK ANTI-TOXIC
-                if (isGroup && groupSettings?.antitoxic) {
-                    const badwords = ['anjg', 'anjing', 'babi', 'monyet', 'kunyuk', 'bajingan', 'tolol', 'goblok', 'kontol', 'memek', 'ngentot'];
-
-                    if (badwords.some(word => textLower.includes(word))) {
-                        const groupMetadata = await sock.groupMetadata(from);
-                        const participants = groupMetadata.participants;
-                        const botAdmin = participants.find(p => p.id === botNumber)?.admin;
-                        const userAdmin = participants.find(p => p.id === sender)?.admin;
-
-                        if (botAdmin && !userAdmin && !isOp) {
-                            await sock.sendMessage(from, { delete: msg.key }); // Hapus pesan
-                            await sock.sendMessage(from, {
-                                text: `⚠️ Mulutnya dijaga ya! (Auto Delete)`,
-                                mentions: [sender]
-                            });
-                            return;
-                        }
+                    if (botAdmin && !userAdmin) {
+                        await sock.groupParticipantsUpdate(from, [sender], 'remove');
+                        return;
                     }
                 }
 
@@ -1152,110 +1028,12 @@ wa.me/6289528950624
 
                 // GROUP COMMANDS
                 if (isGroup) {
-                    // 1. Ambil Metadata Grup
                     const groupMetadata = await sock.groupMetadata(from);
                     const participants = groupMetadata.participants;
-
-                    // 2. Teknik Pencocokan (Number Only)
-                    const myNumber = sock.user.id.split(':')[0].split('@')[0];
-                    const senderNumber = sender.split(':')[0].split('@')[0];
-
-                    const botParticipant = participants.find(p => p.id.includes(myNumber));
-                    const senderParticipant = participants.find(p => p.id.includes(senderNumber));
-
-                    // 3. Status Admin (Pakai ?. biar aman)
-                    const isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
-                    const isUserAdmin = senderParticipant?.admin === 'admin' || senderParticipant?.admin === 'superadmin';
-
-                    // Cek Operator
-                    const isOp = isOperator(senderNumber);
-
-                    // ============================================================
-                    // LOGIKA SATPAM (ACTION DELETE)
-                    // ============================================================
-                    const groupSettings = getGroupSettings(from);
-
-                    // --- ANTI LINK ---
-                    if (groupSettings?.antilink) {
-                        if (text.includes('chat.whatsapp.com')) {
-                            // Cek Admin (Supaya Admin/Op gak kena hapus)
-                            if (!isUserAdmin && !isOp) {
-                                // Coba hapus (Pakai Try-Catch biar kalau bukan admin gak crash)
-                                if (isBotAdmin) {
-                                    await sock.sendMessage(from, { delete: msg.key });
-                                    await sock.sendMessage(from, { text: `⚠️ @${senderNumber} Jangan share link grup lain!`, mentions: [sender] });
-                                } else {
-                                    // Kalau bot ternyata belum admin, diem aja atau kasih tau owner (optional)
-                                    // console.log('Gagal hapus link: Bot bukan admin');
-                                }
-                            }
-                        }
-                    }
-
-                    // --- ANTI TOXIC ---
-                    if (groupSettings?.antitoxic) {
-                        const badwords = ['anjg', 'anjing', 'babi', 'monyet', 'kunyuk', 'bajingan', 'tolol', 'goblok', 'kontol', 'memek', 'ngentot'];
-                        if (badwords.some(word => textLower.includes(word))) {
-                            if (!isUserAdmin && !isOp) {
-                                if (isBotAdmin) {
-                                    await sock.sendMessage(from, { delete: msg.key });
-                                    await sock.sendMessage(from, { text: `⚠️ @${senderNumber} Toxic terdeteksi!`, mentions: [sender] });
-                                }
-                            }
-                        }
-                    }
-
-                    // ============================================================
-                    // COMMAND MODERASI (ADMIN ONLY)
-                    // ============================================================
-
-                    // --- COMMAND ANTI LINK ---
-                    if (textLower.startsWith('.antilink')) {
-                        // Cek user admin atau operator
-                        if (!isUserAdmin && !isOp) return sock.sendMessage(from, { text: '❌ Ente bukan Admin Grup!' }, { quoted: msg });
-
-                        const args = text.split(' ')[1];
-                        if (args === 'on') {
-                            updateGroupSettings(from, 'antilink', true);
-
-                            // DISINI PERUBAHANNYA: Kita HAPUS syarat bot harus admin. 
-                            // Kita cuma kasih peringatan kalau bot belum sadar dia admin.
-                            let warning = '';
-                            if (!isBotAdmin) warning = '\n\n⚠️ *Note:* Sistem mendeteksi Bot belum Admin. Pastikan Bot sudah jadi Admin ya biar work!';
-
-                            await sock.sendMessage(from, { text: `🛡️ Anti-Link AKTIF!${warning}` }, { quoted: msg });
-
-                        } else if (args === 'off') {
-                            updateGroupSettings(from, 'antilink', false);
-                            await sock.sendMessage(from, { text: '🛡️ Anti-Link MATI.' }, { quoted: msg });
-                        } else {
-                            await sock.sendMessage(from, { text: 'Ketik: .antilink on atau .antilink off' }, { quoted: msg });
-                        }
-                        return;
-                    }
-
-                    // --- COMMAND ANTI TOXIC ---
-                    if (textLower.startsWith('.antitoxic')) {
-                        if (!isUserAdmin && !isOp) return sock.sendMessage(from, { text: '❌ Ente bukan Admin Grup!' }, { quoted: msg });
-
-                        const args = text.split(' ')[1];
-                        if (args === 'on') {
-                            updateGroupSettings(from, 'antitoxic', true);
-
-                            let warning = '';
-                            if (!isBotAdmin) warning = '\n\n⚠️ *Note:* Sistem mendeteksi Bot belum Admin. Pastikan Bot sudah jadi Admin ya biar work!';
-
-                            await sock.sendMessage(from, { text: `🤬 Anti-Toxic AKTIF!${warning}` }, { quoted: msg });
-                        } else if (args === 'off') {
-                            updateGroupSettings(from, 'antitoxic', false);
-                            await sock.sendMessage(from, { text: '🤬 Anti-Toxic MATI.' }, { quoted: msg });
-                        } else {
-                            await sock.sendMessage(from, { text: 'Ketik: .antitoxic on atau .antitoxic off' }, { quoted: msg });
-                        }
-                        return;
-                    }
-
-
+                    const botAdmin = participants.find(p => p.id === botNumber)?.admin;
+                    const userAdmin = participants.find(p => p.id === sender)?.admin;
+                    const isBotAdmin = botAdmin === 'admin' || botAdmin === 'superadmin';
+                    const isUserAdmin = userAdmin === 'admin' || userAdmin === 'superadmin';
 
                     if (textLower === '.cekidgroup') {
                         const idGroupText = `🌐 *ID GRUP*\n\nID: ${from}\n_Gunakan ID ini untuk keperluan sewa atau operator._`;
