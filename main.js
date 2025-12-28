@@ -1628,41 +1628,6 @@ wa.me/6289528950624
                         return;
                     }
 
-                    // --- MANUAL SEARCH REAL NSFW ---
-                    if (textLower.startsWith('.18 ')) {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-
-                        const tag = text.slice(4).trim(); // Ambil tag setelah .18 
-                        if (!tag) return sock.sendMessage(from, { text: 'Tag apa bos? Contoh: .18 pussy' }, { quoted: msg });
-
-                        await redditPureRealNSFW(tag, sock, from, msg);
-                        return;
-                    }
-
-                    if (['.boobs', '.tits', '.dada'].includes(textLower)) {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await redditPureRealNSFW('boobs', sock, from, msg);
-                        return;
-                    }
-
-                    if (['.ass', '.bokong', '.pantat'].includes(textLower)) {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await redditPureRealNSFW('ass', sock, from, msg);
-                        return;
-                    }
-
-                    if (['.gonewild', '.amateur', '.gw'].includes(textLower)) {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await redditPureRealNSFW('gonewild', sock, from, msg);
-                        return;
-                    }
-
-                    if (['.gif', '.nsfwgif', '.clip'].includes(textLower)) {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await redditPureRealNSFW('gif', sock, from, msg);
-                        return;
-                    }
-
                     // --- XVIDEOS (Real & Short) ---
                     if (textLower.startsWith('.xv') || textLower.startsWith('.bokep')) {
                         if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
@@ -1792,13 +1757,11 @@ async function asupanTikTok(sock, from, msg) {
 
     try {
         const keywords = [
-            'ukhti gemoy',
-            'jilbab sempit',
-            'cewe tiktok viral',
-            'ukhti tobrut',
-            'jilboobs tiktok',
-            'asupan hijab',
-            'cewek kacamata tobrut'
+           'ukhti gemoy viral', 'jilbab sempit hot', 'cewe tiktok viral montok', 'ukhti tobrut goyang',
+    'jilboobs tiktok 2025', 'asupan hijab seksi', 'cewek kacamata tobrut viral',
+    'hijab montok tiktok', 'ukhti cantik goyang', 'goyang hijab viral hot',
+    'ukhti seksi non nude', 'asupan ukhti bahenol', 'tiktok hijab viral gemas',
+    'cewek hijab body goals', 'ukhti jilbab ketat viral', 'asupan tiktok ukhti 2025'
         ];
 
         const randomQuery = keywords[Math.floor(Math.random() * keywords.length)];
@@ -1965,94 +1928,5 @@ async function searchSfile(query, sock, from, msg) {
     } catch (e) {
         console.error('Sfile Error:', e.message);
         await sock.sendMessage(from, { text: '❌ Error scraping Sfile.' }, { quoted: msg });
-    }
-}
-
-// ============================================================
-// PREMIUM REAL HUMAN NSFW - REDDIT 2025 (PURE NATURAL, NO COSPLAY)
-// ============================================================
-const userAgents = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-    'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-];
-
-async function redditPureRealNSFW(tag = 'random', sock, from, msg) {
-    const tagMap = {
-        pussy: 'pussy+labia+spreadpussy',
-        memek: 'pussy+labia',
-        thighs: 'thighs+ThickThighs',
-        paha: 'thighs',
-        ass: 'ass+paag+asstastic',
-        bokong: 'ass+paag',
-        pantat: 'ass',
-        paptt: 'paag',
-        boobs: 'boobs+bigboobs+tits+bustypetite',
-        tits: 'boobs+tits',
-        tetek: 'boobs',
-        dada: 'boobs',
-        blowjob: 'blowjobs+deepthroat',
-        anal: 'anal+analgw',
-        milf: 'milf+maturewomen',
-        gif: 'nsfw_gif+porn_gifs'
-    };
-
-    let subreddits = tagMap[tag.toLowerCase()] || 'gonewild+realgirls+amateurs+nsfw+bustypetite+paag+thighs';
-
-    const displayTag = tag.charAt(0).toUpperCase() + tag.slice(1) || 'Random Pure Real';
-
-    await sock.sendMessage(from, { text: `🔥 Lagi cari pure real human hot "${displayTag}" dari Reddit (no cosplay bullshit)...` }, { quoted: msg });
-
-    try {
-        const randomUA = userAgents[Math.floor(Math.random() * userAgents.length)];
-        const url = `https://www.reddit.com/r/${subreddits}/hot.json?limit=80&t=day`; // Fresh today only
-
-        const { data } = await axios.get(url, {
-            headers: { 'User-Agent': randomUA },
-            timeout: 10000
-        });
-
-        if (!data || !data.data || !data.data.children) throw new Error('Blocked/Empty');
-
-        let posts = data.data.children
-            .filter(p => !p.data.stickied && p.data.over_18 && p.data.ups > 50) // Filter quality high
-            .map(p => p.data);
-
-        let validPosts = posts.filter(p => {
-            const url = p.url.toLowerCase();
-            return url.match(/\.(jpg|jpeg|png|gif|mp4)$/) || p.is_video || p.preview?.reddit_video_preview;
-        });
-
-        if (validPosts.length === 0) validPosts = posts;
-
-        const post = validPosts[Math.floor(Math.random() * validPosts.length)];
-
-        let mediaUrl = post.url;
-        let isVideo = false;
-
-        if (post.is_video || post.secure_media?.reddit_video) {
-            mediaUrl = post.secure_media?.reddit_video?.fallback_url || post.preview?.reddit_video_preview?.fallback_url;
-            isVideo = true;
-        }
-
-        const buffer = await axios.get(mediaUrl, { responseType: 'arraybuffer', timeout: 20000 });
-
-        const caption = `🔞 *PURE REAL HUMAN HOT - REDDIT 2025*\n` +
-            `📌 *Tag:* ${displayTag} (Natural Amateur)\n` +
-            `🎬 *Title:* ${post.title.substring(0, 100)}\n` +
-            `👍 *Upvotes:* ${post.ups.toLocaleString()}\n` +
-            `🔗 https://reddit.com${post.permalink}\n\n` +
-            `_No cosplay, no fake – 100% real & menarik banget 😈💦_`;
-
-        if (isVideo || mediaUrl.endsWith('.mp4') || mediaUrl.endsWith('.gif')) {
-            await sock.sendMessage(from, { video: buffer.data, caption, gifPlayback: mediaUrl.endsWith('.gif') }, { quoted: msg });
-        } else {
-            await sock.sendMessage(from, { image: buffer.data, caption }, { quoted: msg });
-        }
-
-    } catch (e) {
-        console.error('Reddit Pure Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Lagi kena block sementara (Reddit ketat). Coba lagi 2-5 menit kemudian atau tag lain ya bos!' }, { quoted: msg });
     }
 }
