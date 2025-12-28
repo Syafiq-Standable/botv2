@@ -19,6 +19,7 @@ const WELCOME_DB = path.join(FOLDER, 'welcome.json');
 const RENTALS_DB = path.join(FOLDER, 'rentals.json');
 const OPERATORS_DB = path.join(FOLDER, 'operators.json');
 const MUTE_DB = path.join(FOLDER, 'muted.json');
+const GROUPS_DB = path.join(FOLDER, 'groups.json');
 
 // Buat folder data jika belum ada
 try {
@@ -30,6 +31,33 @@ try {
 // ============================================================
 // HELPER FUNCTIONS
 // ============================================================
+
+function getGroupSettings(groupId) {
+    if (!fs.existsSync(GROUPS_DB)) fs.writeFileSync(GROUPS_DB, '[]');
+    const groups = JSON.parse(fs.readFileSync(GROUPS_DB));
+    const group = groups.find(g => g.id === groupId);
+    // Default settings: mati semua
+    if (!group) return { id: groupId, antilink: false, antitoxic: false };
+    return group;
+}
+
+// Helper buat save database grup
+function updateGroupSettings(groupId, setting, value) {
+    if (!fs.existsSync(GROUPS_DB)) fs.writeFileSync(GROUPS_DB, '[]');
+    const groups = JSON.parse(fs.readFileSync(GROUPS_DB));
+    const index = groups.findIndex(g => g.id === groupId);
+
+    if (index === -1) {
+        // Kalau belum ada, bikin baru
+        const newGroup = { id: groupId, antilink: false, antitoxic: false };
+        newGroup[setting] = value;
+        groups.push(newGroup);
+    } else {
+        // Update yang udah ada
+        groups[index][setting] = value;
+    }
+    fs.writeFileSync(GROUPS_DB, JSON.stringify(groups, null, 2));
+}
 
 function loadJSON(filePath, defaultValue = {}) {
     try {
@@ -706,17 +734,52 @@ async function connectToWhatsApp() {
                     }
                 }
 
-                // Anti link
-                const groupLinkRegex = /chat.whatsapp.com\/(?:invite\/)?([0-9a-zA-Z]{20,26})/i;
-                if (isGroup && groupLinkRegex.test(textLower)) {
-                    const groupMetadata = await sock.groupMetadata(from);
-                    const participants = groupMetadata.participants;
-                    const botAdmin = participants.find(p => p.id === botNumber)?.admin;
-                    const userAdmin = participants.find(p => p.id === sender)?.admin;
+                // ============================================================
+                // LOGIKA SATPAM (MODERASI OTOMATIS)
+                // ============================================================
+                
+                const isOp = isOperator(sender.split('@')[0]); // Cek status operator
+                const groupSettings = isGroup ? getGroupSettings(from) : null; // Load database grup
 
-                    if (botAdmin && !userAdmin) {
-                        await sock.groupParticipantsUpdate(from, [sender], 'remove');
-                        return;
+                // 1. CEK ANTI-LINK
+                if (isGroup && groupSettings?.antilink) {
+                    if (text.includes('chat.whatsapp.com')) {
+                        // Cek Admin/Bot Admin
+                        const groupMetadata = await sock.groupMetadata(from);
+                        const participants = groupMetadata.participants;
+                        const botAdmin = participants.find(p => p.id === botNumber)?.admin;
+                        const userAdmin = participants.find(p => p.id === sender)?.admin;
+
+                        // Kalau User BUKAN Admin & BUKAN Operator, tapi Bot ADMIN -> Sikat
+                        if (botAdmin && !userAdmin && !isOp) {
+                            await sock.sendMessage(from, { delete: msg.key }); // Hapus pesan
+                            await sock.sendMessage(from, { 
+                                text: `⚠️ Dilarang kirim link grup lain!`,
+                                mentions: [sender]
+                            });
+                            return; // Stop proses biar command lain gak jalan
+                        }
+                    }
+                }
+
+                // 2. CEK ANTI-TOXIC
+                if (isGroup && groupSettings?.antitoxic) {
+                    const badwords = ['anjg', 'anjing', 'babi', 'monyet', 'kunyuk', 'bajingan', 'tolol', 'goblok', 'kontol', 'memek', 'ngentot'];
+                    
+                    if (badwords.some(word => textLower.includes(word))) {
+                        const groupMetadata = await sock.groupMetadata(from);
+                        const participants = groupMetadata.participants;
+                        const botAdmin = participants.find(p => p.id === botNumber)?.admin;
+                        const userAdmin = participants.find(p => p.id === sender)?.admin;
+
+                        if (botAdmin && !userAdmin && !isOp) {
+                            await sock.sendMessage(from, { delete: msg.key }); // Hapus pesan
+                            await sock.sendMessage(from, { 
+                                text: `⚠️ Mulutnya dijaga ya! (Auto Delete)`,
+                                mentions: [sender]
+                            });
+                            return;
+                        }
                     }
                 }
 
@@ -1363,6 +1426,51 @@ wa.me/6289528950624
                             });
                         }, ms);
                     }
+                    // ============================================================
+                    // COMMAND MODERASI (ADMIN ONLY)
+                    // ============================================================
+
+                    // --- ANTI LINK ---
+                    if (textLower.startsWith('.antilink')) {
+                        if (!isGroup) return sock.sendMessage(from, { text: '❌ Hanya untuk grup.' }, { quoted: msg });
+                        if (!isAdmin) return sock.sendMessage(from, { text: '❌ Khusus Admin Grup.' }, { quoted: msg });
+                        if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ Jadikan saya Admin dulu biar bisa hapus pesan!' }, { quoted: msg });
+
+                        const args = text.split(' ');
+                        const status = args[1]?.toLowerCase(); // on atau off
+
+                        if (status === 'on') {
+                            updateGroupSettings(from, 'antilink', true);
+                            await sock.sendMessage(from, { text: '🛡️ Anti-Link diaktifkan! Member yang kirim link grup lain akan dihapus otomatis.' }, { quoted: msg });
+                        } else if (status === 'off') {
+                            updateGroupSettings(from, 'antilink', false);
+                            await sock.sendMessage(from, { text: '🛡️ Anti-Link dimatikan.' }, { quoted: msg });
+                        } else {
+                            await sock.sendMessage(from, { text: 'Pilih on atau off.\nContoh: .antilink on' }, { quoted: msg });
+                        }
+                        return;
+                    }
+
+                    // --- ANTI TOXIC ---
+                    if (textLower.startsWith('.antitoxic')) {
+                        if (!isGroup) return sock.sendMessage(from, { text: '❌ Hanya untuk grup.' }, { quoted: msg });
+                        if (!isAdmin) return sock.sendMessage(from, { text: '❌ Khusus Admin Grup.' }, { quoted: msg });
+                        if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ Jadikan saya Admin dulu!' }, { quoted: msg });
+
+                        const args = text.split(' ');
+                        const status = args[1]?.toLowerCase();
+
+                        if (status === 'on') {
+                            updateGroupSettings(from, 'antitoxic', true);
+                            await sock.sendMessage(from, { text: '🤬 Anti-Toxic diaktifkan! Chat kasar akan dihapus.' }, { quoted: msg });
+                        } else if (status === 'off') {
+                            updateGroupSettings(from, 'antitoxic', false);
+                            await sock.sendMessage(from, { text: '🤬 Anti-Toxic dimatikan.' }, { quoted: msg });
+                        } else {
+                            await sock.sendMessage(from, { text: 'Pilih on atau off.\nContoh: .antitoxic on' }, { quoted: msg });
+                        }
+                        return;
+                    }
                 }
 
                 // ============================================
@@ -1637,27 +1745,6 @@ wa.me/6289528950624
                         await sock.sendMessage(from, { text: checkList }, { quoted: msg });
                         return;
                     }
-
-                    // --- ASUPAN UKHTI (TikTok Soft) ---
-                    if (textLower === '.ukhti' || textLower === '.hijab') {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
-
-                        // Panggil fungsi asupanTikTok
-                        await asupanTikTok(sock, from, msg);
-                        return;
-                    }
-
-                    // --- XVIDEOS (Real & Short) ---
-                    if (textLower.startsWith('.xv') || textLower.startsWith('.bokep')) {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
-
-                        // Ambil kata kunci, kalau kosong defaultnya 'viral'
-                        let query = text.split(' ').slice(1).join(' ');
-                        if (!query) query = 'indo viral'; // Default search
-
-                        await searchXvideos(query, sock, from, msg);
-                        return;
-                    }
                 }
 
 
@@ -1679,146 +1766,3 @@ wa.me/6289528950624
 // ============================================================
 
 connectToWhatsApp();
-
-// ============================================================
-// FITUR NSFW: XVIDEOS (REAL HUMAN & SHORT DURATION)
-// ============================================================
-async function searchXvideos(query, sock, from, msg) {
-    await sock.sendMessage(from, { text: `🔍 XVIDEOS: Mencari "${query}" (Durasi Pendek)...` }, { quoted: msg });
-
-    try {
-        // 1. Search dengan Filter Durasi Pendek (dur=1 artinya 1-3 menit)
-        // Biar file-nya kecil dan bisa dikirim ke WA
-        const searchUrl = `https://www.xvideos.com/?k=${encodeURIComponent(query)}&dur=1`;
-
-        const { data } = await axios.get(searchUrl);
-        const $ = cheerio.load(data);
-        const videos = [];
-
-        // 2. Scraping List Video
-        $('.thumb-block').each((i, element) => {
-            const linkElem = $(element).find('.thumb-under a');
-            const title = linkElem.attr('title');
-            const href = linkElem.attr('href');
-
-            if (title && href && !href.startsWith('/profiles')) {
-                videos.push({
-                    title: title,
-                    url: 'https://www.xvideos.com' + href
-                });
-            }
-        });
-
-        if (videos.length === 0) {
-            return sock.sendMessage(from, { text: '❌ Gak nemu videonya bos.' }, { quoted: msg });
-        }
-
-        // 3. Ambil 1 Video Random
-        const randomVideo = videos[Math.floor(Math.random() * videos.length)];
-
-        // 4. Masuk ke halaman video untuk ambil Link MP4 Asli
-        const videoPage = await axios.get(randomVideo.url);
-
-        // Teknik Regex buat nyari link High Quality di dalam script HTML
-        // Xvideos nyimpen link di: html5player.setVideoUrlHigh('LINK');
-        const mp4Match = videoPage.data.match(/html5player\.setVideoUrlHigh\('([^']+)'\)/);
-
-        if (!mp4Match || !mp4Match[1]) {
-            return sock.sendMessage(from, { text: '❌ Gagal narik file videonya (Encrypted/Private).' }, { quoted: msg });
-        }
-
-        const mp4Url = mp4Match[1];
-
-        // 5. Download Video ke Buffer (Memory)
-        // Kita download dulu biar dikirim sebagai VIDEO, bukan Link.
-        const videoBuffer = await axios.get(mp4Url, { responseType: 'arraybuffer' });
-
-        // 6. Kirim ke WhatsApp
-        await sock.sendMessage(from, {
-            video: videoBuffer.data,
-            caption: `🔞 *XVIDEOS SHORT*\n🎬 ${randomVideo.title}\n\n_Real human, no cartoons!_`,
-            gifPlayback: false
-        }, { quoted: msg });
-
-    } catch (e) {
-        console.error('XVideos Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Error: ' + e.message }, { quoted: msg });
-    }
-}
-
-// ============================================================
-// FITUR ASUPAN TIKTOK (VERSI FIX LINK BUNTUNG)
-// ============================================================
-async function asupanTikTok(sock, from, msg) {
-    await sock.sendMessage(from, { text: '🔄 Lagi nyari Ukhti-ukhti viral...' }, { quoted: msg });
-
-    try {
-        const keywords = [
-            'ukhti gemoy',
-            'jilbab sempit',
-            'cewe tiktok viral',
-            'ukhti tobrut',
-            'jilboobs tiktok',
-            'asupan hijab',
-            'cewek kacamata tobrut'
-        ];
-
-        const randomQuery = keywords[Math.floor(Math.random() * keywords.length)];
-
-        // Request ke API TikWM
-        const { data } = await axios.post('https://www.tikwm.com/api/feed/search', {
-            keywords: randomQuery,
-            count: 12,
-            cursor: 0,
-            web: 1,
-            hd: 1
-        }, {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)'
-            }
-        });
-
-        if (!data || !data.data || !data.data.videos) {
-            return sock.sendMessage(from, { text: '❌ Lagi gak nemu asupan nih.' }, { quoted: msg });
-        }
-
-        const videos = data.data.videos;
-        const randomVideo = videos[Math.floor(Math.random() * videos.length)];
-
-        // --- PERBAIKAN LINK DISINI ---
-        let videoUrl = randomVideo.play;
-
-        // Kalau linknya gak ada 'https', kita tempel domain depannya
-        if (!videoUrl.startsWith('http')) {
-            videoUrl = 'https://www.tikwm.com' + videoUrl;
-        }
-
-        // --- DOWNLOAD DULU KE BUFFER (Lebih Aman) ---
-        // Kita download videonya ke memory dulu, baru kirim.
-        // Ini mencegah error "file not found" atau "link expired".
-        const bufferVideo = await axios.get(videoUrl, {
-            responseType: 'arraybuffer',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)'
-            }
-        });
-
-        const caption = `🧕 *ASUPAN TIKTOK*\n` +
-            `📝 *Caption:* ${randomVideo.title}\n` +
-            `👀 *Views:* ${randomVideo.play_count}\n` +
-            `👤 *User:* ${randomVideo.author.nickname}\n\n` +
-            `_Mode: Santuy (Non-Nude)_`;
-
-        // Kirim Video dari Buffer
-        await sock.sendMessage(from, {
-            video: bufferVideo.data,
-            caption: caption,
-            gifPlayback: false
-        }, { quoted: msg });
-
-    } catch (e) {
-        console.error('Asupan TikTok Error:', e);
-        await sock.sendMessage(from, { text: '❌ Gagal: ' + e.message }, { quoted: msg });
-    }
-}
