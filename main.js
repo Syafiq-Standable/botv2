@@ -1859,6 +1859,49 @@ wa.me/6289528950624
                         await sock.sendMessage(from, { text: checkList }, { quoted: msg });
                         return;
                     }
+
+                    // --- ASUPAN UKHTI (TikTok Soft) ---
+                    if (textLower === '.ukhti' || textLower === '.hijab') {
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
+
+                        // Panggil fungsi asupanTikTok
+                        await asupanTikTok(sock, from, msg);
+                        return;
+                    }
+
+                    // --- XVIDEOS (Real & Short) ---
+                    if (textLower.startsWith('.xv') || textLower.startsWith('.bokep')) {
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
+
+                        // Ambil kata kunci, kalau kosong defaultnya 'viral'
+                        let query = text.split(' ').slice(1).join(' ');
+                        if (!query) query = 'indo viral'; // Default search
+
+                        await searchXvideos(query, sock, from, msg);
+                        return;
+                    }
+
+                    // --- DOODSTREAM SEARCH (Link Only) ---
+                    if (textLower.startsWith('.dood')) {
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
+
+                        const query = text.split(' ').slice(1).join(' ');
+                        if (!query) return sock.sendMessage(from, { text: 'Cari apa? Contoh: .dood skandal sma' }, { quoted: msg });
+
+                        await searchDood(query, sock, from, msg);
+                        return;
+                    }
+
+                    // --- SFILE SEARCH (File/RAR) ---
+                    if (textLower.startsWith('.sfile')) {
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
+
+                        const query = text.split(' ').slice(1).join(' ');
+                        if (!query) return sock.sendMessage(from, { text: 'Cari apa? Contoh: .sfile full album' }, { quoted: msg });
+
+                        await searchSfile(query, sock, from, msg);
+                        return;
+                    }
                 }
 
 
@@ -1880,3 +1923,253 @@ wa.me/6289528950624
 // ============================================================
 
 connectToWhatsApp();
+
+// ============================================================
+// FITUR NSFW: XVIDEOS (REAL HUMAN & SHORT DURATION)
+// ============================================================
+async function searchXvideos(query, sock, from, msg) {
+    await sock.sendMessage(from, { text: `🔍 XVIDEOS: Mencari "${query}" (Durasi Pendek)...` }, { quoted: msg });
+
+    try {
+        // 1. Search dengan Filter Durasi Pendek (dur=1 artinya 1-3 menit)
+        // Biar file-nya kecil dan bisa dikirim ke WA
+        const searchUrl = `https://www.xvideos.com/?k=${encodeURIComponent(query)}&dur=1`;
+
+        const { data } = await axios.get(searchUrl);
+        const $ = cheerio.load(data);
+        const videos = [];
+
+        // 2. Scraping List Video
+        $('.thumb-block').each((i, element) => {
+            const linkElem = $(element).find('.thumb-under a');
+            const title = linkElem.attr('title');
+            const href = linkElem.attr('href');
+
+            if (title && href && !href.startsWith('/profiles')) {
+                videos.push({
+                    title: title,
+                    url: 'https://www.xvideos.com' + href
+                });
+            }
+        });
+
+        if (videos.length === 0) {
+            return sock.sendMessage(from, { text: '❌ Gak nemu videonya bos.' }, { quoted: msg });
+        }
+
+        // 3. Ambil 1 Video Random
+        const randomVideo = videos[Math.floor(Math.random() * videos.length)];
+
+        // 4. Masuk ke halaman video untuk ambil Link MP4 Asli
+        const videoPage = await axios.get(randomVideo.url);
+
+        // Teknik Regex buat nyari link High Quality di dalam script HTML
+        // Xvideos nyimpen link di: html5player.setVideoUrlHigh('LINK');
+        const mp4Match = videoPage.data.match(/html5player\.setVideoUrlHigh\('([^']+)'\)/);
+
+        if (!mp4Match || !mp4Match[1]) {
+            return sock.sendMessage(from, { text: '❌ Gagal narik file videonya (Encrypted/Private).' }, { quoted: msg });
+        }
+
+        const mp4Url = mp4Match[1];
+
+        // 5. Download Video ke Buffer (Memory)
+        // Kita download dulu biar dikirim sebagai VIDEO, bukan Link.
+        const videoBuffer = await axios.get(mp4Url, { responseType: 'arraybuffer' });
+
+        // 6. Kirim ke WhatsApp
+        await sock.sendMessage(from, {
+            video: videoBuffer.data,
+            caption: `🔞 *XVIDEOS SHORT*\n🎬 ${randomVideo.title}\n\n_Real human, no cartoons!_`,
+            gifPlayback: false
+        }, { quoted: msg });
+
+    } catch (e) {
+        console.error('XVideos Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Error: ' + e.message }, { quoted: msg });
+    }
+}
+
+// ============================================================
+// FITUR ASUPAN TIKTOK (VERSI FIX LINK BUNTUNG)
+// ============================================================
+async function asupanTikTok(sock, from, msg) {
+    await sock.sendMessage(from, { text: '🔄 Lagi nyari Ukhti-ukhti viral...' }, { quoted: msg });
+
+    try {
+        const keywords = [
+            'ukhti gemoy',
+            'jilbab sempit',
+            'cewe tiktok viral',
+            'ukhti tobrut',
+            'jilboobs tiktok',
+            'asupan hijab',
+            'cewek kacamata tobrut'
+        ];
+
+        const randomQuery = keywords[Math.floor(Math.random() * keywords.length)];
+
+        // Request ke API TikWM
+        const { data } = await axios.post('https://www.tikwm.com/api/feed/search', {
+            keywords: randomQuery,
+            count: 12,
+            cursor: 0,
+            web: 1,
+            hd: 1
+        }, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)'
+            }
+        });
+
+        if (!data || !data.data || !data.data.videos) {
+            return sock.sendMessage(from, { text: '❌ Lagi gak nemu asupan nih.' }, { quoted: msg });
+        }
+
+        const videos = data.data.videos;
+        const randomVideo = videos[Math.floor(Math.random() * videos.length)];
+
+        // --- PERBAIKAN LINK DISINI ---
+        let videoUrl = randomVideo.play;
+
+        // Kalau linknya gak ada 'https', kita tempel domain depannya
+        if (!videoUrl.startsWith('http')) {
+            videoUrl = 'https://www.tikwm.com' + videoUrl;
+        }
+
+        // --- DOWNLOAD DULU KE BUFFER (Lebih Aman) ---
+        // Kita download videonya ke memory dulu, baru kirim.
+        // Ini mencegah error "file not found" atau "link expired".
+        const bufferVideo = await axios.get(videoUrl, {
+            responseType: 'arraybuffer',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)'
+            }
+        });
+
+        const caption = `🧕 *ASUPAN TIKTOK*\n` +
+            `📝 *Caption:* ${randomVideo.title}\n` +
+            `👀 *Views:* ${randomVideo.play_count}\n` +
+            `👤 *User:* ${randomVideo.author.nickname}\n\n` +
+            `_Mode: Santuy (Non-Nude)_`;
+
+        // Kirim Video dari Buffer
+        await sock.sendMessage(from, {
+            video: bufferVideo.data,
+            caption: caption,
+            gifPlayback: false
+        }, { quoted: msg });
+
+    } catch (e) {
+        console.error('Asupan TikTok Error:', e);
+        await sock.sendMessage(from, { text: '❌ Gagal: ' + e.message }, { quoted: msg });
+    }
+}
+
+// ============================================================
+// FITUR: DOODSTREAM FINDER (JALUR PINTAS)
+// Mencari link Doodstream langsung lewat DuckDuckGo
+// ============================================================
+async function searchDood(query, sock, from, msg) {
+    await sock.sendMessage(from, { text: `🕵️ Nyari link Doodstream: "${query}"...` }, { quoted: msg });
+
+    try {
+        // Trik Dorking: Kita cari link yang domainnya dood.*
+        const dork = `site:dood.la OR site:dood.so OR site:dood.re OR site:dood.wf "${query}"`;
+        const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(dork)}`;
+        
+        // Pakai Proxy biar IP VPS gak diblok DuckDuckGo
+        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(searchUrl)}`;
+
+        const { data } = await axios.get(proxyUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
+        });
+
+        const $ = cheerio.load(data);
+        const results = [];
+
+        // Scraping hasil pencarian DuckDuckGo (Versi HTML Ringan)
+        $('.result__body').each((i, element) => {
+            if (results.length >= 5) return; // Limit 5 aja
+
+            const title = $(element).find('.result__a').text().trim();
+            const link = $(element).find('.result__a').attr('href');
+            const snippet = $(element).find('.result__snippet').text().trim();
+
+            // Filter: Pastikan linknya mengarah ke Dood
+            if (link && (link.includes('dood') || link.includes('ds2play'))) {
+                results.push({ title, link, snippet });
+            }
+        });
+
+        if (results.length === 0) {
+            return sock.sendMessage(from, { text: '❌ Gak nemu link Doodstream buat keyword itu.' }, { quoted: msg });
+        }
+
+        let caption = `🕵️ *DOODSTREAM FINDER*\nQuery: _${query}_\n\n`;
+        results.forEach((res, i) => {
+            caption += `${i + 1}. *${res.title}*\n`;
+            caption += `🔗 ${res.link}\n\n`;
+        });
+        caption += `_Link bisa ditonton langsung tanpa VPN (biasanya)._`;
+
+        await sock.sendMessage(from, { 
+            image: { url: 'https://i.imgur.com/L12a70m.png' }, // Logo Doodstream (opsional)
+            caption: caption 
+        }, { quoted: msg });
+
+    } catch (e) {
+        console.error('Dood Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Gagal searching (DuckDuckGo limit/Proxy error).' }, { quoted: msg });
+    }
+}
+
+// ============================================================
+// FITUR: SFILE SEARCH (FILE VIRAL/RAR)
+// ============================================================
+async function searchSfile(query, sock, from, msg) {
+    await sock.sendMessage(from, { text: `📂 Mengaduk-aduk Sfile.mobi: "${query}"...` }, { quoted: msg });
+
+    try {
+        const searchUrl = `https://sfile.mobi/search.php?q=${encodeURIComponent(query)}&search=Search`;
+        
+        const { data } = await axios.get(searchUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
+        });
+
+        const $ = cheerio.load(data);
+        const results = [];
+
+        $('.list').each((i, element) => {
+            if (results.length >= 5) return;
+
+            const linkElem = $(element).find('a');
+            const title = linkElem.text().trim();
+            const href = linkElem.attr('href');
+            const size = $(element).text().match(/\((.*?)\)/)?.[1] || 'Unknown';
+
+            if (title && href && href.includes('sfile.mobi')) {
+                results.push({ title, url: href, size });
+            }
+        });
+
+        if (results.length === 0) {
+            return sock.sendMessage(from, { text: '❌ File tidak ditemukan di Sfile.' }, { quoted: msg });
+        }
+
+        let caption = `📂 *SFILE VIRAL SEARCH*\n\n`;
+        results.forEach((res, i) => {
+            caption += `${i + 1}. *${res.title}*\n`;
+            caption += `📦 Size: ${res.size}\n`;
+            caption += `🔗 ${res.url}\n\n`;
+        });
+        caption += `_Biasanya berisi video viral, full album rar, dll._`;
+
+        await sock.sendMessage(from, { text: caption }, { quoted: msg });
+
+    } catch (e) {
+        console.error('Sfile Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Error scraping Sfile.' }, { quoted: msg });
+    }
+}
