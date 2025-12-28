@@ -6,7 +6,7 @@ const path = require('path');
 const sharp = require('sharp');
 const cheerio = require('cheerio');
 const { exec } = require('child_process');
-const ytdl = require('ytdl-core');
+const { ttdl, igdl, youtube } = require('btch-downloader');
 
 // ============================================================
 // KONFIGURASI AWAL & DEKLARASI PATH
@@ -394,22 +394,23 @@ Ketik *.sewa* untuk info perpanjangan.
 
 async function downloadSosmed(url) {
     try {
-        // Kita nembak ke API Cobalt (gratis & bersih)
-        const response = await axios.post('https://cobalt.api.sc/api/json', {
-            url: url
-        }, {
-            headers: {
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            }
-        });
-
-        // Kalau gagal
-        if (response.data.status === 'error') return null;
-
-        // Kalau sukses, ambil link downloadnya
-        return response.data.url;
+        // Deteksi ini link apa
+        if (url.includes('tiktok.com')) {
+            const data = await ttdl(url);
+            return data.video[0] || data.video; // Ambil video pertama
+        } 
+        else if (url.includes('instagram.com')) {
+            const data = await igdl(url);
+            // IG bisa banyak slide, kita ambil yang pertama aja buat simpel
+            return data[0].url; 
+        }
+        else if (url.includes('youtube.com') || url.includes('youtu.be')) {
+            const data = await youtube(url);
+            return data.mp4; // Ambil link MP4
+        }
+        return null;
     } catch (e) {
+        console.error("Error Scraper:", e);
         return null;
     }
 }
@@ -821,44 +822,48 @@ _Managed by Sukabyone_
                     return;
                 }
 
-                if (textLower.startsWith('.tt2') ||
-                    textLower.startsWith('.tiktok2') ||
-                    textLower.startsWith('.ig') ||
+                // TESTING
+                // ====================================================
+                // FITUR DOWNLOADER (IG, TT, YT) - UNIVERSAL
+                // ====================================================
+                if (textLower.startsWith('.tt2') || 
+                    textLower.startsWith('.tiktok2') || 
+                    textLower.startsWith('.ig') || 
                     textLower.startsWith('.instagram') ||
-                    textLower.startsWith('.yt') ||
-                    textLower.startsWith('.youtube') ||
-                    textLower.startsWith('.twt') ||
-                    textLower.startsWith('.twitter')) {
+                    textLower.startsWith('.yt') || 
+                    textLower.startsWith('.youtube')) {
 
+                    // Ambil link setelah command
                     const args = text.split(' ');
                     const url = args[1];
 
-                    // Cek ada linknya gak
+                    // Validasi kalau link kosong
                     if (!url) {
-                        return sock.sendMessage(from, { text: '❌ Mana linknya kak?\nContoh: .ig https://instagram.com/...' }, { quoted: msg });
+                        return sock.sendMessage(from, { text: '❌ Mana linknya kak?\nContoh: .tt https://tiktok.com/...' }, { quoted: msg });
                     }
 
-                    await sock.sendMessage(from, { text: '⏳ Tunggu sebentar, sedang download...' }, { quoted: msg });
+                    // Kasih reaksi atau pesan tunggu
+                    await sock.sendMessage(from, { text: '⏳ Tunggu sebentar, sedang diproses...' }, { quoted: msg });
 
                     try {
-                        // Memanggil fungsi downloadSosmed (Pastikan fungsi ini sudah ada di paling bawah file)
-                        let linkVideo = await downloadSosmed(url);
+                        // Panggil fungsi downloadSosmed yang sudah kita perbaiki tadi
+                        let videoUrl = await downloadSosmed(url);
 
-                        if (!linkVideo) {
-                            return sock.sendMessage(from, { text: '❌ Gagal download. Pastikan link benar & tidak diprivate.' }, { quoted: msg });
+                        if (videoUrl) {
+                            // Kirim Videonya
+                            await sock.sendMessage(from, { 
+                                video: { url: videoUrl }, 
+                                caption: '✅ Sukses Download (No Watermark)' 
+                            }, { quoted: msg });
+                        } else {
+                            // Kalau gagal (return null)
+                            await sock.sendMessage(from, { text: '❌ Gagal download. Link mungkin private atau server sibuk.' }, { quoted: msg });
                         }
-
-                        // Kirim Videonya
-                        await sock.sendMessage(from, {
-                            video: { url: linkVideo },
-                            caption: '✅ Nih kak videonya (No Watermark)'
-                        }, { quoted: msg });
-
                     } catch (err) {
-                        console.log('Error sosmed:', err);
-                        await sock.sendMessage(from, { text: '❌ Ada error sistem saat mengambil video.' }, { quoted: msg });
+                        console.log('Error Downloader:', err);
+                        await sock.sendMessage(from, { text: '❌ Terjadi kesalahan sistem.' }, { quoted: msg });
                     }
-                    return;
+                    return; // Stop eksekusi agar tidak lanjut ke bawah
                 }
 
                 if (textLower.startsWith('.ig ')) {
