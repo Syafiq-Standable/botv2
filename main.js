@@ -1675,37 +1675,72 @@ wa.me/6289528950624
 
 connectToWhatsApp();
 
+// ============================================================
+// FITUR NSFW (MANUAL SCRAPER - ANTI ERROR)
+// ============================================================
 async function searchPornhub(query, sock, from, msg) {
-    await sock.sendMessage(from, { text: '🔍 Lagi nyari bokep... bentar...' }, { quoted: msg });
+    await sock.sendMessage(from, { text: '🔍 Sedang mencari... (Mode Manual)' }, { quoted: msg });
 
     try {
-        // Cari video berdasarkan kata kunci
-        const searchResult = await ph.searchVideo(query);
+        // 1. Tembak langsung ke website PH
+        // Kita pakai trik user-agent agar tidak diblokir
+        const { data } = await axios.get(`https://www.pornhub.com/video/search?search=${query}`, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        });
+        
+        // 2. Baca HTML-nya pakai Cheerio
+        const $ = cheerio.load(data);
+        let result = null;
 
-        if (!searchResult || searchResult.data.length === 0) {
-            return await sock.sendMessage(from, { text: '❌ Gak nemu videonya bos.' }, { quoted: msg });
+        // 3. Cari elemen video di halaman
+        // Kita loop elemen .videoBox untuk cari video pertama yang valid
+        $('.videoBox').each((i, element) => {
+            if (result) return; // Kalau sudah dapat 1, stop.
+
+            const linkElem = $(element).find('a[href*="/view_video.php"]');
+            const imgElem = $(element).find('img');
+            
+            const title = linkElem.attr('title') || $(element).find('.title a').text();
+            const href = linkElem.attr('href');
+            
+            // Ambil gambar (kadang ada di data-src atau data-thumb_url)
+            const thumb = imgElem.attr('data-src') || imgElem.attr('src') || imgElem.attr('data-thumb_url');
+            
+            const duration = $(element).find('.duration').text().trim();
+            const views = $(element).find('.views').text().trim();
+
+            if (title && href && !title.includes('MEMBER')) { // Filter iklan member
+                result = {
+                    title: title,
+                    url: 'https://www.pornhub.com' + href,
+                    thumb: thumb,
+                    duration: duration,
+                    views: views
+                };
+            }
+        });
+
+        // 4. Kirim Hasil
+        if (!result) {
+            return await sock.sendMessage(from, { text: '❌ Tidak ditemukan hasil (Mungkin server memblokir).' }, { quoted: msg });
         }
 
-        // Ambil hasil pertama (paling relevan)
-        const video = searchResult.data[0];
+        const caption = `🔞 *NSFW RESULT*\n\n` +
+                        `🎬 *Judul:* ${result.title}\n` +
+                        `⏱️ *Durasi:* ${result.duration}\n` +
+                        `👀 *Views:* ${result.views}\n` +
+                        `🔗 *Link:* ${result.url}\n\n` +
+                        `_Gunakan dengan bijak._`;
 
-        // Siapkan pesan caption
-        const caption = `🔞 *NSFW SEARCH RESULT*\n\n` +
-            `🎬 *Judul:* ${video.title}\n` +
-            `⏱️ *Durasi:* ${video.duration}\n` +
-            `👀 *Views:* ${video.views}\n` +
-            `🔗 *Link:* ${video.url}\n\n` +
-            `_Hati-hati, dosa tanggung sendiri._`;
-
-        // Kirim Gambar Thumbnail + Caption
-        // (preview biasanya ada di video.preview atau kita pakai thumbnail default)
         await sock.sendMessage(from, {
-            image: { url: video.preview || 'https://via.placeholder.com/300?text=No+Preview' },
+            image: { url: result.thumb || 'https://via.placeholder.com/300' },
             caption: caption
         }, { quoted: msg });
 
     } catch (e) {
-        console.error('NSFW Error:', e);
-        await sock.sendMessage(from, { text: '❌ Error sistem (Mungkin kena limit/internet).' }, { quoted: msg });
+        console.error('Manual Search Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Terjadi kesalahan sistem.' }, { quoted: msg });
     }
 }
