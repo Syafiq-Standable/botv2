@@ -1635,31 +1635,31 @@ wa.me/6289528950624
                         const tag = text.slice(4).trim(); // Ambil tag setelah .18 
                         if (!tag) return sock.sendMessage(from, { text: 'Tag apa bos? Contoh: .18 pussy' }, { quoted: msg });
 
-                        await nekobotManualSearch(tag, sock, from, msg);
+                        await premiumRealNSFW(tag, sock, from, msg);
                         return;
                     }
 
                     if (['.boobs', '.tits', '.dada'].includes(textLower)) {
                         if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await nekobotManualSearch('boobs', sock, from, msg);
+                        await premiumRealNSFW('boobs', sock, from, msg);
                         return;
                     }
 
                     if (['.ass', '.bokong', '.pantat'].includes(textLower)) {
                         if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await nekobotManualSearch('ass', sock, from, msg);
+                        await premiumRealNSFW('ass', sock, from, msg);
                         return;
                     }
 
                     if (['.gonewild', '.amateur', '.gw'].includes(textLower)) {
                         if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await nekobotManualSearch('gonewild', sock, from, msg);
+                        await premiumRealNSFW('gonewild', sock, from, msg);
                         return;
                     }
 
                     if (['.gif', '.nsfwgif', '.clip'].includes(textLower)) {
                         if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await nekobotManualSearch('gif', sock, from, msg);
+                        await premiumRealNSFW('gif', sock, from, msg);
                         return;
                     }
 
@@ -1969,53 +1969,80 @@ async function searchSfile(query, sock, from, msg) {
 }
 
 // ============================================================
-// NSFW REAL HUMAN MANUAL SEARCH - NEKOBOT API (2025 STABIL)
+// NSFW REAL HUMAN PREMIUM - MULTI API FALLBACK (2025 MANTEP)
 // ============================================================
-async function nekobotManualSearch(tag = 'pgif', sock, from, msg) {
-    // Mapping tag populer biar lebih akurat & variatif
+async function premiumRealNSFW(tag = 'pgif', sock, from, msg) {
+    // Mapping tag Indo + English biar lebih luas & akurat
     const tagMap = {
-        pussy: 'pussy',
-        thighs: 'thigh',
-        ass: 'ass',
-        bokong: 'ass',
-        pantat: 'ass',
-        boobs: 'boobs',
-        tits: 'boobs',
-        dada: 'boobs',
-        anal: 'anal',
-        blowjob: 'bj',
+        pussy: 'pussy', memek: 'pussy',
+        thighs: 'thighs', paha: 'thighs',
+        ass: 'ass', bokong: 'ass', pantat: 'ass', paptt: 'ass',
+        boobs: 'boobs', tits: 'boobs', tetek: 'boobs', dada: 'boobs',
+        anal: 'anal', ngentot: 'anal',
+        blowjob: 'bj', bj: 'bj', kontol: 'bj',
         milf: 'milf',
         teen: 'teen',
-        gif: 'pgif',
-        clip: 'pgif',
-        paptt: 'tits',
-        // Tambahin sendiri kalau mau lebih banyak
+        gif: 'gif', clip: 'gif', pgif: 'gif',
+        random: 'random', hot: 'random'
     };
 
-    const endpoint = tagMap[tag.toLowerCase()] || 'pgif'; // Default pgif (porn gif real hot)
+    const normalizedTag = tagMap[tag.toLowerCase()] || 'random';
     const displayTag = tag.charAt(0).toUpperCase() + tag.slice(1);
 
-    await sock.sendMessage(from, { text: `🔥 Lagi cari real hot "${displayTag}" dari Nekobot...` }, { quoted: msg });
+    await sock.sendMessage(from, { text: `🔥 Lagi cari premium real hot "${displayTag}" (HD Fresh 2025)...` }, { quoted: msg });
+
+    // Prioritas API: NIGHT API dulu (paling mantep HD real), fallback Nekobot
+    const apis = [
+        // NIGHT API - Premium real NSFW HD
+        async () => {
+            const category = normalizedTag === 'random' ? ['ass', 'boobs', 'pussy', 'thighs'][Math.floor(Math.random() * 4)] : normalizedTag;
+            const res = await axios.get(`https://api.night-api.com/images/nsfw/${category}`, { timeout: 8000 });
+            if (res.data && res.data.url) {
+                return { url: res.data.url, source: 'NIGHT API Premium' };
+            }
+            throw new Error('No result');
+        },
+        // Fallback Nekobot (kalau NIGHT limit/down)
+        async () => {
+            const type = normalizedTag === 'random' ? 'pgif' : normalizedTag;
+            const res = await axios.get(`https://nekobot.xyz/api/image?type=${type}`, { timeout: 8000 });
+            if (res.data && res.data.success && res.data.message) {
+                return { url: res.data.message, source: 'Nekobot Fallback' };
+            }
+            throw new Error('No result');
+        }
+    ];
+
+    let mediaUrl = null;
+    let source = '';
+
+    for (const api of apis) {
+        try {
+            const result = await api();
+            mediaUrl = result.url;
+            source = result.source;
+            break;
+        } catch (e) {
+            continue; // Lanjut ke fallback
+        }
+    }
+
+    if (!mediaUrl) {
+        return sock.sendMessage(from, { text: '❌ Semua API lagi limit/down nih bos. Coba lagi 5-10 menit kemudian ya!' }, { quoted: msg });
+    }
 
     try {
-        const apiUrl = `https://nekobot.xyz/api/image?type=${endpoint}`;
-        const { data } = await axios.get(apiUrl);
+        const buffer = await axios.get(mediaUrl, { responseType: 'arraybuffer', timeout: 15000 });
 
-        if (!data || !data.success || !data.message) {
-            return sock.sendMessage(from, { text: '❌ Tag lagi kosong atau API down nih bos. Coba tag lain!' }, { quoted: msg });
-        }
+        const isGif = mediaUrl.toLowerCase().includes('.gif') || normalizedTag === 'gif' || normalizedTag === 'pgif';
 
-        const mediaUrl = data.message;
-        const isGif = mediaUrl.toLowerCase().includes('.gif') || endpoint === 'pgif';
-
-        const buffer = await axios.get(mediaUrl, { responseType: 'arraybuffer' });
-
-        const caption = `🔞 *REAL HUMAN HOT - MANUAL SEARCH*\n` +
+        const caption = `🔞 *PREMIUM REAL HUMAN HOT*\n` +
             `📌 *Tag:* ${displayTag}\n` +
+            `🖼️ *Source:* ${source} (HD Fresh 2025)\n` +
             `🔗 ${mediaUrl}\n\n` +
-            `_Fresh real porn • Nekobot 2025 😈_`;
+            `_Jauh lebih mantep daripada sebelumnya! 😈💦_`;
 
-        if (isGif || endpoint === 'pgif' || endpoint === 'anal' || endpoint === 'bj') {
+        if (isGif) {
             await sock.sendMessage(from, {
                 video: buffer.data,
                 caption,
@@ -2029,7 +2056,7 @@ async function nekobotManualSearch(tag = 'pgif', sock, from, msg) {
         }
 
     } catch (e) {
-        console.error('Nekobot Manual Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Gagal ambil konten. Coba tag lain atau lagi nanti ya bos.' }, { quoted: msg });
+        console.error('Download Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Gagal download file (terlalu besar/limit). Coba tag lain ya bos.' }, { quoted: msg });
     }
 }
