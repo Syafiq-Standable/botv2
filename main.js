@@ -1638,6 +1638,15 @@ wa.me/6289528950624
                         return;
                     }
 
+                    // --- ASUPAN SHORTS (Random Video) ---
+                if (textLower === '.asupan' || textLower === '.tobrut') {
+                     if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
+                     
+                     // Panggil fungsi asupan
+                     await randomAsupan(sock, from, msg);
+                     return;
+                }
+
                     // --- COMMAND NSFW (PORNHUB) ---
                     if (textLower.startsWith('.ph') || textLower.startsWith('.bokep')) {
                         // Cek apakah user adalah owner (OPSIONAL - Biar aman)
@@ -1672,6 +1681,71 @@ wa.me/6289528950624
 // ============================================================
 
 connectToWhatsApp();
+
+// ============================================================
+// FITUR ASUPAN (RANDOM VIDEO PENDEK/TIKTOK)
+// ============================================================
+async function randomAsupan(sock, from, msg) {
+    await sock.sendMessage(from, { text: '🔄 Lagi nyari asupan video pendek...' }, { quoted: msg });
+
+    try {
+        // 1. Cari video dengan kata kunci "Tiktok Porn" biar durasinya pendek & vertikal
+        // Kita random page biar videonya gak itu-itu aja (Page 1 sampai 5)
+        const randomPage = Math.floor(Math.random() * 5) + 1;
+        const searchUrl = `https://www.xnxx.com/search/${encodeURIComponent('tiktok porn')}/${randomPage}`;
+
+        const { data } = await axios.get(searchUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
+        });
+
+        const $ = cheerio.load(data);
+        const videos = [];
+
+        // 2. Kumpulin semua link video dari hasil pencarian
+        $('.thumb-block').each((i, element) => {
+            const link = 'https://www.xnxx.com' + $(element).find('.thumb-under a').attr('href');
+            const title = $(element).find('.thumb-under a').attr('title');
+            if (link && title) videos.push({ title, link });
+        });
+
+        if (videos.length === 0) return sock.sendMessage(from, { text: '❌ Asupan kosong.' }, { quoted: msg });
+
+        // 3. Pilih 1 video secara acak
+        const randomVideo = videos[Math.floor(Math.random() * videos.length)];
+
+        // 4. Masuk ke halaman video buat ambil link MP4 aslinya (Scraping Tahap 2)
+        const videoPage = await axios.get(randomVideo.link);
+        const $$ = cheerio.load(videoPage.data);
+        
+        // Cari URL video (biasanya di script JSON atau elemen HTML5)
+        // XNXX sering taruh link high quality di variable 'html5player.setVideoUrlHigh'
+        const scriptContent = $$('script:contains("html5player.setVideoUrlHigh")').html();
+        
+        let mp4Url = '';
+        if (scriptContent) {
+            const match = scriptContent.match(/html5player\.setVideoUrlHigh\('([^']+)'\)/);
+            if (match) mp4Url = match[1];
+        }
+
+        if (!mp4Url) {
+            return sock.sendMessage(from, { text: '❌ Gagal ngambil file videonya.' }, { quoted: msg });
+        }
+
+        // 5. Download Video ke Buffer (Memory)
+        const videoBuffer = await axios.get(mp4Url, { responseType: 'arraybuffer' });
+
+        // 6. Kirim sebagai Video WhatsApp
+        await sock.sendMessage(from, {
+            video: videoBuffer.data,
+            caption: `🔞 *ASUPAN RANDOM*\n🎬 ${randomVideo.title}\n\n_Video pendek dikirim otomatis._`,
+            gifPlayback: false // Set true kalau mau jadi GIF
+        }, { quoted: msg });
+
+    } catch (e) {
+        console.error('Asupan Error:', e);
+        await sock.sendMessage(from, { text: '❌ Gagal: ' + e.message }, { quoted: msg });
+    }
+}
 
 // ============================================================
 // FITUR NSFW (ANTI-BLOKIR / JALUR TIKUS)
