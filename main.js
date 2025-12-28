@@ -1621,10 +1621,15 @@ wa.me/6289528950624
                         return;
                     }
 
-                    // Asupan TikTok Ukhti
-                    if (['.ukhti', '.hijab', '.asupan'].includes(textLower)) {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await asupanTikTok(sock, from, msg);
+                    // --- ASUPAN TIKTOK CUSTOM SEARCH ---
+                    if (textLower.startsWith('.asupan') || textLower.startsWith('.ukhti') || textLower.startsWith('.hijab')) {
+                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Khusus Owner/Private chat!' }, { quoted: msg });
+
+                        // Ambil keyword setelah command (kalau ada)
+                        let keyword = text.split(' ').slice(1).join(' ');
+                        if (keyword === '') keyword = null; // Biar random kalau nggak ada keyword
+
+                        await asupanTikTokCustom(keyword, sock, from, msg);
                         return;
                     }
 
@@ -1758,26 +1763,31 @@ async function searchSpankbang(query, sock, from, msg) {
 }
 
 // ============================================================
-// FITUR ASUPAN TIKTOK (VERSI FIX LINK BUNTUNG)
+// FITUR ASUPAN TIKTOK CUSTOM SEARCH (REAL UKHTI VIRAL INDO)
 // ============================================================
-async function asupanTikTok(sock, from, msg) {
-    await sock.sendMessage(from, { text: '🔄 Lagi nyari Ukhti-ukhti viral...' }, { quoted: msg });
+async function asupanTikTokCustom(keyword = null, sock, from, msg) {
+    await sock.sendMessage(from, { text: '🔄 Lagi nyari asupan ukhti viral TikTok' + (keyword ? ` "${keyword}"` : '') + '...' }, { quoted: msg });
 
     try {
-        const keywords = [
-            'ukhti gemoy viral', 'jilbab sempit hot', 'cewe tiktok viral montok', 'ukhti tobrut goyang',
-            'jilboobs tiktok 2025', 'asupan hijab seksi', 'cewek kacamata tobrut viral',
-            'hijab montok tiktok', 'ukhti cantik goyang', 'goyang hijab viral hot',
-            'ukhti seksi non nude', 'asupan ukhti bahenol', 'tiktok hijab viral gemas',
-            'cewek hijab body goals', 'ukhti jilbab ketat viral', 'asupan tiktok ukhti 2025'
-        ];
+        let finalQuery;
 
-        const randomQuery = keywords[Math.floor(Math.random() * keywords.length)];
+        if (keyword) {
+            // Kalau ada keyword custom dari user
+            finalQuery = keyword.toLowerCase().trim();
+        } else {
+            // Kalau nggak ada (cuma .asupan), pake random dari list default
+            const defaultKeywords = [
+                'ukhti gemoy viral', 'jilbab sempit hot', 'cewek hijab montok', 'ukhti tobrut goyang',
+                'asupan hijab seksi', 'hijab viral indo', 'ukhti cantik body goals', 'goyang hijab hot',
+                'ukhti kacamata tobrut', 'jilboobs tiktok 2025', 'asupan ukhti bahenol'
+            ];
+            finalQuery = defaultKeywords[Math.floor(Math.random() * defaultKeywords.length)];
+        }
 
-        // Request ke API TikWM
+        // Request ke tikwm.com API search
         const { data } = await axios.post('https://www.tikwm.com/api/feed/search', {
-            keywords: randomQuery,
-            count: 12,
+            keywords: finalQuery,
+            count: 15,      // Lebih banyak biar peluang nemu hot lebih besar
             cursor: 0,
             web: 1,
             hd: 1
@@ -1788,38 +1798,31 @@ async function asupanTikTok(sock, from, msg) {
             }
         });
 
-        if (!data || !data.data || !data.data.videos) {
-            return sock.sendMessage(from, { text: '❌ Lagi gak nemu asupan nih.' }, { quoted: msg });
+        if (!data?.data?.videos || data.data.videos.length === 0) {
+            return sock.sendMessage(from, { text: `❌ Gak nemu asupan ukhti dengan keyword "${finalQuery}" nih bos. Coba keyword lain!` }, { quoted: msg });
         }
 
-        const videos = data.data.videos;
+        const videos = data.data.videos.filter(v => v.play); // Pastikan ada link video
         const randomVideo = videos[Math.floor(Math.random() * videos.length)];
 
-        // --- PERBAIKAN LINK DISINI ---
         let videoUrl = randomVideo.play;
-
-        // Kalau linknya gak ada 'https', kita tempel domain depannya
         if (!videoUrl.startsWith('http')) {
             videoUrl = 'https://www.tikwm.com' + videoUrl;
         }
 
-        // --- DOWNLOAD DULU KE BUFFER (Lebih Aman) ---
-        // Kita download videonya ke memory dulu, baru kirim.
-        // Ini mencegah error "file not found" atau "link expired".
+        // Download ke buffer biar aman kirim WA
         const bufferVideo = await axios.get(videoUrl, {
             responseType: 'arraybuffer',
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)'
-            }
+            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
         });
 
-        const caption = `🧕 *ASUPAN TIKTOK*\n` +
-            `📝 *Caption:* ${randomVideo.title}\n` +
-            `👀 *Views:* ${randomVideo.play_count}\n` +
-            `👤 *User:* ${randomVideo.author.nickname}\n\n` +
-            `_Mode: Santuy (Non-Nude)_`;
+        const caption = `🧕 *ASUPAN UKHTI TIKTOK VIRAL*\n` +
+            `🔍 *Keyword:* ${finalQuery}\n` +
+            `📝 *Caption:* ${randomVideo.title || 'Ukhti hot viral'}\n` +
+            `👀 *Views:* ${randomVideo.play_count?.toLocaleString() || 'Banyak'}\n` +
+            `👤 *User:* @${randomVideo.author.nickname}\n\n` +
+            `_Real Indo • Santuy turning on 😏🇮🇩_`;
 
-        // Kirim Video dari Buffer
         await sock.sendMessage(from, {
             video: bufferVideo.data,
             caption: caption,
@@ -1827,8 +1830,8 @@ async function asupanTikTok(sock, from, msg) {
         }, { quoted: msg });
 
     } catch (e) {
-        console.error('Asupan TikTok Error:', e);
-        await sock.sendMessage(from, { text: '❌ Gagal: ' + e.message }, { quoted: msg });
+        console.error('Asupan Custom Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Gagal ambil asupan: ' + e.message + '. Coba lagi ya bos!' }, { quoted: msg });
     }
 }
 
