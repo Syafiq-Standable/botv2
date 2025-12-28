@@ -1071,7 +1071,7 @@ wa.me/6289528950624
                 // ============================================================
                 // COMMAND: .hd (Convert Document Video to HD Video)
                 // ============================================================
-                if (textLower === '.profile') {
+                if (textLower === '.hd') {
                     try {
                         // 1. Ambil data pesan (apakah dari chat langsung atau reply/quoted)
                         const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
