@@ -1073,44 +1073,40 @@ wa.me/6289528950624
                 // ============================================================
                 if (textLower === '.hd') {
                     try {
-                        // Ambil pesan yang di-reply atau pesan itu sendiri
                         const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-
-                        // Cari documentMessage di berbagai kemungkinan struktur
                         const doc = msg.message?.documentWithCaptionMessage?.message?.documentMessage ||
                             msg.message?.documentMessage ||
                             quoted?.documentMessage ||
                             quoted?.documentWithCaptionMessage?.message?.documentMessage;
 
-                        if (!doc) return sock.sendMessage(from, { text: '❌ Mana file videonya ngab? Tag/reply dokumen videonya ya.' });
-                        if (!doc.mimetype.includes('video')) return sock.sendMessage(from, { text: '❌ Itu bukan video, SAM gak bisa proses.' });
+                        if (!doc) return sock.sendMessage(from, { text: '❌ Mana file videonya ngab?' });
+                        if (!doc.mimetype.includes('video')) return sock.sendMessage(from, { text: '❌ Harus format video ya!' });
 
-                        await sock.sendMessage(from, { text: '⏳ Sedang memproses HD... Kalau error "bad decrypt", coba kirim ulang filenya ya!' });
+                        // Langsung kirim status proses
+                        await sock.sendMessage(from, { text: '⏳ *BOT SAM* sedang memproses HD...' }, { quoted: msg });
 
-                        // DOWNLOAD CONTENT
-                        // Tips: downloadContentFromMessage butuh object message yang utuh
+                        // OPTIMASI: Pakai Array untuk kumpulin chunk (lebih cepat dari Buffer.concat di dalam loop)
                         const stream = await downloadContentFromMessage(doc, 'document');
-                        // Ubah 'video' jadi 'document' kalau filenya dikirim sebagai dokumen
-
-                        let buffer = Buffer.from([]);
+                        let chunks = [];
                         for await (const chunk of stream) {
-                            buffer = Buffer.concat([buffer, chunk]);
+                            chunks.push(chunk);
                         }
+                        const finalBuffer = Buffer.concat(chunks);
 
-                        if (buffer.length === 0) throw new Error('Buffer kosong');
+                        if (finalBuffer.length === 0) throw new Error('Buffer kosong');
 
+                        // KIRIM BALIK
                         await sock.sendMessage(from, {
-                            video: buffer,
+                            video: finalBuffer,
                             caption: '✅ *Video HD Sukses!*',
                             mimetype: 'video/mp4'
                         }, { quoted: msg });
 
+                        // Bersihkan memori
+                        chunks = [];
                     } catch (err) {
                         console.error('Error Fitur HD:', err);
-                        // Pesan edukasi buat user
-                        await sock.sendMessage(from, {
-                            text: '❌ Gagal dekripsi file. Biasanya karena filenya udah kelamaan atau corrupt. Coba kirim ulang (upload baru) dokumen videonya terus ketik .hd lagi.'
-                        });
+                        await sock.sendMessage(from, { text: '❌ Gagal. Coba upload ulang filenya terus ketik .hd lagi.' });
                     }
                 }
 
