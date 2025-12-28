@@ -1634,8 +1634,8 @@ wa.me/6289528950624
                     }
 
                         // DUCKDUCK GO
-                    if (textLower.startsWith('.foto18 ') || textLower.startsWith('.nsfwimg ')) {
-                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Khusus Owner/Private!' }, { quoted: msg });
+                    if (textLower.startsWith('.18 ') || textLower.startsWith('.nsfw ')) {
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner/Private!' }, { quoted: msg });
 
                         const keyword = text.split(' ').slice(1).join(' ') || 'hot real nsfw';
                         await duckduckgoNSFWImage(keyword, sock, from, msg);
@@ -1643,7 +1643,7 @@ wa.me/6289528950624
                     }
 
                     // Random tanpa keyword
-                    if (textLower === '.foto18' || textLower === '.nsfwimg') {
+                    if (textLower === '.18' || textLower === '.nsfw') {
                         await duckduckgoNSFWImage('nsfw real hot', sock, from, msg);
                         return;
                     }
