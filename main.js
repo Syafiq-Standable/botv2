@@ -234,50 +234,55 @@ function grantRental(scope, id, tier, days, grantedBy, context = 'auto') {
 }
 
 function getRental(jid) {
-    const rentals = loadRentals();
+    try {
+        // Load semua data rental
+        const rentals = loadRentals();
 
-    // 1. Cek JID lengkap
-    if (rentals[jid]) {
-        if (rentals[jid].expires > Date.now()) return rentals[jid];
-    }
-
-    // 2. Jika JID mengandung @, coba tanpa domain
-    if (jid.includes('@')) {
-        const jidWithoutDomain = jid.split('@')[0];
-        if (rentals[jidWithoutDomain]) {
-            const rentalData = rentals[jidWithoutDomain];
+        // 1. Coba dengan JID lengkap terlebih dahulu
+        if (rentals[jid]) {
+            const rentalData = rentals[jid];
             if (rentalData.expires > Date.now()) {
                 return rentalData;
             }
         }
-    }
 
-    // 3. Coba semua kemungkinan format
-    for (const key in rentals) {
-        // Jika key tanpa domain (format lama)
-        if (!key.includes('@')) {
-            // Coba cocokkan dengan format lengkap
-            let possibleMatch = false;
-
-            if (jid.endsWith('@g.us') && key === jid.replace('@g.us', '')) {
-                possibleMatch = true;
-            } else if (jid.endsWith('@s.whatsapp.net') && key === jid.replace('@s.whatsapp.net', '')) {
-                possibleMatch = true;
-            }
-
-            if (possibleMatch) {
-                const rentalData = rentals[key];
+        // 2. Jika JID mengandung @, coba tanpa domain (fallback buat database lama)
+        if (jid.includes('@')) {
+            const jidWithoutDomain = jid.split('@')[0];
+            if (rentals[jidWithoutDomain]) {
+                const rentalData = rentals[jidWithoutDomain];
                 if (rentalData.expires > Date.now()) {
                     return rentalData;
                 }
             }
         }
+
+        // 3. Cek kemungkinan format lain (manual matching)
+        for (const key in rentals) {
+            if (!key.includes('@')) {
+                let possibleMatch = false;
+                if (jid.endsWith('@g.us') && key === jid.replace('@g.us', '')) {
+                    possibleMatch = true;
+                } else if (jid.endsWith('@s.whatsapp.net') && key === jid.replace('@s.whatsapp.net', '')) {
+                    possibleMatch = true;
+                }
+
+                if (possibleMatch) {
+                    const rentalData = rentals[key];
+                    if (rentalData.expires > Date.now()) {
+                        return rentalData;
+                    }
+                }
+            }
+        }
+
+        // 4. Tidak ditemukan atau sudah expired
+        return false;
+    } catch (e) {
+        console.error('Error in getRental:', e.message);
+        return false;
     }
-
-
-    // 4. Tidak ditemukan atau sudah expired
-    return false;
-};
+}
 
 const hasAccessForCommand = (command, isGroup, sender, groupId, sock) => {
     const senderId = sender.split('@')[0];
@@ -1041,6 +1046,8 @@ wa.me/6289528950624
                     return;
                 }
 
+
+
                 if (textLower === '.profile') {
                     try {
                         const users = loadUsers();
@@ -1059,6 +1066,68 @@ wa.me/6289528950624
                         await sock.sendMessage(from, { text: '❌ Gagal mendapatkan profile.' });
                     }
                     return;
+                }
+
+                // ============================================================
+                // COMMAND: .hd (Convert Document Video to HD Video)
+                // ============================================================
+                if (textLower === '.profile') {
+                    try {
+                        // 1. Ambil data pesan (apakah dari chat langsung atau reply/quoted)
+                        const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
+
+                        // Cek semua kemungkinan posisi documentMessage
+                        const docMsg = msg.message?.documentWithCaptionMessage?.message?.documentMessage ||
+                            msg.message?.documentMessage ||
+                            quoted?.documentMessage ||
+                            quoted?.documentWithCaptionMessage?.message?.documentMessage;
+
+                        // 2. Validasi: Harus berupa dokumen
+                        if (!docMsg) {
+                            return await sock.sendMessage(from, {
+                                text: `Tag atau kirim video dokumen dengan caption *${prefix}hd* ya ngab!`
+                            }, { quoted: msg });
+                        }
+
+                        // 3. Validasi: Harus format video
+                        if (!docMsg.mimetype || !docMsg.mimetype.includes('video')) {
+                            return await sock.sendMessage(from, {
+                                text: '❌ Itu bukan file video, BOT SAM nggak bisa proses jadi HD.'
+                            }, { quoted: msg });
+                        }
+
+                        // 4. Validasi: Size Limit 25MB (Biar VPS nggak sesek)
+                        const sizeInMB = docMsg.fileLength / (1024 * 1024);
+                        if (sizeInMB > 25) {
+                            return await sock.sendMessage(from, {
+                                text: `⚠️ Kegedean ngab! Maksimal 25MB, file kamu sekitar ${sizeInMB.toFixed(2)}MB.`
+                            }, { quoted: msg });
+                        }
+
+                        // Beri feedback biar user nggak ngira bot mati
+                        await sock.sendMessage(from, { text: '⏳ Sedang memproses kualitas HD... Mohon tunggu.' }, { quoted: msg });
+
+                        // 5. Download konten dari server WhatsApp
+                        const stream = await downloadContentFromMessage(docMsg, 'video');
+                        let buffer = Buffer.from([]);
+                        for await (const chunk of stream) {
+                            buffer = Buffer.concat([buffer, chunk]);
+                        }
+
+                        // 6. Kirim balik sebagai pesan Video biasa
+                        await sock.sendMessage(from, {
+                            video: buffer,
+                            caption: `✅ *Video HD Success*\n\nFile: ${docMsg.fileName || 'Video_HD.mp4'}\nSize: ${sizeInMB.toFixed(2)}MB\n\n_Silakan simpan ke galeri dan upload ke SW!_`,
+                            mimetype: 'video/mp4',
+                            fileName: docMsg.fileName || 'video.mp4'
+                        }, { quoted: msg });
+
+                    } catch (err) {
+                        console.error('Error Fitur HD:', err);
+                        await sock.sendMessage(from, {
+                            text: '❌ Waduh, sistem BOT SAM lagi error pas mau convert video HD.'
+                        }, { quoted: msg });
+                    }
                 }
 
                 // GROUP COMMANDS
@@ -1638,6 +1707,8 @@ wa.me/6289528950624
                             await sock.sendMessage(from, { text: `⚠️ Perintah ${command} sudah diganti dengan *${prefix}addrent* dan *${prefix}delrent*.` }, { quoted: msg });
                             return;
                     }
+
+
                     // AUDIT COMMAND
                     if (textLower === '.checkall') {
                         if (!isOperator(senderId)) return;
