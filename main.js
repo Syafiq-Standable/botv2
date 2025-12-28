@@ -1623,38 +1623,38 @@ wa.me/6289528950624
 
                     // Asupan TikTok Ukhti
                     if (['.ukhti', '.hijab', '.asupan'].includes(textLower)) {
-                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
                         await asupanTikTok(sock, from, msg);
                         return;
                     }
 
                     // Reddit Real NSFW Commands
                     if (['.nsfw', '.real', '.hot'].includes(textLower)) {
-                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
                         await redditRealNSFW('random', sock, from, msg);
                         return;
                     }
 
                     if (['.boobs', '.tits', '.dada'].includes(textLower)) {
-                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
                         await redditRealNSFW('boobs', sock, from, msg);
                         return;
                     }
 
                     if (['.ass', '.bokong', '.pantat'].includes(textLower)) {
-                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
                         await redditRealNSFW('ass', sock, from, msg);
                         return;
                     }
 
                     if (['.gonewild', '.amateur', '.gw'].includes(textLower)) {
-                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
                         await redditRealNSFW('gonewild', sock, from, msg);
                         return;
                     }
 
                     if (['.gif', '.nsfwgif', '.clip'].includes(textLower)) {
-                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
                         await redditRealNSFW('gif', sock, from, msg);
                         return;
                     }
