@@ -1692,26 +1692,25 @@ wa.me/6289528950624
 connectToWhatsApp();
 
 // ============================================================
-// FITUR ASUPAN TIKTOK (SOFT / UKHTI / TOBRUT)
+// FITUR ASUPAN TIKTOK (VERSI FIX LINK BUNTUNG)
 // ============================================================
 async function asupanTikTok(sock, from, msg) {
     await sock.sendMessage(from, { text: '🔄 Lagi nyari Ukhti-ukhti viral...' }, { quoted: msg });
 
     try {
-        // Daftar kata kunci "Pemersatu Bangsa"
-        // Bot akan pilih satu secara acak biar gak bosen
         const keywords = [
-            'ukhti gemoy',
-            'jilbab sempit',
-            'cewe tiktok viral',
-            'ukhti tobrut',
+            'ukhti gemoy', 
+            'jilbab sempit', 
+            'cewe tiktok viral', 
+            'ukhti tobrut', 
             'jilboobs tiktok',
-            'asupan hijab'
+            'asupan hijab',
+            'cewek kacamata tobrut'
         ];
-
+        
         const randomQuery = keywords[Math.floor(Math.random() * keywords.length)];
-
-        // Request ke API TikTok (TikWM)
+        
+        // Request ke API TikWM
         const { data } = await axios.post('https://www.tikwm.com/api/feed/search', {
             keywords: randomQuery,
             count: 12,
@@ -1726,24 +1725,39 @@ async function asupanTikTok(sock, from, msg) {
         });
 
         if (!data || !data.data || !data.data.videos) {
-            return sock.sendMessage(from, { text: '❌ Lagi gak nemu asupan nih, server TikTok sibuk.' }, { quoted: msg });
+            return sock.sendMessage(from, { text: '❌ Lagi gak nemu asupan nih.' }, { quoted: msg });
         }
 
-        // Ambil video secara acak dari hasil pencarian
         const videos = data.data.videos;
         const randomVideo = videos[Math.floor(Math.random() * videos.length)];
 
-        // Download Video (Tanpa Watermark)
-        const videoUrl = randomVideo.play; // Link video no-wm
-        const caption = `🧕 *ASUPAN TIKTOK*\n` +
-            `📝 *Caption:* ${randomVideo.title}\n` +
-            `👀 *Views:* ${randomVideo.play_count}\n` +
-            `👤 *User:* ${randomVideo.author.nickname}\n\n` +
-            `_Mode: Santuy (Non-Nude)_`;
+        // --- PERBAIKAN LINK DISINI ---
+        let videoUrl = randomVideo.play;
+        
+        // Kalau linknya gak ada 'https', kita tempel domain depannya
+        if (!videoUrl.startsWith('http')) {
+            videoUrl = 'https://www.tikwm.com' + videoUrl;
+        }
 
-        // Kirim Video
-        await sock.sendMessage(from, {
-            video: { url: videoUrl },
+        // --- DOWNLOAD DULU KE BUFFER (Lebih Aman) ---
+        // Kita download videonya ke memory dulu, baru kirim.
+        // Ini mencegah error "file not found" atau "link expired".
+        const bufferVideo = await axios.get(videoUrl, { 
+            responseType: 'arraybuffer',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)'
+            }
+        });
+
+        const caption = `🧕 *ASUPAN TIKTOK*\n` +
+                        `📝 *Caption:* ${randomVideo.title}\n` +
+                        `👀 *Views:* ${randomVideo.play_count}\n` +
+                        `👤 *User:* ${randomVideo.author.nickname}\n\n` +
+                        `_Mode: Santuy (Non-Nude)_`;
+
+        // Kirim Video dari Buffer
+        await sock.sendMessage(from, { 
+            video: bufferVideo.data, 
             caption: caption,
             gifPlayback: false
         }, { quoted: msg });
