@@ -1026,7 +1026,6 @@ wa.me/6289528950624
                     }
 
                     // --- COMMAND NSFW (PORNHUB) ---
-                    if (isGroup) return reply('❌ Fitur nakal cuma bisa di Private Chat!');
                     if (textLower.startsWith('.ph') || textLower.startsWith('.bokep')) {
                         // Cek apakah user adalah owner (OPSIONAL - Biar aman)
                         // if (!isCreator) return reply('❌ Fitur ini khusus Owner demi keamanan nomor.');
