@@ -805,7 +805,7 @@ async function connectToWhatsApp() {
 
 ╭───「 *🛠️ TOOLS & EDIT* 」
 │ ✦ *.s* _Stiker Maker_
-│ ✦ *.hd* _Video to HD_
+│ ✦ *.hd* _SW HD (reply ke document video)_
 │ ✦ *.qrgen* _Create QR Code_
 │ ✦ *.toimg* _Stiker to Image_
 ╰───✇
@@ -853,34 +853,42 @@ async function connectToWhatsApp() {
                 // ============================================
                 // BARU: .menuop (Menu Khusus Operator - DARK MODE STYLE)
                 // ============================================
-                if (textLower === '.menuop') {
+                if (textLower === '.menu18') {
                     // Cek validasi Operator
                     if (!isOperator(sender.split('@')[0])) {
                         return sock.sendMessage(from, { text: '⚠️ *ACCESS DENIED* \nMenu ini dikunci khusus Operator.' }, { quoted: msg });
                     }
 
                     const menuOpText = `
-░█▀▀░█▀█░█▄█░░
-░▀▀█░█▀█░█░█░░
-░▀▀▀░▀░▀░▀░▀░░
-*OPERATOR DASHBOARD* 🛠️
 
-╭──「 *💸 RENTAL SYSTEM* 」
-│ 🟢 *.addrent* _<hari>_
-│ 🔴 *.delrent* _<id>_
-│ 📋 *.listrent* _Check Active_
-╰──────────────⳹
-
-╭──「 *🔞 HIDDEN SEARCH* 」
-│ 🔍 *.sfile* _Search File_
-│ 💃 *.asupan* _TikTok Random_
-│ 📺 *.dood* _DoodStream_
-│ 🔞 *.xv* _XVideos_
-╰──────────────⳹
-
-*Note:*
-_Gunakan fitur hidden dengan bijak._
-_Log aktivitas tercatat sistem._
+╭───「 🔥 HOT & RANDOM 」
+│ ✦ .nsfw      Random Hot Real NSFW
+│ ✦ .real      Same seperti .nsfw
+│ ✦ .hot       Random konten viral panas
+╰───✇
+╭───「 🫦 BODY FOCUS 」
+│ ✦ .boobs     Big Boobs / Tits Real
+│ ✦ .tits      Sama seperti .boobs
+│ ✦ .dada      Big boobs Indo style
+│ ✦ .ass       Perfect Ass / PAWG
+│ ✦ .bokong    Pantat montok real
+│ ✦ .pantat    Sama seperti .ass
+╰───✇
+╭───「 📸 AMATEUR & SELCA 」
+│ ✦ .gonewild  GoneWild / Amateur Real
+│ ✦ .amateur   Konten amateur selfie
+│ ✦ .gw        GoneWild style
+╰───✇
+╭───「 🎥 SHORT CLIP & GIF 」
+│ ✦ .gif       NSFW GIF / Clip pendek real
+│ ✦ .nsfwgif   Sama seperti .gif
+│ ✦ .clip      Video pendek hot real
+╰───✇
+╭───「 🧕 ASUPAN SOFT (NON-NUDE) 」
+│ ✦ .ukhti     Ukhti viral TikTok gemoy
+│ ✦ .hijab     Hijab tobrut / jilboobs soft
+│ ✦ .asupan    Asupan cewek TikTok santuy
+╰───✇
 `.trim();
 
                     await sock.sendMessage(from, { text: menuOpText }, { quoted: msg });
@@ -1613,12 +1621,41 @@ wa.me/6289528950624
                         return;
                     }
 
-                    // --- ASUPAN UKHTI (TikTok Soft) ---
-                    if (textLower === '.ukhti' || textLower === '.hijab') {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
-
-                        // Panggil fungsi asupanTikTok
+                    // Asupan TikTok Ukhti
+                    if (['.ukhti', '.hijab', '.asupan'].includes(textLower)) {
+                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
                         await asupanTikTok(sock, from, msg);
+                        return;
+                    }
+
+                    // Reddit Real NSFW Commands
+                    if (['.nsfw', '.real', '.hot'].includes(textLower)) {
+                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
+                        await redditRealNSFW('random', sock, from, msg);
+                        return;
+                    }
+
+                    if (['.boobs', '.tits', '.dada'].includes(textLower)) {
+                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
+                        await redditRealNSFW('boobs', sock, from, msg);
+                        return;
+                    }
+
+                    if (['.ass', '.bokong', '.pantat'].includes(textLower)) {
+                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
+                        await redditRealNSFW('ass', sock, from, msg);
+                        return;
+                    }
+
+                    if (['.gonewild', '.amateur', '.gw'].includes(textLower)) {
+                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
+                        await redditRealNSFW('gonewild', sock, from, msg);
+                        return;
+                    }
+
+                    if (['.gif', '.nsfwgif', '.clip'].includes(textLower)) {
+                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
+                        await redditRealNSFW('gif', sock, from, msg);
                         return;
                     }
 
@@ -1924,5 +1961,105 @@ async function searchSfile(query, sock, from, msg) {
     } catch (e) {
         console.error('Sfile Error:', e.message);
         await sock.sendMessage(from, { text: '❌ Error scraping Sfile.' }, { quoted: msg });
+    }
+}
+
+// Reddit Real NSFW (Main Function)
+async function redditRealNSFW(type = 'random', sock, from, msg) {
+    let subreddits = '';
+    let displayName = '';
+
+    switch (type) {
+        case 'random':
+            subreddits = 'nsfw+realgirls+gonewild+nsfw_gif+amateur+LegalTeens+collegesluts+hotchicks';
+            displayName = 'Random Hot Real NSFW';
+            break;
+        case 'boobs':
+            subreddits = 'boobs+bigboobs+tits+BiggerThanYouThought+bustypetite+NaturalTits';
+            displayName = 'Big Boobs & Busty Real';
+            break;
+        case 'ass':
+            subreddits = 'ass+paag+asstastic+TheBestAsses+buttsharpies';
+            displayName = 'Perfect Ass Real';
+            break;
+        case 'gonewild':
+            subreddits = 'gonewild+realgirls+gwpublic+AmateurGoneWild';
+            displayName = 'GoneWild & Amateur Real';
+            break;
+        case 'gif':
+            subreddits = 'nsfw_gif+porn_gifs+cumsluts+60fpsporn+nsfw_gifs';
+            displayName = 'NSFW GIF & Short Real Clip';
+            break;
+        default:
+            subreddits = 'nsfw+realgirls+gonewild';
+            displayName = 'Random Real NSFW';
+    }
+
+    await sock.sendMessage(from, { text: `🔥 Lagi ambil konten real hot dari r/${displayName}...` }, { quoted: msg });
+
+    try {
+        const url = `https://www.reddit.com/r/${subreddits}/hot.json?limit=70`;
+
+        const { data } = await axios.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
+            }
+        });
+
+        const posts = data.data.children
+            .filter(p => !p.data.stickied && p.data.over_18)
+            .map(p => p.data);
+
+        if (posts.length === 0) {
+            return sock.sendMessage(from, { text: '❌ Subreddit lagi sepi, coba lagi nanti ya.' }, { quoted: msg });
+        }
+
+        // Prioritas media direct
+        let validPosts = posts.filter(p => {
+            const url = p.url.toLowerCase();
+            return url.match(/\.(jpg|jpeg|png|gif|mp4)$/) ||
+                p.is_video ||
+                (p.preview?.reddit_video_preview?.fallback_url);
+        });
+
+        if (validPosts.length === 0) validPosts = posts;
+
+        const post = validPosts[Math.floor(Math.random() * validPosts.length)];
+
+        let mediaUrl = post.url;
+        let isVideo = false;
+
+        if (post.is_video || post.secure_media?.reddit_video) {
+            mediaUrl = post.secure_media?.reddit_video?.fallback_url ||
+                post.preview?.reddit_video_preview?.fallback_url ||
+                post.media?.reddit_video?.fallback_url;
+            isVideo = true;
+        }
+
+        const buffer = await axios.get(mediaUrl, { responseType: 'arraybuffer' });
+
+        const caption = `🔞 *REAL HUMAN NSFW - REDDIT*\n` +
+            `📌 *Subreddit:* r/${displayName}\n` +
+            `🎬 *Title:* ${post.title.substring(0, 120)}\n` +
+            `👍 *Upvotes:* ${post.ups.toLocaleString()}\n` +
+            `🔗 https://reddit.com${post.permalink}\n\n` +
+            `_Fresh daily upload - 100% Real Human 😈_`;
+
+        if (isVideo || mediaUrl.endsWith('.mp4')) {
+            await sock.sendMessage(from, {
+                video: buffer.data,
+                caption,
+                gifPlayback: false
+            }, { quoted: msg });
+        } else {
+            await sock.sendMessage(from, {
+                image: buffer.data,
+                caption
+            }, { quoted: msg });
+        }
+
+    } catch (e) {
+        console.error('Reddit NSFW Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Gagal ambil konten (rate limit/block). Tunggu 1-2 menit lalu coba lagi ya bos.' }, { quoted: msg });
     }
 }
