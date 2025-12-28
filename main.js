@@ -1628,10 +1628,14 @@ wa.me/6289528950624
                         return;
                     }
 
-                    // Reddit Real NSFW Commands
-                    if (['.nsfw', '.real', '.hot'].includes(textLower)) {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
-                        await redditRealNSFW('random', sock, from, msg);
+                    // --- MANUAL SEARCH REAL NSFW ---
+                    if (textLower.startsWith('.18 ')) {
+                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Fitur ini khusus Owner/Private chat!' }, { quoted: msg });
+
+                        const tag = text.slice(4).trim(); // Ambil tag setelah .18 
+                        if (!tag) return sock.sendMessage(from, { text: 'Tag apa bos? Contoh: .18 pussy' }, { quoted: msg });
+
+                        await nekobotManualSearch(tag, sock, from, msg);
                         return;
                     }
 
@@ -1964,92 +1968,58 @@ async function searchSfile(query, sock, from, msg) {
     }
 }
 
-// Reddit Real NSFW (Main Function)
-async function redditRealNSFW(type = 'random', sock, from, msg) {
-    let subreddits = '';
-    let displayName = '';
+// ============================================================
+// NSFW REAL HUMAN MANUAL SEARCH - NEKOBOT API (2025 STABIL)
+// ============================================================
+async function nekobotManualSearch(tag = 'pgif', sock, from, msg) {
+    // Mapping tag populer biar lebih akurat & variatif
+    const tagMap = {
+        pussy: 'pussy',
+        thighs: 'thigh',
+        ass: 'ass',
+        bokong: 'ass',
+        pantat: 'ass',
+        boobs: 'boobs',
+        tits: 'boobs',
+        dada: 'boobs',
+        anal: 'anal',
+        blowjob: 'bj',
+        milf: 'milf',
+        teen: 'teen',
+        gif: 'pgif',
+        clip: 'pgif',
+        paptt: 'tits',
+        // Tambahin sendiri kalau mau lebih banyak
+    };
 
-    switch (type) {
-        case 'random':
-            subreddits = 'nsfw+realgirls+gonewild+nsfw_gif+amateur+LegalTeens+collegesluts+hotchicks';
-            displayName = 'Random Hot Real NSFW';
-            break;
-        case 'boobs':
-            subreddits = 'boobs+bigboobs+tits+BiggerThanYouThought+bustypetite+NaturalTits';
-            displayName = 'Big Boobs & Busty Real';
-            break;
-        case 'ass':
-            subreddits = 'ass+paag+asstastic+TheBestAsses+buttsharpies';
-            displayName = 'Perfect Ass Real';
-            break;
-        case 'gonewild':
-            subreddits = 'gonewild+realgirls+gwpublic+AmateurGoneWild';
-            displayName = 'GoneWild & Amateur Real';
-            break;
-        case 'gif':
-            subreddits = 'nsfw_gif+porn_gifs+cumsluts+60fpsporn+nsfw_gifs';
-            displayName = 'NSFW GIF & Short Real Clip';
-            break;
-        default:
-            subreddits = 'nsfw+realgirls+gonewild';
-            displayName = 'Random Real NSFW';
-    }
+    const endpoint = tagMap[tag.toLowerCase()] || 'pgif'; // Default pgif (porn gif real hot)
+    const displayTag = tag.charAt(0).toUpperCase() + tag.slice(1);
 
-    await sock.sendMessage(from, { text: `🔥 Lagi ambil konten real hot dari r/${displayName}...` }, { quoted: msg });
+    await sock.sendMessage(from, { text: `🔥 Lagi cari real hot "${displayTag}" dari Nekobot...` }, { quoted: msg });
 
     try {
-        const url = `https://www.reddit.com/r/${subreddits}/hot.json?limit=70`;
+        const apiUrl = `https://nekobot.xyz/api/image?type=${endpoint}`;
+        const { data } = await axios.get(apiUrl);
 
-        const { data } = await axios.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
-            }
-        });
-
-        const posts = data.data.children
-            .filter(p => !p.data.stickied && p.data.over_18)
-            .map(p => p.data);
-
-        if (posts.length === 0) {
-            return sock.sendMessage(from, { text: '❌ Subreddit lagi sepi, coba lagi nanti ya.' }, { quoted: msg });
+        if (!data || !data.success || !data.message) {
+            return sock.sendMessage(from, { text: '❌ Tag lagi kosong atau API down nih bos. Coba tag lain!' }, { quoted: msg });
         }
 
-        // Prioritas media direct
-        let validPosts = posts.filter(p => {
-            const url = p.url.toLowerCase();
-            return url.match(/\.(jpg|jpeg|png|gif|mp4)$/) ||
-                p.is_video ||
-                (p.preview?.reddit_video_preview?.fallback_url);
-        });
-
-        if (validPosts.length === 0) validPosts = posts;
-
-        const post = validPosts[Math.floor(Math.random() * validPosts.length)];
-
-        let mediaUrl = post.url;
-        let isVideo = false;
-
-        if (post.is_video || post.secure_media?.reddit_video) {
-            mediaUrl = post.secure_media?.reddit_video?.fallback_url ||
-                post.preview?.reddit_video_preview?.fallback_url ||
-                post.media?.reddit_video?.fallback_url;
-            isVideo = true;
-        }
+        const mediaUrl = data.message;
+        const isGif = mediaUrl.toLowerCase().includes('.gif') || endpoint === 'pgif';
 
         const buffer = await axios.get(mediaUrl, { responseType: 'arraybuffer' });
 
-        const caption = `🔞 *REAL HUMAN NSFW - REDDIT*\n` +
-            `📌 *Subreddit:* r/${displayName}\n` +
-            `🎬 *Title:* ${post.title.substring(0, 120)}\n` +
-            `👍 *Upvotes:* ${post.ups.toLocaleString()}\n` +
-            `🔗 https://reddit.com${post.permalink}\n\n` +
-            `_Fresh daily upload - 100% Real Human 😈_`;
+        const caption = `🔞 *REAL HUMAN HOT - MANUAL SEARCH*\n` +
+            `📌 *Tag:* ${displayTag}\n` +
+            `🔗 ${mediaUrl}\n\n` +
+            `_Fresh real porn • Nekobot 2025 😈_`;
 
-        if (isVideo || mediaUrl.endsWith('.mp4')) {
+        if (isGif || endpoint === 'pgif' || endpoint === 'anal' || endpoint === 'bj') {
             await sock.sendMessage(from, {
                 video: buffer.data,
                 caption,
-                gifPlayback: false
+                gifPlayback: true
             }, { quoted: msg });
         } else {
             await sock.sendMessage(from, {
@@ -2059,7 +2029,7 @@ async function redditRealNSFW(type = 'random', sock, from, msg) {
         }
 
     } catch (e) {
-        console.error('Reddit NSFW Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Gagal ambil konten (rate limit/block). Tunggu 1-2 menit lalu coba lagi ya bos.' }, { quoted: msg });
+        console.error('Nekobot Manual Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Gagal ambil konten. Coba tag lain atau lagi nanti ya bos.' }, { quoted: msg });
     }
 }
