@@ -7,8 +7,8 @@ const sharp = require('sharp');
 const cheerio = require('cheerio');
 const { exec } = require('child_process');
 const { ttdl, igdl, youtube } = require('btch-downloader');
-const PornHub = require('nsfwhub');
-const ph = new PornHub();
+const nsfw = require('nsfwhub');
+const ph = new nsfw.PornHub();
 
 // ============================================================
 // KONFIGURASI AWAL & DEKLARASI PATH
