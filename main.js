@@ -1659,25 +1659,25 @@ wa.me/6289528950624
                         return;
                     }
 
-                    // --- INDO VIRAL (Kirim Video) ---
-                    if (textLower.startsWith('.indo')) {
+                    // --- DOODSTREAM SEARCH (Link Only) ---
+                    if (textLower.startsWith('.dood')) {
                         if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
 
-                        let query = text.split(' ').slice(1).join(' ');
-                        if (!query) query = 'jilbab skandal'; // Default kalau kosong
+                        const query = text.split(' ').slice(1).join(' ');
+                        if (!query) return sock.sendMessage(from, { text: 'Cari apa? Contoh: .dood skandal sma' }, { quoted: msg });
 
-                        await searchIndo(query, sock, from, msg);
+                        await searchDood(query, sock, from, msg);
                         return;
                     }
 
-                    // --- SEBOKEP SEARCH (Kirim Link) ---
-                    if (textLower.startsWith('.sebokep') || textLower.startsWith('.local')) {
+                    // --- SFILE SEARCH (File/RAR) ---
+                    if (textLower.startsWith('.sfile')) {
                         if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
 
-                        let query = text.split(' ').slice(1).join(' ');
-                        if (!query) return sock.sendMessage(from, { text: 'Mau cari apa? Contoh: .sebokep sma' }, { quoted: msg });
+                        const query = text.split(' ').slice(1).join(' ');
+                        if (!query) return sock.sendMessage(from, { text: 'Cari apa? Contoh: .sfile full album' }, { quoted: msg });
 
-                        await searchSebokep(query, sock, from, msg);
+                        await searchSfile(query, sock, from, msg);
                         return;
                     }
                 }
@@ -1701,122 +1701,6 @@ wa.me/6289528950624
 // ============================================================
 
 connectToWhatsApp();
-
-// ============================================================
-// FITUR 1: INDO VIRAL (DOWNLOADABLE / KIRIM VIDEO)
-// Menggunakan database Xvideos tapi difilter khusus konten Indo
-// ============================================================
-async function searchIndo(query, sock, from, msg) {
-    await sock.sendMessage(from, { text: `🇮🇩 Nyari asupan Indo: "${query}"...` }, { quoted: msg });
-
-    try {
-        // Trik: Tambahin kata kunci "Indo" biar yang keluar lokal punya
-        const keywords = `indo ${query}`;
-        const searchUrl = `https://www.xvideos.com/?k=${encodeURIComponent(keywords)}&dur=1`; // dur=1 (Short)
-
-        const { data } = await axios.get(searchUrl);
-        const $ = cheerio.load(data);
-        const videos = [];
-
-        $('.thumb-block').each((i, element) => {
-            const linkElem = $(element).find('.thumb-under a');
-            const title = linkElem.attr('title');
-            const href = linkElem.attr('href');
-
-            // Filter: Hanya ambil yang judulnya berbau Indo atau user Indo
-            if (title && href && !href.startsWith('/profiles')) {
-                videos.push({
-                    title: title,
-                    url: 'https://www.xvideos.com' + href
-                });
-            }
-        });
-
-        if (videos.length === 0) return sock.sendMessage(from, { text: '❌ Gak nemu video Indo yang pas.' }, { quoted: msg });
-
-        const randomVideo = videos[Math.floor(Math.random() * videos.length)];
-
-        // Ambil Link MP4
-        const videoPage = await axios.get(randomVideo.url);
-        const mp4Match = videoPage.data.match(/html5player\.setVideoUrlHigh\('([^']+)'\)/);
-
-        if (!mp4Match || !mp4Match[1]) {
-            return sock.sendMessage(from, { text: '❌ Video diprivate ownernya.' }, { quoted: msg });
-        }
-
-        // Download & Kirim
-        const videoBuffer = await axios.get(mp4Match[1], { responseType: 'arraybuffer' });
-
-        await sock.sendMessage(from, {
-            video: videoBuffer.data,
-            caption: `🇮🇩 *INDO VIRAL*\n🎬 ${randomVideo.title}\n\n_Video dikirim otomatis._`,
-            gifPlayback: false
-        }, { quoted: msg });
-
-    } catch (e) {
-        console.error('Indo Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Error: ' + e.message }, { quoted: msg });
-    }
-}
-
-// ============================================================
-// FITUR 2: SEBOKEP / LINGBOKEP (LINK ONLY)
-// Karena pakai Doodstream (susah download), kita cuma kasih Link Nonton
-// ============================================================
-async function searchSebokep(query, sock, from, msg) {
-    await sock.sendMessage(from, { text: `🔍 Mengobok-obok web Sebokep: "${query}"...` }, { quoted: msg });
-
-    try {
-        // Kita pakai Proxy Codetabs biar tembus blokir Internet Positif
-        // Target: sebokep.wiki (domain sering ganti, cek kalau error)
-        const targetUrl = `https://sebokep.wiki/?s=${encodeURIComponent(query)}`;
-        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
-
-        const { data } = await axios.get(proxyUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
-        });
-
-        const $ = cheerio.load(data);
-        const results = [];
-
-        // Scraping layout standar WordPress (rata-rata web bokep indo pake WP)
-        $('article').each((i, element) => {
-            if (results.length >= 5) return; // Ambil max 5 hasil
-
-            const title = $(element).find('.entry-title a').text().trim();
-            const link = $(element).find('.entry-title a').attr('href');
-            const img = $(element).find('img').attr('src');
-
-            if (title && link) {
-                results.push({ title, link, img });
-            }
-        });
-
-        if (results.length === 0) {
-            return sock.sendMessage(from, { text: '❌ Gak nemu di Sebokep (Mungkin ganti domain atau keyword salah).' }, { quoted: msg });
-        }
-
-        // Kirim Hasil sebagai List Text
-        let caption = `🔍 *HASIL PENCARIAN SEBOKEP*\nKeyword: _${query}_\n\n`;
-
-        results.forEach((res, index) => {
-            caption += `${index + 1}. *${res.title}*\n`;
-            caption += `🔗 ${res.link}\n\n`;
-        });
-
-        caption += `_Web lokal pakai Doodstream, jadi cuma bisa kasih link nonton ya._`;
-
-        // Kirim gambar dari hasil pertama aja sebagai thumbnail
-        await sock.sendMessage(from, {
-            image: { url: results[0].img || 'https://via.placeholder.com/300' },
-            caption: caption
-        }, { quoted: msg });
-
-    } catch (e) {
-        console.error('Sebokep Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Gagal akses Sebokep (Proxy Error).' }, { quoted: msg });
-    }
-}
 
 // ============================================================
 // FITUR NSFW: XVIDEOS (REAL HUMAN & SHORT DURATION)
@@ -1962,69 +1846,108 @@ async function asupanTikTok(sock, from, msg) {
 }
 
 // ============================================================
-// FITUR NSFW (ANTI-BLOKIR / JALUR TIKUS)
+// FITUR: DOODSTREAM FINDER (JALUR PINTAS)
+// Mencari link Doodstream langsung lewat DuckDuckGo
 // ============================================================
-async function searchPornhub(query, sock, from, msg) {
-    await sock.sendMessage(from, { text: '🔍 Sedang mencari lewat jalur tikus...' }, { quoted: msg });
+async function searchDood(query, sock, from, msg) {
+    await sock.sendMessage(from, { text: `🕵️ Nyari link Doodstream: "${query}"...` }, { quoted: msg });
 
     try {
-        // --- TRIK 1: Ganti Target ke XNXX (Lebih Gampang Tembus) ---
-        // Pornhub sering banget blokir IP VPS, XNXX biasanya lebih santuy.
-        const searchUrl = `https://www.xnxx.com/search/${encodeURIComponent(query)}`;
+        // Trik Dorking: Kita cari link yang domainnya dood.*
+        const dork = `site:dood.la OR site:dood.so OR site:dood.re OR site:dood.wf "${query}"`;
+        const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(dork)}`;
+        
+        // Pakai Proxy biar IP VPS gak diblok DuckDuckGo
+        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(searchUrl)}`;
 
-        // Kita pakai User-Agent biar dikira Browser beneran
-        const { data } = await axios.get(searchUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-A205U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36'
-            }
+        const { data } = await axios.get(proxyUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
         });
 
         const $ = cheerio.load(data);
-        let result = null;
+        const results = [];
 
-        // Scraping data XNXX
-        $('.thumb-block').each((i, element) => {
-            if (result) return; // Ambil 1 aja
+        // Scraping hasil pencarian DuckDuckGo (Versi HTML Ringan)
+        $('.result__body').each((i, element) => {
+            if (results.length >= 5) return; // Limit 5 aja
 
-            const linkElem = $(element).find('.thumb-under a');
-            const imgElem = $(element).find('.thumb img'); // Kadang di .thumb-inside img
+            const title = $(element).find('.result__a').text().trim();
+            const link = $(element).find('.result__a').attr('href');
+            const snippet = $(element).find('.result__snippet').text().trim();
 
-            const title = linkElem.attr('title') || linkElem.text();
-            const href = linkElem.attr('href');
-
-            // Trik ambil gambar di XNXX (kadang data-src)
-            const thumb = imgElem.attr('data-src') || imgElem.attr('src');
-            const duration = $(element).find('.duration').text().trim(); // Kadang classnya beda, opsional
-
-            if (title && href) {
-                result = {
-                    title: title,
-                    url: 'https://www.xnxx.com' + href,
-                    thumb: thumb,
-                    duration: duration || 'Unknown'
-                };
+            // Filter: Pastikan linknya mengarah ke Dood
+            if (link && (link.includes('dood') || link.includes('ds2play'))) {
+                results.push({ title, link, snippet });
             }
         });
 
-        // --- CEK HASIL ---
-        if (!result) {
-            return await sock.sendMessage(from, { text: '❌ Server kebal banget, masih gak tembus blokirnya bos.' }, { quoted: msg });
+        if (results.length === 0) {
+            return sock.sendMessage(from, { text: '❌ Gak nemu link Doodstream buat keyword itu.' }, { quoted: msg });
         }
 
-        // --- KIRIM HASIL ---
-        const caption = `🔞 *NSFW FOUND (XNXX)*\n\n` +
-            `🎬 *Judul:* ${result.title}\n` +
-            `⏱️ *Durasi:* ${result.duration}\n` +
-            `🔗 *Link:* ${result.url}\n\n` +
-            `_Link sudah diamankan._`;
+        let caption = `🕵️ *DOODSTREAM FINDER*\nQuery: _${query}_\n\n`;
+        results.forEach((res, i) => {
+            caption += `${i + 1}. *${res.title}*\n`;
+            caption += `🔗 ${res.link}\n\n`;
+        });
+        caption += `_Link bisa ditonton langsung tanpa VPN (biasanya)._`;
 
-        await sock.sendMessage(from, {
-            image: { url: result.thumb || 'https://via.placeholder.com/300' },
-            caption: caption
+        await sock.sendMessage(from, { 
+            image: { url: 'https://i.imgur.com/L12a70m.png' }, // Logo Doodstream (opsional)
+            caption: caption 
         }, { quoted: msg });
 
     } catch (e) {
-        console.log('Error NSFW:', e.message);
-        await sock.sendMessage(from, { text: `❌ Gagal: ${e.message} (Server kena Internet Positif)` }, { quoted: msg });
+        console.error('Dood Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Gagal searching (DuckDuckGo limit/Proxy error).' }, { quoted: msg });
+    }
+}
+
+// ============================================================
+// FITUR: SFILE SEARCH (FILE VIRAL/RAR)
+// ============================================================
+async function searchSfile(query, sock, from, msg) {
+    await sock.sendMessage(from, { text: `📂 Mengaduk-aduk Sfile.mobi: "${query}"...` }, { quoted: msg });
+
+    try {
+        const searchUrl = `https://sfile.mobi/search.php?q=${encodeURIComponent(query)}&search=Search`;
+        
+        const { data } = await axios.get(searchUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
+        });
+
+        const $ = cheerio.load(data);
+        const results = [];
+
+        $('.list').each((i, element) => {
+            if (results.length >= 5) return;
+
+            const linkElem = $(element).find('a');
+            const title = linkElem.text().trim();
+            const href = linkElem.attr('href');
+            const size = $(element).text().match(/\((.*?)\)/)?.[1] || 'Unknown';
+
+            if (title && href && href.includes('sfile.mobi')) {
+                results.push({ title, url: href, size });
+            }
+        });
+
+        if (results.length === 0) {
+            return sock.sendMessage(from, { text: '❌ File tidak ditemukan di Sfile.' }, { quoted: msg });
+        }
+
+        let caption = `📂 *SFILE VIRAL SEARCH*\n\n`;
+        results.forEach((res, i) => {
+            caption += `${i + 1}. *${res.title}*\n`;
+            caption += `📦 Size: ${res.size}\n`;
+            caption += `🔗 ${res.url}\n\n`;
+        });
+        caption += `_Biasanya berisi video viral, full album rar, dll._`;
+
+        await sock.sendMessage(from, { text: caption }, { quoted: msg });
+
+    } catch (e) {
+        console.error('Sfile Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Error scraping Sfile.' }, { quoted: msg });
     }
 }
