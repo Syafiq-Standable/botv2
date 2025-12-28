@@ -1633,13 +1633,18 @@ wa.me/6289528950624
                         return;
                     }
 
-                    // --- XVIDEOS (Real & Short) ---
-                    if (textLower.startsWith('.sb') || textLower.startsWith('.spank')) {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
+                        // DUCKDUCK GO
+                    if (textLower.startsWith('.foto18 ') || textLower.startsWith('.nsfwimg ')) {
+                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Khusus Owner/Private!' }, { quoted: msg });
 
-                        // Ambil kata kunci, kalau kosong defaultnya 'viral'
-                        let query = text.split(' ').slice(1).join(' ') || 'indo viral';
-                        await searchSpankbang(query, sock, from, msg);
+                        const keyword = text.split(' ').slice(1).join(' ') || 'hot real nsfw';
+                        await duckduckgoNSFWImage(keyword, sock, from, msg);
+                        return;
+                    }
+
+                    // Random tanpa keyword
+                    if (textLower === '.foto18' || textLower === '.nsfwimg') {
+                        await duckduckgoNSFWImage('nsfw real hot', sock, from, msg);
                         return;
                     }
 
@@ -1687,78 +1692,57 @@ wa.me/6289528950624
 connectToWhatsApp();
 
 // ============================================================
-// FITUR NSFW: SPANKBANG (REAL HUMAN SHORT CLIP - ALTERNATIF XVIDEOS)
+// FITUR NSFW FOTO UNCENSORED VIA DUCKDUCKGO (REAL HUMAN 2025)
 // ============================================================
-async function searchSpankbang(query, sock, from, msg) {
-    await sock.sendMessage(from, { text: `🔍 SPANKBANG: Mencari "${query}" (Short Hot Clip)...` }, { quoted: msg });
+async function duckduckgoNSFWImage(keyword = 'hot real', sock, from, msg) {
+    await sock.sendMessage(from, { text: `🔍 Lagi cari foto NSFW uncensored "${keyword}" via DuckDuckGo...` }, { quoted: msg });
 
     try {
-        // Search dengan sort newest atau popular
-        const searchUrl = `https://spankbang.com/s/${encodeURIComponent(query)}/?o=new`;
+        // Step 1: Dapatkan vqd token (wajib!)
+        const tokenRes = await axios.post('https://duckduckgo.com/', 
+            new URLSearchParams({ q: keyword }),
+            { headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' } }
+        );
+
+        const vqdMatch = tokenRes.data.match(/vqd='([\d-]+)'/);
+        if (!vqdMatch || !vqdMatch[1]) {
+            return sock.sendMessage(from, { text: '❌ Gagal ambil token vqd. Coba lagi nanti ya bos.' }, { quoted: msg });
+        }
+
+        const vqd = vqdMatch[1];
+
+        // Step 2: Search image dengan safe search OFF (p=-1 = uncensored NSFW)
+        const searchUrl = `https://duckduckgo.com/i.js?o=json&q=${encodeURIComponent(keyword)}&vqd=${vqd}&p=-1&f=,,,,,` ; // p=-1 = Safe Search Off
 
         const { data } = await axios.get(searchUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
-        });
-        const $ = cheerio.load(data);
-        const videos = [];
-
-        // Scraping list video (selector SpankBang 2025)
-        $('.results .video-item').each((i, element) => {
-            const linkElem = $(element).find('a');
-            const title = linkElem.attr('data-name') || linkElem.text().trim();
-            const href = linkElem.attr('href');
-
-            if (title && href) {
-                videos.push({
-                    title,
-                    url: 'https://spankbang.com' + href
-                });
-            }
+            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)', 'Referer': 'https://duckduckgo.com/' }
         });
 
-        if (videos.length === 0) {
-            return sock.sendMessage(from, { text: '❌ Gak nemu videonya bos. Coba keyword lain!' }, { quoted: msg });
+        if (!data.results || data.results.length === 0) {
+            return sock.sendMessage(from, { text: `❌ Gak nemu foto NSFW dengan keyword "${keyword}" nih.` }, { quoted: msg });
         }
 
-        // Random video
-        const randomVideo = videos[Math.floor(Math.random() * videos.length)];
+        // Random foto uncensored
+        const images = data.results.filter(img => img.image && !img.image.includes('placeholder')); // Filter valid
+        const randomImg = images[Math.floor(Math.random() * images.length)];
 
-        // Masuk halaman video ambil stream link
-        const videoPage = await axios.get(randomVideo.url);
-        const $$ = cheerio.load(videoPage.data);
+        // Download buffer & kirim sebagai image
+        const buffer = await axios.get(randomImg.image, { responseType: 'arraybuffer' });
 
-        // SpankBang stream links di script atau data-stream
-        let mp4Url = null;
-        $$('script').each((i, el) => {
-            const script = $$(el).html();
-            if (script && script.includes('stream_data')) {
-                const match = script.match(/\"(\d+p)\":\"([^\"]+)\"/g);
-                if (match) {
-                    // Ambil quality tertinggi atau 720p/480p biar aman WA
-                    const high = match.find(m => m.includes('720p') || m.includes('480p'));
-                    if (high) {
-                        mp4Url = high.split('"')[3];
-                    }
-                }
-            }
-        });
-
-        if (!mp4Url) {
-            return sock.sendMessage(from, { text: '❌ Gagal narik link stream (mungkin encrypted). Coba video lain.' }, { quoted: msg });
-        }
-
-        // Download buffer
-        const videoBuffer = await axios.get(mp4Url, { responseType: 'arraybuffer' });
+        const caption = `🔞 *NSFW FOTO UNCENSORED - DUCKDUCKGO*\n` +
+            `📌 *Keyword:* ${keyword}\n` +
+            `🎬 *Title:* ${randomImg.title || 'Hot real photo'}\n` +
+            `🔗 ${randomImg.url}\n\n` +
+            `_Real human • No sensor • Fresh 2025 😈💦_`;
 
         await sock.sendMessage(from, {
-            video: videoBuffer.data,
-            caption: `🔞 *SPANKBANG SHORT HOT*\n🎬 ${randomVideo.title}\n\n_Real human Indo/viral panas! 😈_`,
-            gifPlayback: false
+            image: buffer.data,
+            caption
         }, { quoted: msg });
 
     } catch (e) {
-        console.error('SpankBang Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Error: ' + e.message + '. Coba lagi atau keyword beda ya bos.' }, { quoted: msg });
+        console.error('DuckDuckGo NSFW Image Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Error scraping: ' + e.message + '. IP mungkin kena limit sementara.' }, { quoted: msg });
     }
 }
 
