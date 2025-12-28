@@ -1638,14 +1638,14 @@ wa.me/6289528950624
                         return;
                     }
 
-                    // --- ASUPAN SHORTS (Random Video) ---
-                if (textLower === '.asupan' || textLower === '.tobrut') {
-                     if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
-                     
-                     // Panggil fungsi asupan
-                     await randomAsupan(sock, from, msg);
-                     return;
-                }
+                    // --- ASUPAN UKHTI (TikTok Soft) ---
+                    if (textLower === '.ukhti' || textLower === '.hijab') {
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
+
+                        // Panggil fungsi asupanTikTok
+                        await asupanTikTok(sock, from, msg);
+                        return;
+                    }
 
                     // --- COMMAND NSFW (PORNHUB) ---
                     if (textLower.startsWith('.ph') || textLower.startsWith('.bokep')) {
@@ -1657,6 +1657,15 @@ wa.me/6289528950624
 
                         // Panggil fungsi searchPornhub
                         await searchPornhub(query, sock, from, msg);
+                        return;
+                    }
+
+                    // --- COMMAND SHORTIES ---
+                    if (textLower === '.shorties' || textLower === '.phshort') {
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
+
+                        // Panggil fungsi shorties
+                        await phShorties(sock, from, msg);
                         return;
                     }
 
@@ -1683,66 +1692,64 @@ wa.me/6289528950624
 connectToWhatsApp();
 
 // ============================================================
-// FITUR ASUPAN (RANDOM VIDEO PENDEK/TIKTOK)
+// FITUR ASUPAN TIKTOK (SOFT / UKHTI / TOBRUT)
 // ============================================================
-async function randomAsupan(sock, from, msg) {
-    await sock.sendMessage(from, { text: '🔄 Lagi nyari asupan video pendek...' }, { quoted: msg });
+async function asupanTikTok(sock, from, msg) {
+    await sock.sendMessage(from, { text: '🔄 Lagi nyari Ukhti-ukhti viral...' }, { quoted: msg });
 
     try {
-        // 1. Cari video dengan kata kunci "Tiktok Porn" biar durasinya pendek & vertikal
-        // Kita random page biar videonya gak itu-itu aja (Page 1 sampai 5)
-        const randomPage = Math.floor(Math.random() * 5) + 1;
-        const searchUrl = `https://www.xnxx.com/search/${encodeURIComponent('tiktok porn')}/${randomPage}`;
+        // Daftar kata kunci "Pemersatu Bangsa"
+        // Bot akan pilih satu secara acak biar gak bosen
+        const keywords = [
+            'ukhti gemoy',
+            'jilbab sempit',
+            'cewe tiktok viral',
+            'ukhti tobrut',
+            'jilboobs tiktok',
+            'asupan hijab'
+        ];
 
-        const { data } = await axios.get(searchUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
+        const randomQuery = keywords[Math.floor(Math.random() * keywords.length)];
+
+        // Request ke API TikTok (TikWM)
+        const { data } = await axios.post('https://www.tikwm.com/api/feed/search', {
+            keywords: randomQuery,
+            count: 12,
+            cursor: 0,
+            web: 1,
+            hd: 1
+        }, {
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)'
+            }
         });
 
-        const $ = cheerio.load(data);
-        const videos = [];
+        if (!data || !data.data || !data.data.videos) {
+            return sock.sendMessage(from, { text: '❌ Lagi gak nemu asupan nih, server TikTok sibuk.' }, { quoted: msg });
+        }
 
-        // 2. Kumpulin semua link video dari hasil pencarian
-        $('.thumb-block').each((i, element) => {
-            const link = 'https://www.xnxx.com' + $(element).find('.thumb-under a').attr('href');
-            const title = $(element).find('.thumb-under a').attr('title');
-            if (link && title) videos.push({ title, link });
-        });
-
-        if (videos.length === 0) return sock.sendMessage(from, { text: '❌ Asupan kosong.' }, { quoted: msg });
-
-        // 3. Pilih 1 video secara acak
+        // Ambil video secara acak dari hasil pencarian
+        const videos = data.data.videos;
         const randomVideo = videos[Math.floor(Math.random() * videos.length)];
 
-        // 4. Masuk ke halaman video buat ambil link MP4 aslinya (Scraping Tahap 2)
-        const videoPage = await axios.get(randomVideo.link);
-        const $$ = cheerio.load(videoPage.data);
-        
-        // Cari URL video (biasanya di script JSON atau elemen HTML5)
-        // XNXX sering taruh link high quality di variable 'html5player.setVideoUrlHigh'
-        const scriptContent = $$('script:contains("html5player.setVideoUrlHigh")').html();
-        
-        let mp4Url = '';
-        if (scriptContent) {
-            const match = scriptContent.match(/html5player\.setVideoUrlHigh\('([^']+)'\)/);
-            if (match) mp4Url = match[1];
-        }
+        // Download Video (Tanpa Watermark)
+        const videoUrl = randomVideo.play; // Link video no-wm
+        const caption = `🧕 *ASUPAN TIKTOK*\n` +
+            `📝 *Caption:* ${randomVideo.title}\n` +
+            `👀 *Views:* ${randomVideo.play_count}\n` +
+            `👤 *User:* ${randomVideo.author.nickname}\n\n` +
+            `_Mode: Santuy (Non-Nude)_`;
 
-        if (!mp4Url) {
-            return sock.sendMessage(from, { text: '❌ Gagal ngambil file videonya.' }, { quoted: msg });
-        }
-
-        // 5. Download Video ke Buffer (Memory)
-        const videoBuffer = await axios.get(mp4Url, { responseType: 'arraybuffer' });
-
-        // 6. Kirim sebagai Video WhatsApp
+        // Kirim Video
         await sock.sendMessage(from, {
-            video: videoBuffer.data,
-            caption: `🔞 *ASUPAN RANDOM*\n🎬 ${randomVideo.title}\n\n_Video pendek dikirim otomatis._`,
-            gifPlayback: false // Set true kalau mau jadi GIF
+            video: { url: videoUrl },
+            caption: caption,
+            gifPlayback: false
         }, { quoted: msg });
 
     } catch (e) {
-        console.error('Asupan Error:', e);
+        console.error('Asupan TikTok Error:', e);
         await sock.sendMessage(from, { text: '❌ Gagal: ' + e.message }, { quoted: msg });
     }
 }
@@ -1757,7 +1764,7 @@ async function searchPornhub(query, sock, from, msg) {
         // --- TRIK 1: Ganti Target ke XNXX (Lebih Gampang Tembus) ---
         // Pornhub sering banget blokir IP VPS, XNXX biasanya lebih santuy.
         const searchUrl = `https://www.xnxx.com/search/${encodeURIComponent(query)}`;
-        
+
         // Kita pakai User-Agent biar dikira Browser beneran
         const { data } = await axios.get(searchUrl, {
             headers: {
@@ -1777,7 +1784,7 @@ async function searchPornhub(query, sock, from, msg) {
 
             const title = linkElem.attr('title') || linkElem.text();
             const href = linkElem.attr('href');
-            
+
             // Trik ambil gambar di XNXX (kadang data-src)
             const thumb = imgElem.attr('data-src') || imgElem.attr('src');
             const duration = $(element).find('.duration').text().trim(); // Kadang classnya beda, opsional
@@ -1799,10 +1806,10 @@ async function searchPornhub(query, sock, from, msg) {
 
         // --- KIRIM HASIL ---
         const caption = `🔞 *NSFW FOUND (XNXX)*\n\n` +
-                        `🎬 *Judul:* ${result.title}\n` +
-                        `⏱️ *Durasi:* ${result.duration}\n` +
-                        `🔗 *Link:* ${result.url}\n\n` +
-                        `_Link sudah diamankan._`;
+            `🎬 *Judul:* ${result.title}\n` +
+            `⏱️ *Durasi:* ${result.duration}\n` +
+            `🔗 *Link:* ${result.url}\n\n` +
+            `_Link sudah diamankan._`;
 
         await sock.sendMessage(from, {
             image: { url: result.thumb || 'https://via.placeholder.com/300' },
@@ -1812,5 +1819,69 @@ async function searchPornhub(query, sock, from, msg) {
     } catch (e) {
         console.log('Error NSFW:', e.message);
         await sock.sendMessage(from, { text: `❌ Gagal: ${e.message} (Server kena Internet Positif)` }, { quoted: msg });
+    }
+}
+
+// ============================================================
+// FITUR NSFW: PORNHUB SHORTIES (BYPASS PROXY)
+// ============================================================
+async function phShorties(sock, from, msg) {
+    await sock.sendMessage(from, { text: '📱 Lagi mengintip menu Shorties (Bypass)...' }, { quoted: msg });
+
+    try {
+        // --- TRIK BYPASS BLOKIR ---
+        // Kita tidak nembak pornhub.com langsung, tapi lewat 'corsproxy'
+        // Ini seolah-olah kita akses dari server luar negeri (gratis)
+        const targetUrl = 'https://www.pornhub.com/shorties';
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+
+        const { data } = await axios.get(proxyUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-A205U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36'
+            }
+        });
+
+        const $ = cheerio.load(data);
+        const videos = [];
+
+        // --- SCRAPING KHUSUS TAMPILAN SHORTIES ---
+        // Pornhub Shorties strukturnya beda sama search biasa
+        // Biasanya ada di dalam container ID #shortiesVideoGrid atau class .wrapper
+        $('a[href*="/view_video.php"]').each((i, element) => {
+            const title = $(element).attr('title') || $(element).find('.title').text().trim();
+            const link = $(element).attr('href');
+            const imgElem = $(element).find('img');
+            const thumb = imgElem.attr('src') || imgElem.attr('data-src') || imgElem.attr('data-thumb_url');
+
+            // Filter link sampah/iklan
+            if (title && link && thumb && !link.includes('javascript')) {
+                videos.push({
+                    title: title,
+                    url: 'https://www.pornhub.com' + link,
+                    thumb: thumb
+                });
+            }
+        });
+
+        if (videos.length === 0) {
+            return sock.sendMessage(from, { text: '❌ Gagal tembus Shorties (Layout berubah atau Proxy limit).' }, { quoted: msg });
+        }
+
+        // Ambil 1 video secara acak biar seru
+        const result = videos[Math.floor(Math.random() * videos.length)];
+
+        const caption = `📱 *PORNHUB SHORTIES (RANDOM)*\n\n` +
+            `🎬 *Judul:* ${result.title}\n` +
+            `🔗 *Link:* ${result.url}\n\n` +
+            `_Shorties tidak bisa didownload bot (Protected). Klik link untuk nonton._`;
+
+        await sock.sendMessage(from, {
+            image: { url: result.thumb },
+            caption: caption
+        }, { quoted: msg });
+
+    } catch (e) {
+        console.error('Shorties Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Gagal Bypass: ' + e.message }, { quoted: msg });
     }
 }
