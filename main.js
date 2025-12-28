@@ -1674,63 +1674,61 @@ wa.me/6289528950624
 connectToWhatsApp();
 
 // ============================================================
-// FITUR NSFW (MANUAL SCRAPER - ANTI ERROR)
+// FITUR NSFW (ANTI-BLOKIR / JALUR TIKUS)
 // ============================================================
 async function searchPornhub(query, sock, from, msg) {
-    await sock.sendMessage(from, { text: '🔍 Sedang mencari... (Mode Manual)' }, { quoted: msg });
+    await sock.sendMessage(from, { text: '🔍 Sedang mencari lewat jalur tikus...' }, { quoted: msg });
 
     try {
-        // 1. Tembak langsung ke website PH
-        // Kita pakai trik user-agent agar tidak diblokir
-        const { data } = await axios.get(`https://www.pornhub.com/video/search?search=${query}`, {
+        // --- TRIK 1: Ganti Target ke XNXX (Lebih Gampang Tembus) ---
+        // Pornhub sering banget blokir IP VPS, XNXX biasanya lebih santuy.
+        const searchUrl = `https://www.xnxx.com/search/${encodeURIComponent(query)}`;
+        
+        // Kita pakai User-Agent biar dikira Browser beneran
+        const { data } = await axios.get(searchUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-A205U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36'
             }
         });
 
-        // 2. Baca HTML-nya pakai Cheerio
         const $ = cheerio.load(data);
         let result = null;
 
-        // 3. Cari elemen video di halaman
-        // Kita loop elemen .videoBox untuk cari video pertama yang valid
-        $('.videoBox').each((i, element) => {
-            if (result) return; // Kalau sudah dapat 1, stop.
+        // Scraping data XNXX
+        $('.thumb-block').each((i, element) => {
+            if (result) return; // Ambil 1 aja
 
-            const linkElem = $(element).find('a[href*="/view_video.php"]');
-            const imgElem = $(element).find('img');
+            const linkElem = $(element).find('.thumb-under a');
+            const imgElem = $(element).find('.thumb img'); // Kadang di .thumb-inside img
 
-            const title = linkElem.attr('title') || $(element).find('.title a').text();
+            const title = linkElem.attr('title') || linkElem.text();
             const href = linkElem.attr('href');
+            
+            // Trik ambil gambar di XNXX (kadang data-src)
+            const thumb = imgElem.attr('data-src') || imgElem.attr('src');
+            const duration = $(element).find('.duration').text().trim(); // Kadang classnya beda, opsional
 
-            // Ambil gambar (kadang ada di data-src atau data-thumb_url)
-            const thumb = imgElem.attr('data-src') || imgElem.attr('src') || imgElem.attr('data-thumb_url');
-
-            const duration = $(element).find('.duration').text().trim();
-            const views = $(element).find('.views').text().trim();
-
-            if (title && href && !title.includes('MEMBER')) { // Filter iklan member
+            if (title && href) {
                 result = {
                     title: title,
-                    url: 'https://www.pornhub.com' + href,
+                    url: 'https://www.xnxx.com' + href,
                     thumb: thumb,
-                    duration: duration,
-                    views: views
+                    duration: duration || 'Unknown'
                 };
             }
         });
 
-        // 4. Kirim Hasil
+        // --- CEK HASIL ---
         if (!result) {
-            return await sock.sendMessage(from, { text: '❌ Tidak ditemukan hasil (Mungkin server memblokir).' }, { quoted: msg });
+            return await sock.sendMessage(from, { text: '❌ Server kebal banget, masih gak tembus blokirnya bos.' }, { quoted: msg });
         }
 
-        const caption = `🔞 *NSFW RESULT*\n\n` +
-            `🎬 *Judul:* ${result.title}\n` +
-            `⏱️ *Durasi:* ${result.duration}\n` +
-            `👀 *Views:* ${result.views}\n` +
-            `🔗 *Link:* ${result.url}\n\n` +
-            `_Gunakan dengan bijak._`;
+        // --- KIRIM HASIL ---
+        const caption = `🔞 *NSFW FOUND (XNXX)*\n\n` +
+                        `🎬 *Judul:* ${result.title}\n` +
+                        `⏱️ *Durasi:* ${result.duration}\n` +
+                        `🔗 *Link:* ${result.url}\n\n` +
+                        `_Link sudah diamankan._`;
 
         await sock.sendMessage(from, {
             image: { url: result.thumb || 'https://via.placeholder.com/300' },
@@ -1738,7 +1736,7 @@ async function searchPornhub(query, sock, from, msg) {
         }, { quoted: msg });
 
     } catch (e) {
-        console.error('Manual Search Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Terjadi kesalahan sistem.' }, { quoted: msg });
+        console.log('Error NSFW:', e.message);
+        await sock.sendMessage(from, { text: `❌ Gagal: ${e.message} (Server kena Internet Positif)` }, { quoted: msg });
     }
 }
