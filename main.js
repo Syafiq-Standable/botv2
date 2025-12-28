@@ -233,6 +233,57 @@ function grantRental(scope, id, tier, days, grantedBy, context = 'auto') {
     return rentals[normalizedId];
 }
 
+function getRental(id) {
+    const getRental = (jid) => {
+    // Load semua data rental
+    const rentals = loadRentals();
+    
+    // 1. Coba dengan JID lengkap terlebih dahulu
+    if (rentals[jid]) {
+        const rentalData = rentals[jid];
+        if (rentalData.expires > Date.now()) {
+            return rentalData;
+        }
+    }
+    
+    // 2. Jika JID mengandung @, coba tanpa domain
+    if (jid.includes('@')) {
+        const jidWithoutDomain = jid.split('@')[0];
+        if (rentals[jidWithoutDomain]) {
+            const rentalData = rentals[jidWithoutDomain];
+            if (rentalData.expires > Date.now()) {
+                return rentalData;
+            }
+        }
+    }
+    
+    // 3. Coba semua kemungkinan format
+    for (const key in rentals) {
+        // Jika key tanpa domain (format lama)
+        if (!key.includes('@')) {
+            // Coba cocokkan dengan format lengkap
+            let possibleMatch = false;
+            
+            if (jid.endsWith('@g.us') && key === jid.replace('@g.us', '')) {
+                possibleMatch = true;
+            } else if (jid.endsWith('@s.whatsapp.net') && key === jid.replace('@s.whatsapp.net', '')) {
+                possibleMatch = true;
+            }
+            
+            if (possibleMatch) {
+                const rentalData = rentals[key];
+                if (rentalData.expires > Date.now()) {
+                    return rentalData;
+                }
+            }
+        }
+    }
+}
+    
+    // 4. Tidak ditemukan atau sudah expired
+    return false;
+};
+
 const hasAccessForCommand = (command, isGroup, sender, groupId, sock) => {
     const senderId = sender.split('@')[0];
 
