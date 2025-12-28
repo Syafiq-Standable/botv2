@@ -1658,6 +1658,28 @@ wa.me/6289528950624
                         await searchXvideos(query, sock, from, msg);
                         return;
                     }
+
+                    // --- INDO VIRAL (Kirim Video) ---
+                    if (textLower.startsWith('.indo')) {
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
+
+                        let query = text.split(' ').slice(1).join(' ');
+                        if (!query) query = 'jilbab skandal'; // Default kalau kosong
+
+                        await searchIndo(query, sock, from, msg);
+                        return;
+                    }
+
+                    // --- SEBOKEP SEARCH (Kirim Link) ---
+                    if (textLower.startsWith('.sebokep') || textLower.startsWith('.local')) {
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
+
+                        let query = text.split(' ').slice(1).join(' ');
+                        if (!query) return sock.sendMessage(from, { text: 'Mau cari apa? Contoh: .sebokep sma' }, { quoted: msg });
+
+                        await searchSebokep(query, sock, from, msg);
+                        return;
+                    }
                 }
 
 
@@ -1679,6 +1701,122 @@ wa.me/6289528950624
 // ============================================================
 
 connectToWhatsApp();
+
+// ============================================================
+// FITUR 1: INDO VIRAL (DOWNLOADABLE / KIRIM VIDEO)
+// Menggunakan database Xvideos tapi difilter khusus konten Indo
+// ============================================================
+async function searchIndo(query, sock, from, msg) {
+    await sock.sendMessage(from, { text: `🇮🇩 Nyari asupan Indo: "${query}"...` }, { quoted: msg });
+
+    try {
+        // Trik: Tambahin kata kunci "Indo" biar yang keluar lokal punya
+        const keywords = `indo ${query}`;
+        const searchUrl = `https://www.xvideos.com/?k=${encodeURIComponent(keywords)}&dur=1`; // dur=1 (Short)
+
+        const { data } = await axios.get(searchUrl);
+        const $ = cheerio.load(data);
+        const videos = [];
+
+        $('.thumb-block').each((i, element) => {
+            const linkElem = $(element).find('.thumb-under a');
+            const title = linkElem.attr('title');
+            const href = linkElem.attr('href');
+
+            // Filter: Hanya ambil yang judulnya berbau Indo atau user Indo
+            if (title && href && !href.startsWith('/profiles')) {
+                videos.push({
+                    title: title,
+                    url: 'https://www.xvideos.com' + href
+                });
+            }
+        });
+
+        if (videos.length === 0) return sock.sendMessage(from, { text: '❌ Gak nemu video Indo yang pas.' }, { quoted: msg });
+
+        const randomVideo = videos[Math.floor(Math.random() * videos.length)];
+
+        // Ambil Link MP4
+        const videoPage = await axios.get(randomVideo.url);
+        const mp4Match = videoPage.data.match(/html5player\.setVideoUrlHigh\('([^']+)'\)/);
+
+        if (!mp4Match || !mp4Match[1]) {
+            return sock.sendMessage(from, { text: '❌ Video diprivate ownernya.' }, { quoted: msg });
+        }
+
+        // Download & Kirim
+        const videoBuffer = await axios.get(mp4Match[1], { responseType: 'arraybuffer' });
+
+        await sock.sendMessage(from, {
+            video: videoBuffer.data,
+            caption: `🇮🇩 *INDO VIRAL*\n🎬 ${randomVideo.title}\n\n_Video dikirim otomatis._`,
+            gifPlayback: false
+        }, { quoted: msg });
+
+    } catch (e) {
+        console.error('Indo Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Error: ' + e.message }, { quoted: msg });
+    }
+}
+
+// ============================================================
+// FITUR 2: SEBOKEP / LINGBOKEP (LINK ONLY)
+// Karena pakai Doodstream (susah download), kita cuma kasih Link Nonton
+// ============================================================
+async function searchSebokep(query, sock, from, msg) {
+    await sock.sendMessage(from, { text: `🔍 Mengobok-obok web Sebokep: "${query}"...` }, { quoted: msg });
+
+    try {
+        // Kita pakai Proxy Codetabs biar tembus blokir Internet Positif
+        // Target: sebokep.wiki (domain sering ganti, cek kalau error)
+        const targetUrl = `https://sebokep.wiki/?s=${encodeURIComponent(query)}`;
+        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
+
+        const { data } = await axios.get(proxyUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
+        });
+
+        const $ = cheerio.load(data);
+        const results = [];
+
+        // Scraping layout standar WordPress (rata-rata web bokep indo pake WP)
+        $('article').each((i, element) => {
+            if (results.length >= 5) return; // Ambil max 5 hasil
+
+            const title = $(element).find('.entry-title a').text().trim();
+            const link = $(element).find('.entry-title a').attr('href');
+            const img = $(element).find('img').attr('src');
+
+            if (title && link) {
+                results.push({ title, link, img });
+            }
+        });
+
+        if (results.length === 0) {
+            return sock.sendMessage(from, { text: '❌ Gak nemu di Sebokep (Mungkin ganti domain atau keyword salah).' }, { quoted: msg });
+        }
+
+        // Kirim Hasil sebagai List Text
+        let caption = `🔍 *HASIL PENCARIAN SEBOKEP*\nKeyword: _${query}_\n\n`;
+
+        results.forEach((res, index) => {
+            caption += `${index + 1}. *${res.title}*\n`;
+            caption += `🔗 ${res.link}\n\n`;
+        });
+
+        caption += `_Web lokal pakai Doodstream, jadi cuma bisa kasih link nonton ya._`;
+
+        // Kirim gambar dari hasil pertama aja sebagai thumbnail
+        await sock.sendMessage(from, {
+            image: { url: results[0].img || 'https://via.placeholder.com/300' },
+            caption: caption
+        }, { quoted: msg });
+
+    } catch (e) {
+        console.error('Sebokep Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Gagal akses Sebokep (Proxy Error).' }, { quoted: msg });
+    }
+}
 
 // ============================================================
 // FITUR NSFW: XVIDEOS (REAL HUMAN & SHORT DURATION)
