@@ -1837,57 +1837,60 @@ async function searchPornhub(query, sock, from, msg) {
 }
 
 // ============================================================
-// FITUR NSFW: PORNHUB SHORTIES (BYPASS PROXY)
+// FITUR NSFW: PORNHUB SHORTIES (FIX PROXY & THUMBNAIL)
 // ============================================================
 async function phShorties(sock, from, msg) {
-    await sock.sendMessage(from, { text: '📱 Lagi mengintip menu Shorties (Bypass)...' }, { quoted: msg });
+    await sock.sendMessage(from, { text: '📱 Mencari Shorties (Jalur Codetabs)...' }, { quoted: msg });
 
     try {
-        // --- TRIK BYPASS BLOKIR ---
-        // Kita tidak nembak pornhub.com langsung, tapi lewat 'corsproxy'
-        // Ini seolah-olah kita akses dari server luar negeri (gratis)
         const targetUrl = 'https://www.pornhub.com/shorties';
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+        
+        // GANTI PROXY: Pakai 'codetabs', biasanya lebih tembus daripada 'allorigins'
+        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
 
         const { data } = await axios.get(proxyUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-A205U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.120 Mobile Safari/537.36'
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)'
             }
         });
 
         const $ = cheerio.load(data);
         const videos = [];
 
-        // --- SCRAPING KHUSUS TAMPILAN SHORTIES ---
-        // Pornhub Shorties strukturnya beda sama search biasa
-        // Biasanya ada di dalam container ID #shortiesVideoGrid atau class .wrapper
+        // Scraping Data
         $('a[href*="/view_video.php"]').each((i, element) => {
             const title = $(element).attr('title') || $(element).find('.title').text().trim();
             const link = $(element).attr('href');
             const imgElem = $(element).find('img');
-            const thumb = imgElem.attr('src') || imgElem.attr('data-src') || imgElem.attr('data-thumb_url');
+            
+            // Ambil berbagai kemungkinan atribut gambar
+            let thumb = imgElem.attr('src') || imgElem.attr('data-src') || imgElem.attr('data-thumb_url');
 
-            // Filter link sampah/iklan
-            if (title && link && thumb && !link.includes('javascript')) {
+            if (title && link && thumb) {
+                // FIX URL BUNTUNG: Kadang link cuma '/view...' atau gambar '/img...'
+                // Kita harus tempel domainnya biar gak error ENOENT
+                const fullLink = link.startsWith('http') ? link : 'https://www.pornhub.com' + link;
+                const fullThumb = thumb.startsWith('http') ? thumb : 'https://www.pornhub.com' + thumb;
+
                 videos.push({
                     title: title,
-                    url: 'https://www.pornhub.com' + link,
-                    thumb: thumb
+                    url: fullLink,
+                    thumb: fullThumb
                 });
             }
         });
 
         if (videos.length === 0) {
-            return sock.sendMessage(from, { text: '❌ Gagal tembus Shorties (Layout berubah atau Proxy limit).' }, { quoted: msg });
+            return sock.sendMessage(from, { text: '❌ Gagal ambil data (Proxy limit atau Layout berubah).' }, { quoted: msg });
         }
 
-        // Ambil 1 video secara acak biar seru
+        // Ambil 1 Random
         const result = videos[Math.floor(Math.random() * videos.length)];
 
-        const caption = `📱 *PORNHUB SHORTIES (RANDOM)*\n\n` +
-            `🎬 *Judul:* ${result.title}\n` +
-            `🔗 *Link:* ${result.url}\n\n` +
-            `_Shorties tidak bisa didownload bot (Protected). Klik link untuk nonton._`;
+        const caption = `📱 *PORNHUB SHORTIES*\n\n` +
+                        `🎬 *Judul:* ${result.title}\n` +
+                        `🔗 *Link:* ${result.url}\n\n` +
+                        `_Klik link untuk nonton._`;
 
         await sock.sendMessage(from, {
             image: { url: result.thumb },
@@ -1896,6 +1899,7 @@ async function phShorties(sock, from, msg) {
 
     } catch (e) {
         console.error('Shorties Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Gagal Bypass: ' + e.message }, { quoted: msg });
+        // Fallback kalau proxy ini mati juga
+        await sock.sendMessage(from, { text: '❌ Gagal akses lewat jalur tikus. Servernya lagi ketat banget bos.' }, { quoted: msg });
     }
 }
