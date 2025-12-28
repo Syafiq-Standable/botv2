@@ -1623,7 +1623,7 @@ wa.me/6289528950624
 
                         case prefix + 'addrent':
                             if (!isOperator(senderId)) {
-                                return sock.sendMessage(from, { text: '❌ Hanya operator!' }, { quoted: msg });
+                                return sock.se  ndMessage(from, { text: '❌ Hanya operator!' }, { quoted: msg });
                             }
 
                             const args = text.split(' ');
