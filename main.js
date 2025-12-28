@@ -1091,14 +1091,25 @@ wa.me/6289528950624
 
                 // GROUP COMMANDS
                 if (isGroup) {
+                    // Ambil Metadata Grup Terbaru
                     const groupMetadata = await sock.groupMetadata(from);
                     const participants = groupMetadata.participants;
 
-                    const botAdmin = participants.find(p => p.id === botNumber)?.admin;
-                    const userAdmin = participants.find(p => p.id === sender)?.admin;
+                    // --- PERBAIKAN LOGIKA ADMIN DI SINI ---
 
-                    const isBotAdmin = botAdmin === 'admin' || botAdmin === 'superadmin';
-                    const isUserAdmin = userAdmin === 'admin' || userAdmin === 'superadmin';
+                    // 1. Ambil ID Bot yang bersih (tanpa kode device :2, :10, dll)
+                    //    Contoh: 628xx:5@s.wa.net -> 628xx@s.wa.net
+                    const myId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+
+                    // 2. Cari Bot di daftar member
+                    const botParticipant = participants.find(p => p.id === myId);
+
+                    // 3. Cari Pengirim di daftar member
+                    const senderParticipant = participants.find(p => p.id === sender);
+
+                    // 4. Tentukan Status Admin (Lebih Akurat)
+                    const isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
+                    const isUserAdmin = senderParticipant?.admin === 'admin' || senderParticipant?.admin === 'superadmin';
 
                     // ============================================================
                     // COMMAND MODERASI (ADMIN ONLY)
