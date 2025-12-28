@@ -1633,7 +1633,7 @@ wa.me/6289528950624
                         return;
                     }
 
-                        // DUCKDUCK GO
+                    // DUCKDUCK GO
                     if (textLower.startsWith('.18 ') || textLower.startsWith('.nsfw ')) {
                         if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner/Private!' }, { quoted: msg });
 
@@ -1646,6 +1646,12 @@ wa.me/6289528950624
                     if (textLower === '.18' || textLower === '.nsfw') {
                         await duckduckgoNSFWImage('nsfw real hot', sock, from, msg);
                         return;
+                    }
+
+                        // ENAKs
+                    if (textLower.startsWith('.yandex18 ') || textLower === '.yandex18') {
+                        const keyword = text.split(' ').slice(1).join(' ') || 'nsfw real';
+                        await yandexNSFWImage(keyword, sock, from, msg);
                     }
 
                     // --- DOODSTREAM SEARCH (Link Only) ---
@@ -1692,48 +1698,57 @@ wa.me/6289528950624
 connectToWhatsApp();
 
 // ============================================================
-// FITUR NSFW FOTO UNCENSORED VIA DUCKDUCKGO (REAL HUMAN 2025)
+// NSFW FOTO UNCENSORED VIA DUCKDUCKGO (FIX VQD 2025)
 // ============================================================
-async function duckduckgoNSFWImage(keyword = 'hot real', sock, from, msg) {
-    await sock.sendMessage(from, { text: `🔍 Lagi cari foto NSFW uncensored "${keyword}" via DuckDuckGo...` }, { quoted: msg });
+async function duckduckgoNSFWImage(keyword = 'nsfw real hot', sock, from, msg) {
+    await sock.sendMessage(from, { text: `🔍 Lagi cari foto NSFW uncensored "${keyword}" via DuckDuckGo (fix 2025)...` }, { quoted: msg });
 
     try {
-        // Step 1: Dapatkan vqd token (wajib!)
-        const tokenRes = await axios.post('https://duckduckgo.com/', 
-            new URLSearchParams({ q: keyword }),
-            { headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' } }
-        );
+        // Step 1: Get vqd token - Update regex terbaru 2025
+        const params = new URLSearchParams({ q: keyword });
+        const tokenRes = await axios.post('https://duckduckgo.com/', params, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
 
-        const vqdMatch = tokenRes.data.match(/vqd='([\d-]+)'/);
-        if (!vqdMatch || !vqdMatch[1]) {
-            return sock.sendMessage(from, { text: '❌ Gagal ambil token vqd. Coba lagi nanti ya bos.' }, { quoted: msg });
+        // Regex update: Bisa vqd='...' atau vqd="..."
+        let vqd = tokenRes.data.match(/vqd[=\s]*[=:]\s*['"]([\d-]+)['"]/)?.[1] ||
+            tokenRes.data.match(/vqd=([\d-]+)/)?.[1];
+
+        if (!vqd) {
+            return sock.sendMessage(from, { text: '❌ Gagal ambil vqd token (DDG ubah struktur lagi). Coba lagi 5 menit kemudian atau keyword lain ya bos.' }, { quoted: msg });
         }
 
-        const vqd = vqdMatch[1];
-
-        // Step 2: Search image dengan safe search OFF (p=-1 = uncensored NSFW)
-        const searchUrl = `https://duckduckgo.com/i.js?o=json&q=${encodeURIComponent(keyword)}&vqd=${vqd}&p=-1&f=,,,,,` ; // p=-1 = Safe Search Off
+        // Step 2: Search image uncensored (p=-1 = safe search off)
+        const searchUrl = `https://duckduckgo.com/i.js?o=json&q=${encodeURIComponent(keyword)}&vqd=${vqd}&p=-1&f=,,,,,&u=b`;
 
         const { data } = await axios.get(searchUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)', 'Referer': 'https://duckduckgo.com/' }
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)',
+                'Referer': 'https://duckduckgo.com/'
+            }
         });
 
         if (!data.results || data.results.length === 0) {
-            return sock.sendMessage(from, { text: `❌ Gak nemu foto NSFW dengan keyword "${keyword}" nih.` }, { quoted: msg });
+            return sock.sendMessage(from, { text: `❌ Gak nemu foto uncensored untuk "${keyword}". Coba keyword lebih spesifik!` }, { quoted: msg });
         }
 
-        // Random foto uncensored
-        const images = data.results.filter(img => img.image && !img.image.includes('placeholder')); // Filter valid
-        const randomImg = images[Math.floor(Math.random() * images.length)];
+        // Filter & random foto real hot
+        const validImages = data.results.filter(img => img.image && img.width > 300 && img.height > 300); // Filter thumbnail kecil
+        if (validImages.length === 0) return sock.sendMessage(from, { text: '❌ Hasil kosong/kualitas rendah.' }, { quoted: msg });
 
-        // Download buffer & kirim sebagai image
+        const randomImg = validImages[Math.floor(Math.random() * validImages.length)];
+
         const buffer = await axios.get(randomImg.image, { responseType: 'arraybuffer' });
 
-        const caption = `🔞 *NSFW FOTO UNCENSORED - DUCKDUCKGO*\n` +
+        const caption = `🔞 *NSFW FOTO UNCENSORED - DUCKDUCKGO 2025*\n` +
             `📌 *Keyword:* ${keyword}\n` +
-            `🎬 *Title:* ${randomImg.title || 'Hot real photo'}\n` +
+            `🎬 *Title:* ${randomImg.title || 'Real hot photo'}\n` +
+            `📏 *Size:* ${randomImg.width}x${randomImg.height}\n` +
             `🔗 ${randomImg.url}\n\n` +
-            `_Real human • No sensor • Fresh 2025 😈💦_`;
+            `_Real human • No blur/sensor • Fresh daily 😈💦_`;
 
         await sock.sendMessage(from, {
             image: buffer.data,
@@ -1741,8 +1756,59 @@ async function duckduckgoNSFWImage(keyword = 'hot real', sock, from, msg) {
         }, { quoted: msg });
 
     } catch (e) {
-        console.error('DuckDuckGo NSFW Image Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Error scraping: ' + e.message + '. IP mungkin kena limit sementara.' }, { quoted: msg });
+        console.error('DDG NSFW Image Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Error total (mungkin block IP). Coba lagi nanti atau ganti ke alternatif Yandex ya bos!' }, { quoted: msg });
+    }
+}
+
+// ============================================================
+// ALTERNATIF: YANDEX NSFW IMAGE UNCENSORED (LEBIH MANTEP 2025)
+// ============================================================
+async function yandexNSFWImage(keyword = 'nsfw real hot', sock, from, msg) {
+    await sock.sendMessage(from, { text: `🔍 Lagi cari foto NSFW uncensored Yandex "${keyword}" (real hot tanpa sensor)...` }, { quoted: msg });
+
+    try {
+        const searchUrl = `https://yandex.com/images/search?text=${encodeURIComponent(keyword)}&isize=large&iorient=square`;
+
+        const { data } = await axios.get(searchUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
+        });
+
+        const $ = cheerio.load(data);
+        const images = [];
+
+        $('.serp-item').each((i, el) => {
+            const json = $(el).attr('data-bem');
+            if (json) {
+                try {
+                    const parsed = JSON.parse(json);
+                    const img = parsed['serp-item'].img_href || parsed['serp-item'].orig;
+                    if (img) images.push(img);
+                } catch { }
+            }
+        });
+
+        if (images.length === 0) {
+            return sock.sendMessage(from, { text: `❌ Gak nemu foto di Yandex untuk "${keyword}".` }, { quoted: msg });
+        }
+
+        const randomUrl = images[Math.floor(Math.random() * images.length)];
+
+        const buffer = await axios.get(randomUrl, { responseType: 'arraybuffer' });
+
+        const caption = `🔞 *NSFW FOTO UNCENSORED - YANDEX 2025*\n` +
+            `📌 *Keyword:* ${keyword}\n` +
+            `🔗 ${randomUrl}\n\n` +
+            `_Real human super hot • No filter • Yandex juara uncensored 😈💦_`;
+
+        await sock.sendMessage(from, {
+            image: buffer.data,
+            caption
+        }, { quoted: msg });
+
+    } catch (e) {
+        console.error('Yandex NSFW Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Error Yandex. Coba lagi ya!' }, { quoted: msg });
     }
 }
 
