@@ -1629,14 +1629,12 @@ wa.me/6289528950624
                     }
 
                     // --- XVIDEOS (Real & Short) ---
-                    if (textLower.startsWith('.xv') || textLower.startsWith('.bokep')) {
+                    if (textLower.startsWith('.sb') || textLower.startsWith('.spank')) {
                         if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
 
                         // Ambil kata kunci, kalau kosong defaultnya 'viral'
-                        let query = text.split(' ').slice(1).join(' ');
-                        if (!query) query = 'indo viral'; // Default search
-
-                        await searchXvideos(query, sock, from, msg);
+                        let query = text.split(' ').slice(1).join(' ') || 'indo viral';
+                        await searchSpankbang(query, sock, from, msg);
                         return;
                     }
 
@@ -1684,68 +1682,78 @@ wa.me/6289528950624
 connectToWhatsApp();
 
 // ============================================================
-// FITUR NSFW: XVIDEOS (REAL HUMAN & SHORT DURATION)
+// FITUR NSFW: SPANKBANG (REAL HUMAN SHORT CLIP - ALTERNATIF XVIDEOS)
 // ============================================================
-async function searchXvideos(query, sock, from, msg) {
-    await sock.sendMessage(from, { text: `🔍 XVIDEOS: Mencari "${query}" (Durasi Pendek)...` }, { quoted: msg });
+async function searchSpankbang(query, sock, from, msg) {
+    await sock.sendMessage(from, { text: `🔍 SPANKBANG: Mencari "${query}" (Short Hot Clip)...` }, { quoted: msg });
 
     try {
-        // 1. Search dengan Filter Durasi Pendek (dur=1 artinya 1-3 menit)
-        // Biar file-nya kecil dan bisa dikirim ke WA
-        const searchUrl = `https://www.xvideos.com/?k=${encodeURIComponent(query)}&dur=1`;
+        // Search dengan sort newest atau popular
+        const searchUrl = `https://spankbang.com/s/${encodeURIComponent(query)}/?o=new`;
 
-        const { data } = await axios.get(searchUrl);
+        const { data } = await axios.get(searchUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
+        });
         const $ = cheerio.load(data);
         const videos = [];
 
-        // 2. Scraping List Video
-        $('.thumb-block').each((i, element) => {
-            const linkElem = $(element).find('.thumb-under a');
-            const title = linkElem.attr('title');
+        // Scraping list video (selector SpankBang 2025)
+        $('.results .video-item').each((i, element) => {
+            const linkElem = $(element).find('a');
+            const title = linkElem.attr('data-name') || linkElem.text().trim();
             const href = linkElem.attr('href');
 
-            if (title && href && !href.startsWith('/profiles')) {
+            if (title && href) {
                 videos.push({
-                    title: title,
-                    url: 'https://www.xvideos.com' + href
+                    title,
+                    url: 'https://spankbang.com' + href
                 });
             }
         });
 
         if (videos.length === 0) {
-            return sock.sendMessage(from, { text: '❌ Gak nemu videonya bos.' }, { quoted: msg });
+            return sock.sendMessage(from, { text: '❌ Gak nemu videonya bos. Coba keyword lain!' }, { quoted: msg });
         }
 
-        // 3. Ambil 1 Video Random
+        // Random video
         const randomVideo = videos[Math.floor(Math.random() * videos.length)];
 
-        // 4. Masuk ke halaman video untuk ambil Link MP4 Asli
+        // Masuk halaman video ambil stream link
         const videoPage = await axios.get(randomVideo.url);
+        const $$ = cheerio.load(videoPage.data);
 
-        // Teknik Regex buat nyari link High Quality di dalam script HTML
-        // Xvideos nyimpen link di: html5player.setVideoUrlHigh('LINK');
-        const mp4Match = videoPage.data.match(/html5player\.setVideoUrlHigh\('([^']+)'\)/);
+        // SpankBang stream links di script atau data-stream
+        let mp4Url = null;
+        $$('script').each((i, el) => {
+            const script = $$(el).html();
+            if (script && script.includes('stream_data')) {
+                const match = script.match(/\"(\d+p)\":\"([^\"]+)\"/g);
+                if (match) {
+                    // Ambil quality tertinggi atau 720p/480p biar aman WA
+                    const high = match.find(m => m.includes('720p') || m.includes('480p'));
+                    if (high) {
+                        mp4Url = high.split('"')[3];
+                    }
+                }
+            }
+        });
 
-        if (!mp4Match || !mp4Match[1]) {
-            return sock.sendMessage(from, { text: '❌ Gagal narik file videonya (Encrypted/Private).' }, { quoted: msg });
+        if (!mp4Url) {
+            return sock.sendMessage(from, { text: '❌ Gagal narik link stream (mungkin encrypted). Coba video lain.' }, { quoted: msg });
         }
 
-        const mp4Url = mp4Match[1];
-
-        // 5. Download Video ke Buffer (Memory)
-        // Kita download dulu biar dikirim sebagai VIDEO, bukan Link.
+        // Download buffer
         const videoBuffer = await axios.get(mp4Url, { responseType: 'arraybuffer' });
 
-        // 6. Kirim ke WhatsApp
         await sock.sendMessage(from, {
             video: videoBuffer.data,
-            caption: `🔞 *XVIDEOS SHORT*\n🎬 ${randomVideo.title}\n\n_Real human, no cartoons!_`,
+            caption: `🔞 *SPANKBANG SHORT HOT*\n🎬 ${randomVideo.title}\n\n_Real human Indo/viral panas! 😈_`,
             gifPlayback: false
         }, { quoted: msg });
 
     } catch (e) {
-        console.error('XVideos Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Error: ' + e.message }, { quoted: msg });
+        console.error('SpankBang Error:', e.message);
+        await sock.sendMessage(from, { text: '❌ Error: ' + e.message + '. Coba lagi atau keyword beda ya bos.' }, { quoted: msg });
     }
 }
 
@@ -1757,11 +1765,11 @@ async function asupanTikTok(sock, from, msg) {
 
     try {
         const keywords = [
-           'ukhti gemoy viral', 'jilbab sempit hot', 'cewe tiktok viral montok', 'ukhti tobrut goyang',
-    'jilboobs tiktok 2025', 'asupan hijab seksi', 'cewek kacamata tobrut viral',
-    'hijab montok tiktok', 'ukhti cantik goyang', 'goyang hijab viral hot',
-    'ukhti seksi non nude', 'asupan ukhti bahenol', 'tiktok hijab viral gemas',
-    'cewek hijab body goals', 'ukhti jilbab ketat viral', 'asupan tiktok ukhti 2025'
+            'ukhti gemoy viral', 'jilbab sempit hot', 'cewe tiktok viral montok', 'ukhti tobrut goyang',
+            'jilboobs tiktok 2025', 'asupan hijab seksi', 'cewek kacamata tobrut viral',
+            'hijab montok tiktok', 'ukhti cantik goyang', 'goyang hijab viral hot',
+            'ukhti seksi non nude', 'asupan ukhti bahenol', 'tiktok hijab viral gemas',
+            'cewek hijab body goals', 'ukhti jilbab ketat viral', 'asupan tiktok ukhti 2025'
         ];
 
         const randomQuery = keywords[Math.floor(Math.random() * keywords.length)];
