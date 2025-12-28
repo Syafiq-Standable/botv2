@@ -32,6 +32,67 @@ try {
 // HELPER FUNCTIONS
 // ============================================================
 
+function addRental(groupId, groupName, days) {
+    if (!fs.existsSync(RENTALS_DB)) fs.writeFileSync(RENTALS_DB, '[]');
+    const rentals = JSON.parse(fs.readFileSync(RENTALS_DB));
+
+    // VALIDASI: Pastikan days itu angka valid. Kalau aneh-aneh, paksa jadi 30 hari.
+    let validDays = parseInt(days);
+    if (isNaN(validDays) || validDays <= 0) validDays = 30;
+
+    // Konversi hari ke milidetik
+    const milliseconds = validDays * 24 * 60 * 60 * 1000;
+    const expiredDate = Date.now() + milliseconds;
+
+    const index = rentals.findIndex(r => r.id === groupId);
+    if (index !== -1) {
+        rentals[index].expired = expiredDate;
+        rentals[index].name = groupName;
+    } else {
+        rentals.push({ id: groupId, name: groupName, expired: expiredDate });
+    }
+    fs.writeFileSync(RENTALS_DB, JSON.stringify(rentals, null, 2));
+    return expiredDate;
+}
+
+function checkRental(groupId) {
+    if (!fs.existsSync(RENTALS_DB)) return false;
+    const rentals = JSON.parse(fs.readFileSync(RENTALS_DB));
+
+    const index = rentals.findIndex(r => r.id === groupId);
+    if (index === -1) return false;
+
+    // VALIDASI: Kalau datanya rusak (null/NaN), jangan dihapus, anggap aktif dulu biar bisa diperbaiki owner
+    if (!rentals[index].expired || isNaN(rentals[index].expired)) {
+        return true; // Safe mode: Tetap izinkan
+    }
+
+    const now = Date.now();
+    if (now > rentals[index].expired) {
+        // Hapus hanya jika benar-benar expired
+        rentals.splice(index, 1);
+        fs.writeFileSync(RENTALS_DB, JSON.stringify(rentals, null, 2));
+        return false;
+    }
+
+    return true;
+}
+
+function getRentalDays(groupId) {
+    if (!fs.existsSync(RENTALS_DB)) return 0;
+    const rentals = JSON.parse(fs.readFileSync(RENTALS_DB));
+    const data = rentals.find(r => r.id === groupId);
+    if (!data) return 0;
+
+    // Kalau expirednya error/unlimited
+    if (!data.expired) return 999;
+
+    const timeLeft = data.expired - Date.now();
+    if (timeLeft <= 0) return 0;
+
+    return Math.ceil(timeLeft / (1000 * 60 * 60 * 24));
+}
+
 function getGroupSettings(groupId) {
     if (!fs.existsSync(GROUPS_DB)) fs.writeFileSync(GROUPS_DB, '[]');
     const groups = JSON.parse(fs.readFileSync(GROUPS_DB));
