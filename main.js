@@ -233,19 +233,14 @@ function grantRental(scope, id, tier, days, grantedBy, context = 'auto') {
     return rentals[normalizedId];
 }
 
-function getRental(id) {
-    const getRental = (jid) => {
-    // Load semua data rental
+function getRental(jid) {
     const rentals = loadRentals();
-    
-    // 1. Coba dengan JID lengkap terlebih dahulu
+
+    // 1. Cek JID lengkap
     if (rentals[jid]) {
-        const rentalData = rentals[jid];
-        if (rentalData.expires > Date.now()) {
-            return rentalData;
-        }
+        if (rentals[jid].expires > Date.now()) return rentals[jid];
     }
-    
+
     // 2. Jika JID mengandung @, coba tanpa domain
     if (jid.includes('@')) {
         const jidWithoutDomain = jid.split('@')[0];
@@ -256,20 +251,20 @@ function getRental(id) {
             }
         }
     }
-    
+
     // 3. Coba semua kemungkinan format
     for (const key in rentals) {
         // Jika key tanpa domain (format lama)
         if (!key.includes('@')) {
             // Coba cocokkan dengan format lengkap
             let possibleMatch = false;
-            
+
             if (jid.endsWith('@g.us') && key === jid.replace('@g.us', '')) {
                 possibleMatch = true;
             } else if (jid.endsWith('@s.whatsapp.net') && key === jid.replace('@s.whatsapp.net', '')) {
                 possibleMatch = true;
             }
-            
+
             if (possibleMatch) {
                 const rentalData = rentals[key];
                 if (rentalData.expires > Date.now()) {
@@ -278,8 +273,8 @@ function getRental(id) {
             }
         }
     }
-}
-    
+
+
     // 4. Tidak ditemukan atau sudah expired
     return false;
 };
@@ -1642,6 +1637,38 @@ wa.me/6289528950624
                         case prefix + 'delprem':
                             await sock.sendMessage(from, { text: `⚠️ Perintah ${command} sudah diganti dengan *${prefix}addrent* dan *${prefix}delrent*.` }, { quoted: msg });
                             return;
+                    }
+                    // AUDIT COMMAND
+                    if (textLower === '.checkall') {
+                        if (!isOperator(senderId)) return;
+
+                        const commands = [
+                            { name: 'Downloader (TT)', func: typeof downloadTikTok },
+                            { name: 'Downloader (IG)', func: typeof downloadInstagram },
+                            { name: 'Downloader (YT)', func: typeof ytMp4 },
+                            { name: 'Sticker Maker', func: typeof createSticker },
+                            { name: 'Database System', func: typeof loadUsers },
+                            { name: 'Rental System', func: typeof grantRental },
+                            { name: 'Anime API', func: typeof getWaifu },
+                            { name: 'Scheduler/Alarm', func: typeof setupBackgroundJobs }
+                        ];
+
+                        let checkList = `🛠️ *AUDIT COMMAND SAM BOT*\n━━━━━━━━━━━━━━━\n`;
+
+                        commands.forEach(cmd => {
+                            const status = cmd.func === 'function' ? '✅ Ready' : '❌ Broken/Undefined';
+                            checkList += `• *${cmd.name}*: ${status}\n`;
+                        });
+
+                        // Cek folder sampah buat storage
+                        const sampahDir = path.join(__dirname, 'database', 'sampah');
+                        const sampahReady = fs.existsSync(sampahDir) ? '✅ Exists' : '⚠️ Missing (Auto-create)';
+                        checkList += `\n• *Folder Junk*: ${sampahReady}`;
+
+                        checkList += `\n━━━━━━━━━━━━━━━\n_Status: Diagnostic Complete_`;
+
+                        await sock.sendMessage(from, { text: checkList }, { quoted: msg });
+                        return;
                     }
                 }
 
