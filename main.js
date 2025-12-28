@@ -1623,7 +1623,7 @@ wa.me/6289528950624
 
                     // --- ASUPAN TIKTOK CUSTOM SEARCH ---
                     if (textLower.startsWith('.asupan') || textLower.startsWith('.ukhti') || textLower.startsWith('.hijab')) {
-                        if (!isPrivateOrOwner) return sock.sendMessage(from, { text: '❌ Khusus Owner/Private chat!' }, { quoted: msg });
+                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner/Private chat!' }, { quoted: msg });
 
                         // Ambil keyword setelah command (kalau ada)
                         let keyword = text.split(' ').slice(1).join(' ');
