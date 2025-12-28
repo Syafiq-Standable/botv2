@@ -392,26 +392,49 @@ Ketik *.sewa* untuk info perpanjangan.
 // FITUR DOWNLOADER .TT .IG .YTMP3 .YTMP4 .FB .X
 // ============================================================
 
-async function downloadSosmed(url) {
+async function downloadInstagram(url, sock, from, msg) {
+    await sock.sendMessage(from, { text: '⏳ Download Instagram...' }, { quoted: msg });
     try {
-        // Deteksi ini link apa
-        if (url.includes('tiktok.com')) {
-            const data = await ttdl(url);
-            return data.video[0] || data.video; // Ambil video pertama
-        } 
-        else if (url.includes('instagram.com')) {
-            const data = await igdl(url);
-            // IG bisa banyak slide, kita ambil yang pertama aja buat simpel
-            return data[0].url; 
+        // Menggunakan API Widipe
+        const res = await axios.get(`https://widipe.com/download/igdl?url=${url}`);
+        
+        // Cek apakah ada hasilnya
+        if (res.data && res.data.result && res.data.result.length > 0) {
+            const videoUrl = res.data.result[0].url; // Ambil video pertama
+            
+            await sock.sendMessage(from, {
+                video: { url: videoUrl },
+                caption: '✅ Instagram Download'
+            }, { quoted: msg });
+        } else {
+            throw new Error('Video tidak ditemukan');
         }
-        else if (url.includes('youtube.com') || url.includes('youtu.be')) {
-            const data = await youtube(url);
-            return data.mp4; // Ambil link MP4
+    } catch (error) {
+        console.error('IG download error:', error.message);
+        await sock.sendMessage(from, { text: '❌ Gagal download Instagram (Link private/Error).' }, { quoted: msg });
+    }
+}
+
+// --- DOWNLOADER YOUTUBE (Pakai API Widipe) ---
+async function downloadYouTube(url, sock, from, msg) {
+    await sock.sendMessage(from, { text: '⏳ Download YouTube...' }, { quoted: msg });
+    try {
+        const res = await axios.get(`https://widipe.com/download/ytdl?url=${url}`);
+        
+        if (res.data && res.data.result && res.data.result.mp4) {
+            const videoUrl = res.data.result.mp4;
+            const title = res.data.result.title || 'YouTube Video';
+            
+            await sock.sendMessage(from, {
+                video: { url: videoUrl },
+                caption: `✅ ${title}`
+            }, { quoted: msg });
+        } else {
+            throw new Error('Video tidak ditemukan');
         }
-        return null;
-    } catch (e) {
-        console.error("Error Scraper:", e);
-        return null;
+    } catch (error) {
+        console.error('YouTube download error:', error.message);
+        await sock.sendMessage(from, { text: '❌ Gagal download YouTube.' }, { quoted: msg });
     }
 }
 
@@ -822,56 +845,23 @@ _Managed by Sukabyone_
                     return;
                 }
 
-                // TESTING
-                // ====================================================
-                // FITUR DOWNLOADER (IG, TT, YT) - UNIVERSAL
-                // ====================================================
-                if (textLower.startsWith('.tt2') || 
-                    textLower.startsWith('.tiktok2') || 
-                    textLower.startsWith('.ig') || 
-                    textLower.startsWith('.instagram') ||
-                    textLower.startsWith('.yt') || 
-                    textLower.startsWith('.youtube')) {
-
-                    // Ambil link setelah command
-                    const args = text.split(' ');
-                    const url = args[1];
-
-                    // Validasi kalau link kosong
-                    if (!url) {
-                        return sock.sendMessage(from, { text: '❌ Mana linknya kak?\nContoh: .tt https://tiktok.com/...' }, { quoted: msg });
-                    }
-
-                    // Kasih reaksi atau pesan tunggu
-                    await sock.sendMessage(from, { text: '⏳ Tunggu sebentar, sedang diproses...' }, { quoted: msg });
-
-                    try {
-                        // Panggil fungsi downloadSosmed yang sudah kita perbaiki tadi
-                        let videoUrl = await downloadSosmed(url);
-
-                        if (videoUrl) {
-                            // Kirim Videonya
-                            await sock.sendMessage(from, { 
-                                video: { url: videoUrl }, 
-                                caption: '✅ Sukses Download (No Watermark)' 
-                            }, { quoted: msg });
-                        } else {
-                            // Kalau gagal (return null)
-                            await sock.sendMessage(from, { text: '❌ Gagal download. Link mungkin private atau server sibuk.' }, { quoted: msg });
-                        }
-                    } catch (err) {
-                        console.log('Error Downloader:', err);
-                        await sock.sendMessage(from, { text: '❌ Terjadi kesalahan sistem.' }, { quoted: msg });
-                    }
-                    return; // Stop eksekusi agar tidak lanjut ke bawah
+                // 2. INSTAGRAM
+                if (textLower.startsWith('.ig') || textLower.startsWith('.instagram')) {
+                    const url = text.split(' ')[1];
+                    if (!url) return sock.sendMessage(from, { text: 'Mana linknya?' }, { quoted: msg });
+                    
+                    // Panggil fungsi khusus Instagram
+                    await downloadInstagram(url, sock, from, msg);
+                    return;
                 }
 
-                if (textLower.startsWith('.ig ')) {
+                // 3. YOUTUBE
+                if (textLower.startsWith('.yt') || textLower.startsWith('.youtube')) {
                     const url = text.split(' ')[1];
-                    if (!url.includes('instagram.com')) {
-                        return sock.sendMessage(from, { text: '❌ Link Instagram tidak valid!' }, { quoted: msg });
-                    }
-                    await downloadInstagram(url, sock, from, msg);
+                    if (!url) return sock.sendMessage(from, { text: 'Mana linknya?' }, { quoted: msg });
+                    
+                    // Panggil fungsi khusus YouTube
+                    await downloadYouTube(url, sock, from, msg);
                     return;
                 }
 
