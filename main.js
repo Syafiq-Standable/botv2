@@ -1365,245 +1365,159 @@ wa.me/6289528950624
                     }
                 }
 
-                // ============================================
-                // OPERATOR COMMANDS
-                // ============================================
-
-                const command = textLower.split(' ')[0];
+                // ============================================================
+                // 🛡️ FITUR OPERATOR / OWNER (RENTAL SYSTEM)
+                // ============================================================
                 const senderId = sender.split('@')[0];
 
                 if (isOperator(senderId)) {
-                    switch (command) {
-                        case prefix + 'listrent':
-                        case prefix + 'ceksewaall':
-                            const activeRentals = await listRentals(sock);
 
-                            if (activeRentals.length === 0) {
-                                await sock.sendMessage(from, { text: 'Bot lagi *santai*. Belum ada yang aktif sewa saat ini.' }, { quoted: msg });
-                                return;
-                            }
+                    // 1. LIST RENT (Cek Semua Sewa)
+                    if (textLower === prefix + 'listrent' || textLower === prefix + 'ceksewaall') {
+                        const activeRentals = await listRentals(sock);
 
-                            let listText = '📄 *CATATAN OPERATOR* 📄\n_Hanya untuk internal._\n\n';
+                        if (activeRentals.length === 0) {
+                            return sock.sendMessage(from, { text: 'Bot lagi *santai*. Belum ada yang aktif sewa saat ini.' }, { quoted: msg });
+                        }
 
-                            activeRentals.forEach((r, i) => {
-                                const nameDisplay = r.type === 'Grup' ? ` (${r.name})` : '';
-                                listText += `*${i + 1}. ${r.type}${nameDisplay}*:\n`;
-                                listText += ` > ID: ${r.jid}\n`;
-                                listText += ` > Level: ${r.tier}\n`;
-                                listText += ` > Habis: ${r.expiryDate} (Sisa ${r.duration})\n`;
-                                listText += ` > Diberi: ${r.grantedBy}\n\n`;
-                            });
+                        let listText = '📄 *CATATAN OPERATOR* 📄\n_Hanya untuk internal._\n\n';
 
-                            listText += `_Total ${activeRentals.length} akses aktif. Keep it lowkey._`;
+                        activeRentals.forEach((r, i) => {
+                            const nameDisplay = r.type === 'Grup' ? ` (${r.name})` : '';
+                            listText += `*${i + 1}. ${r.type}${nameDisplay}*:\n`;
+                            listText += ` > ID: ${r.jid}\n`;
+                            listText += ` > Level: ${r.tier}\n`;
+                            listText += ` > Habis: ${r.expiryDate} (Sisa ${r.duration})\n`;
+                            listText += ` > Diberi: ${r.grantedBy}\n\n`;
+                        });
 
-                            await sock.sendMessage(from, { text: listText.trim() }, { quoted: msg });
-                            return;
-
-                        case prefix + 'addrent':
-                            if (!isOperator(senderId)) {
-                                return sock.sendMessage(from, { text: '❌ Hanya operator!' }, { quoted: msg });
-                            }
-
-                            const args = text.split(' ');
-
-                            // Handle .addrent list
-                            if (args.length > 1 && args[1].toLowerCase() === 'list') {
-                                const activeRentals = await listRentals(sock);
-
-                                if (activeRentals.length === 0) {
-                                    return sock.sendMessage(from, { text: '📭 Belum ada sewa aktif.' }, { quoted: msg });
-                                }
-
-                                let listText = `📋 *DAFTAR SEWA AKTIF* (${activeRentals.length})\n\n`;
-
-                                activeRentals.slice(0, 10).forEach((r, i) => {
-                                    const nameDisplay = r.type === 'Grup' ? ` (${r.name.substring(0, 20)}...)` : '';
-                                    listText += `${i + 1}. *${r.type}${nameDisplay}*\n`;
-                                    listText += `   ⏳ ${r.duration} lagi\n`;
-                                    listText += `   📅 ${r.expiryDate}\n`;
-                                    listText += `   🆔 ${r.jid.substring(0, 20)}...\n\n`;
-                                });
-
-                                if (activeRentals.length > 10) {
-                                    listText += `...dan ${activeRentals.length - 10} lainnya.\n`;
-                                }
-
-                                await sock.sendMessage(from, { text: listText }, { quoted: msg });
-                                return;
-                            }
-
-                            // Tampilkan help jika format salah
-                            if (args.length < 2) {
-                                const helpText = `📋 *CARA PAKAI .addrent* 📋
-
-1. *DI GRUP* (otomatis):
-   .addrent 30  → sewa grup ini 30 hari
-   .addrent group 30 → sama seperti atas
-   .addrent extend 30 → perpanjang sewa
-
-2. *DI PRIVATE CHAT*:
-   .addrent 628123456789 30 → sewa user
-   .addrent 120363423805458918@g.us 30 → sewa grup
-
-3. *LAINNYA*:
-   .addrent list → lihat semua sewa aktif
-
-*Contoh:* \`.addrent 7\` → sewa 7 hari`;
-                                return sock.sendMessage(from, { text: helpText }, { quoted: msg });
-                            }
-
-                            try {
-                                let targetId, days, context;
-
-                                // SCENARIO 1: ".addrent 30" (di grup → otomatis grup ini)
-                                if (args.length === 2 && !isNaN(args[1])) {
-                                    targetId = from;
-                                    days = parseInt(args[1]);
-                                    context = 'group';
-                                }
-                                // SCENARIO 2: ".addrent group 30"
-                                else if (args[1].toLowerCase() === 'group' && !isNaN(args[2])) {
-                                    targetId = from;
-                                    days = parseInt(args[2]);
-                                    context = 'group';
-                                }
-                                // SCENARIO 3: ".addrent extend 30"
-                                else if (args[1].toLowerCase() === 'extend' && !isNaN(args[2])) {
-                                    targetId = from;
-                                    days = parseInt(args[2]);
-                                    context = 'group';
-
-                                    const existing = getRental(targetId);
-                                    if (!existing) {
-                                        return sock.sendMessage(from, {
-                                            text: '❌ Grup ini belum punya sewa aktif. Gunakan `.addrent 30` saja.'
-                                        }, { quoted: msg });
-                                    }
-                                }
-                                // SCENARIO 4: Format lengkap
-                                else if (args.length >= 3 && !isNaN(args[2])) {
-                                    targetId = args[1];
-                                    days = parseInt(args[2]);
-                                    context = targetId.length >= 15 ? 'group' : 'private';
-                                }
-                                else {
-                                    return sock.sendMessage(from, {
-                                        text: '❌ Format salah! Contoh: `.addrent 30` atau `.addrent 628123456789 30`'
-                                    }, { quoted: msg });
-                                }
-
-                                if (isNaN(days) || days <= 0) {
-                                    return sock.sendMessage(from, { text: '❌ Jumlah hari harus angka positif!' }, { quoted: msg });
-                                }
-
-                                // Grant rental
-                                const rentalInfo = grantRental('MANUAL', targetId, 'A', days, senderId, context);
-
-                                // Format response
-                                const now = new Date();
-                                const expiryDate = new Date(rentalInfo.expires);
-                                const daysDiff = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
-
-                                let response = `✅ *SEWA DITAMBAHKAN* ✅\n\n`;
-                                response += `📌 *ID:* ${targetId.includes('@') ? targetId : normalizeJid(targetId, context)}\n`;
-                                response += `⏱️ *Durasi:* ${days} hari\n`;
-                                response += `📅 *Berlaku hingga:* ${formatDate(rentalInfo.expires)}\n`;
-                                response += `⏳ *Sisa:* ${daysDiff} hari\n`;
-                                response += `👤 *Ditambahkan oleh:* @${senderId.split('@')[0]}\n\n`;
-                                response += `_Status: ${rentalInfo.scope.toUpperCase()} - ${rentalInfo.tier}_`;
-
-                                await sock.sendMessage(from, {
-                                    text: response,
-                                    mentions: [sender]
-                                }, { quoted: msg });
-
-                            } catch (error) {
-                                console.error('Addrent error:', error);
-                                await sock.sendMessage(from, {
-                                    text: `❌ Gagal menambah sewa: ${error.message}`
-                                }, { quoted: msg });
-                            }
-                            return;
-
-                        case prefix + 'delrent':
-                            // Fix: Gunakan variable yang konsisten
-                            const delArgs = text.split(' ');
-
-                            if (delArgs.length < 2) {
-                                await sock.sendMessage(from, {
-                                    text: `Format salah! Gunakan: ${prefix}delrent [ID JID/Group]\n\nContoh:\n.delrent 628123456789\n.delrent 120363423805458918@g.us`
-                                }, { quoted: msg });
-                                return;
-                            }
-
-                            let idToRevoke = delArgs[1].trim();
-
-                            // Handle ".delrent group" (hapus sewa grup saat ini)
-                            if (idToRevoke.toLowerCase() === 'group' && isGroup) {
-                                idToRevoke = from; // ID grup sekarang
-                                console.log(`[DELRENT] Auto-targeting current group: ${idToRevoke}`);
-                            }
-
-                            // Normalisasi JID jika belum lengkap
-                            if (!idToRevoke.includes('@')) {
-                                // Auto-detect: angka panjang = grup, pendek = private
-                                idToRevoke = idToRevoke.length >= 15 ?
-                                    `${idToRevoke}@g.us` :
-                                    `${idToRevoke}@s.whatsapp.net`;
-                            }
-
-                            // Validasi JID
-                            if (!isValidJid(idToRevoke)) {
-                                await sock.sendMessage(from, {
-                                    text: `❌ Format JID tidak valid.\n\nFormat yang benar:\n• Private: 628123456789@s.whatsapp.net\n• Group: 120363423805458918@g.us\n\nID yang dimasukkan: ${idToRevoke}`
-                                }, { quoted: msg });
-                                return;
-                            }
-
-                            // Cek apakah ada sewa aktif sebelum dihapus
-                            const existingRental = getRental(idToRevoke);
-
-                            if (!existingRental) {
-                                await sock.sendMessage(from, {
-                                    text: `❌ ID *${idToRevoke}* tidak memiliki sewa aktif.`
-                                }, { quoted: msg });
-                                return;
-                            }
-
-                            // Hapus sewa
-                            revokeRental(idToRevoke);
-
-                            // Verifikasi penghapusan
-                            const afterDelete = getRental(idToRevoke);
-
-                            if (!afterDelete) {
-                                const response = `✅ *SEWA DIHAPUS* ✅\n\n` +
-                                    `📌 *ID:* ${idToRevoke}\n` +
-                                    `🗑️ *Dihapus oleh:* @${senderId.split('@')[0]}\n` +
-                                    `📅 *Data sewa sebelumnya:*\n` +
-                                    `   - Tier: ${existingRental.tier}\n` +
-                                    `   - Expired: ${formatDate(existingRental.expires)}\n` +
-                                    `   - Scope: ${existingRental.scope}\n\n` +
-                                    `_Status: TERHAPUS ✅_`;
-
-                                await sock.sendMessage(from, {
-                                    text: response,
-                                    mentions: [sender]
-                                }, { quoted: msg });
-                            } else {
-                                await sock.sendMessage(from, {
-                                    text: `⚠️ Peringatan: Penghapusan mungkin gagal. ID masih terdeteksi memiliki akses.`
-                                }, { quoted: msg });
-                            }
-                            return;
-
-
-                        case prefix + 'addprem':
-                        case prefix + 'delprem':
-                            await sock.sendMessage(from, { text: `⚠️ Perintah ${command} sudah diganti dengan *${prefix}addrent* dan *${prefix}delrent*.` }, { quoted: msg });
-                            return;
+                        listText += `_Total ${activeRentals.length} akses aktif. Keep it lowkey._`;
+                        return sock.sendMessage(from, { text: listText.trim() }, { quoted: msg });
                     }
 
+                    // 2. ADD RENT (Tambah Sewa)
+                    else if (textLower.startsWith(prefix + 'addrent')) {
+                        const args = text.split(' ');
+
+                        // Sub-command: .addrent list
+                        if (args.length > 1 && args[1].toLowerCase() === 'list') {
+                            const activeRentals = await listRentals(sock);
+                            if (activeRentals.length === 0) return sock.sendMessage(from, { text: '📭 Belum ada sewa aktif.' }, { quoted: msg });
+
+                            let listText = `📋 *DAFTAR SEWA AKTIF* (${activeRentals.length})\n\n`;
+                            activeRentals.slice(0, 10).forEach((r, i) => {
+                                const nameDisplay = r.type === 'Grup' ? ` (${r.name.substring(0, 20)}...)` : '';
+                                listText += `${i + 1}. *${r.type}${nameDisplay}*\n ⏳ ${r.duration} lagi\n 📅 ${r.expiryDate}\n 🆔 ${r.jid.substring(0, 20)}...\n\n`;
+                            });
+                            if (activeRentals.length > 10) listText += `...dan ${activeRentals.length - 10} lainnya.\n`;
+
+                            return sock.sendMessage(from, { text: listText }, { quoted: msg });
+                        }
+
+                        // Tampilkan Help jika format kurang
+                        if (args.length < 2) {
+                            const helpText = `📋 *CARA PAKAI .addrent* 📋\n\n1. *DI GRUP*:\n   .addrent 30  → sewa grup ini 30 hari\n   .addrent extend 30 → perpanjang\n\n2. *MANUAL*:\n   .addrent 628xx 30 → sewa user\n   .addrent 120363xx@g.us 30 → sewa grup\n\n*Contoh:* \`.addrent 7\``;
+                            return sock.sendMessage(from, { text: helpText }, { quoted: msg });
+                        }
+
+                        try {
+                            let targetId, days, context;
+
+                            // Skenario 1: .addrent 30 (Auto Grup)
+                            if (args.length === 2 && !isNaN(args[1])) {
+                                targetId = from;
+                                days = parseInt(args[1]);
+                                context = 'group';
+                            }
+                            // Skenario 2: .addrent group 30
+                            else if (args[1].toLowerCase() === 'group' && !isNaN(args[2])) {
+                                targetId = from;
+                                days = parseInt(args[2]);
+                                context = 'group';
+                            }
+                            // Skenario 3: .addrent extend 30
+                            else if (args[1].toLowerCase() === 'extend' && !isNaN(args[2])) {
+                                targetId = from;
+                                days = parseInt(args[2]);
+                                context = 'group';
+                                if (!getRental(targetId)) return sock.sendMessage(from, { text: '❌ Grup ini belum sewa. Pakai .addrent 30 aja.' }, { quoted: msg });
+                            }
+                            // Skenario 4: Manual ID
+                            else if (args.length >= 3 && !isNaN(args[2])) {
+                                targetId = args[1];
+                                days = parseInt(args[2]);
+                                context = targetId.length >= 15 ? 'group' : 'private';
+                            } else {
+                                return sock.sendMessage(from, { text: '❌ Format salah! Cek .addrent untuk bantuan.' }, { quoted: msg });
+                            }
+
+                            if (isNaN(days) || days <= 0) return sock.sendMessage(from, { text: '❌ Jumlah hari harus angka positif!' }, { quoted: msg });
+
+                            // Eksekusi Grant Rental
+                            const rentalInfo = grantRental('MANUAL', targetId, 'A', days, senderId, context);
+
+                            // Hitung sisa hari
+                            const now = new Date();
+                            const expiryDate = new Date(rentalInfo.expires);
+                            const daysDiff = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
+
+                            let response = `✅ *SEWA DITAMBAHKAN* ✅\n\n📌 *ID:* ${targetId.includes('@') ? targetId : normalizeJid(targetId, context)}\n⏱️ *Durasi:* ${days} hari\n📅 *Berlaku:* ${formatDate(rentalInfo.expires)}\n⏳ *Sisa:* ${daysDiff} hari\n👤 *Oleh:* @${senderId.split('@')[0]}\n\n_Status: ${rentalInfo.scope.toUpperCase()} - ${rentalInfo.tier}_`;
+
+                            return sock.sendMessage(from, { text: response, mentions: [sender] }, { quoted: msg });
+
+                        } catch (error) {
+                            console.error('Addrent error:', error);
+                            return sock.sendMessage(from, { text: `❌ Error: ${error.message}` }, { quoted: msg });
+                        }
+                    }
+
+                    // 3. DEL RENT (Hapus Sewa)
+                    else if (textLower.startsWith(prefix + 'delrent') || textLower.startsWith(prefix + 'delsewa')) {
+                        const args = text.split(' '); // Pakai args biar konsisten
+
+                        if (args.length < 2) {
+                            return sock.sendMessage(from, { text: `⚠️ Format salah! Gunakan:\n${prefix}delrent [ID JID/Group]\n\nContoh:\n.delrent 120363423805458918@g.us` }, { quoted: msg });
+                        }
+
+                        let idToRevoke = args[1].trim();
+
+                        // Handle .delrent group (hapus grup ini)
+                        if (idToRevoke.toLowerCase() === 'group' && isGroup) {
+                            idToRevoke = from;
+                        }
+
+                        // Auto-detect format ID (jika user lupa @g.us)
+                        if (!idToRevoke.includes('@')) {
+                            idToRevoke = idToRevoke.length >= 15 ? `${idToRevoke}@g.us` : `${idToRevoke}@s.whatsapp.net`;
+                        }
+
+                        // Validasi JID
+                        if (!isValidJid(idToRevoke)) {
+                            return sock.sendMessage(from, { text: `❌ Format ID aneh: ${idToRevoke}` }, { quoted: msg });
+                        }
+
+                        // Cek exist
+                        const existingRental = getRental(idToRevoke);
+                        if (!existingRental) {
+                            return sock.sendMessage(from, { text: `❌ ID *${idToRevoke}* memang tidak ada sewanya.` }, { quoted: msg });
+                        }
+
+                        // Eksekusi Hapus
+                        revokeRental(idToRevoke);
+
+                        // Cek hasil
+                        if (!getRental(idToRevoke)) {
+                            const response = `✅ *SEWA DIHAPUS* ✅\n\n📌 *ID:* ${idToRevoke}\n🗑️ *Dihapus oleh:* @${senderId.split('@')[0]}\n📅 *Data lama:*\n   - Expired: ${formatDate(existingRental.expires)}\n   - Scope: ${existingRental.scope}\n\n_Status: TERHAPUS 🚮_`;
+                            return sock.sendMessage(from, { text: response, mentions: [sender] }, { quoted: msg });
+                        } else {
+                            return sock.sendMessage(from, { text: `⚠️ Gagal menghapus database. Coba cek logs.` }, { quoted: msg });
+                        }
+                    }
+
+                    // 4. LEGACY COMMANDS (Peringatan)
+                    else if (textLower.startsWith(prefix + 'addprem') || textLower.startsWith(prefix + 'delprem')) {
+                        return sock.sendMessage(from, { text: `⚠️ Command lawas. Gunakan *${prefix}addrent* atau *${prefix}delrent*.` }, { quoted: msg });
+                    }
 
                     // AUDIT COMMAND
                     if (textLower === '.checkall') {
@@ -1856,7 +1770,7 @@ async function searchDood(query, sock, from, msg) {
         // Trik Dorking: Kita cari link yang domainnya dood.*
         const dork = `site:dood.la OR site:dood.so OR site:dood.re OR site:dood.wf "${query}"`;
         const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(dork)}`;
-        
+
         // Pakai Proxy biar IP VPS gak diblok DuckDuckGo
         const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(searchUrl)}`;
 
@@ -1892,9 +1806,9 @@ async function searchDood(query, sock, from, msg) {
         });
         caption += `_Link bisa ditonton langsung tanpa VPN (biasanya)._`;
 
-        await sock.sendMessage(from, { 
+        await sock.sendMessage(from, {
             image: { url: 'https://i.imgur.com/L12a70m.png' }, // Logo Doodstream (opsional)
-            caption: caption 
+            caption: caption
         }, { quoted: msg });
 
     } catch (e) {
@@ -1911,7 +1825,7 @@ async function searchSfile(query, sock, from, msg) {
 
     try {
         const searchUrl = `https://sfile.mobi/search.php?q=${encodeURIComponent(query)}&search=Search`;
-        
+
         const { data } = await axios.get(searchUrl, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
         });
