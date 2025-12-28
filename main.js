@@ -737,7 +737,7 @@ async function connectToWhatsApp() {
                 // ============================================================
                 // LOGIKA SATPAM (MODERASI OTOMATIS)
                 // ============================================================
-                
+
                 const isOp = isOperator(sender.split('@')[0]); // Cek status operator
                 const groupSettings = isGroup ? getGroupSettings(from) : null; // Load database grup
 
@@ -753,7 +753,7 @@ async function connectToWhatsApp() {
                         // Kalau User BUKAN Admin & BUKAN Operator, tapi Bot ADMIN -> Sikat
                         if (botAdmin && !userAdmin && !isOp) {
                             await sock.sendMessage(from, { delete: msg.key }); // Hapus pesan
-                            await sock.sendMessage(from, { 
+                            await sock.sendMessage(from, {
                                 text: `⚠️ Dilarang kirim link grup lain!`,
                                 mentions: [sender]
                             });
@@ -765,7 +765,7 @@ async function connectToWhatsApp() {
                 // 2. CEK ANTI-TOXIC
                 if (isGroup && groupSettings?.antitoxic) {
                     const badwords = ['anjg', 'anjing', 'babi', 'monyet', 'kunyuk', 'bajingan', 'tolol', 'goblok', 'kontol', 'memek', 'ngentot'];
-                    
+
                     if (badwords.some(word => textLower.includes(word))) {
                         const groupMetadata = await sock.groupMetadata(from);
                         const participants = groupMetadata.participants;
@@ -774,7 +774,7 @@ async function connectToWhatsApp() {
 
                         if (botAdmin && !userAdmin && !isOp) {
                             await sock.sendMessage(from, { delete: msg.key }); // Hapus pesan
-                            await sock.sendMessage(from, { 
+                            await sock.sendMessage(from, {
                                 text: `⚠️ Mulutnya dijaga ya! (Auto Delete)`,
                                 mentions: [sender]
                             });
@@ -1097,6 +1097,54 @@ wa.me/6289528950624
                     const userAdmin = participants.find(p => p.id === sender)?.admin;
                     const isBotAdmin = botAdmin === 'admin' || botAdmin === 'superadmin';
                     const isUserAdmin = userAdmin === 'admin' || userAdmin === 'superadmin';
+
+                    // ============================================================
+                    // COMMAND MODERASI (ADMIN ONLY)
+                    // ============================================================
+
+                    // --- ANTI LINK ---
+                    if (textLower.startsWith('.antilink')) {
+                        if (!isGroup) return sock.sendMessage(from, { text: '❌ Hanya untuk grup.' }, { quoted: msg });
+                        if (!isAdmin) return sock.sendMessage(from, { text: '❌ Khusus Admin Grup.' }, { quoted: msg });
+                        if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ Jadikan saya Admin dulu biar bisa hapus pesan!' }, { quoted: msg });
+
+                        const args = text.split(' ');
+                        const status = args[1]?.toLowerCase(); // on atau off
+
+                        if (status === 'on') {
+                            updateGroupSettings(from, 'antilink', true);
+                            await sock.sendMessage(from, { text: '🛡️ Anti-Link diaktifkan! Member yang kirim link grup lain akan dihapus otomatis.' }, { quoted: msg });
+                        } else if (status === 'off') {
+                            updateGroupSettings(from, 'antilink', false);
+                            await sock.sendMessage(from, { text: '🛡️ Anti-Link dimatikan.' }, { quoted: msg });
+                        } else {
+                            await sock.sendMessage(from, { text: 'Pilih on atau off.\nContoh: .antilink on' }, { quoted: msg });
+                        }
+                        return;
+                    }
+
+                    // --- ANTI TOXIC ---
+                    if (textLower.startsWith('.antitoxic')) {
+                        if (!isGroup) return sock.sendMessage(from, { text: '❌ Hanya untuk grup.' }, { quoted: msg });
+                        if (!isAdmin) return sock.sendMessage(from, { text: '❌ Khusus Admin Grup.' }, { quoted: msg });
+                        if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ Jadikan saya Admin dulu!' }, { quoted: msg });
+
+                        const args = text.split(' ');
+                        const status = args[1]?.toLowerCase();
+
+                        if (status === 'on') {
+                            updateGroupSettings(from, 'antitoxic', true);
+                            await sock.sendMessage(from, { text: '🤬 Anti-Toxic diaktifkan! Chat kasar akan dihapus.' }, { quoted: msg });
+                        } else if (status === 'off') {
+                            updateGroupSettings(from, 'antitoxic', false);
+                            await sock.sendMessage(from, { text: '🤬 Anti-Toxic dimatikan.' }, { quoted: msg });
+                        } else {
+                            await sock.sendMessage(from, { text: 'Pilih on atau off.\nContoh: .antitoxic on' }, { quoted: msg });
+                        }
+                        return;
+                    }
+
+
 
                     if (textLower === '.cekidgroup') {
                         const idGroupText = `🌐 *ID GRUP*\n\nID: ${from}\n_Gunakan ID ini untuk keperluan sewa atau operator._`;
@@ -1425,51 +1473,6 @@ wa.me/6289528950624
                                 mentions: [sender]
                             });
                         }, ms);
-                    }
-                    // ============================================================
-                    // COMMAND MODERASI (ADMIN ONLY)
-                    // ============================================================
-
-                    // --- ANTI LINK ---
-                    if (textLower.startsWith('.antilink')) {
-                        if (!isGroup) return sock.sendMessage(from, { text: '❌ Hanya untuk grup.' }, { quoted: msg });
-                        if (!isAdmin) return sock.sendMessage(from, { text: '❌ Khusus Admin Grup.' }, { quoted: msg });
-                        if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ Jadikan saya Admin dulu biar bisa hapus pesan!' }, { quoted: msg });
-
-                        const args = text.split(' ');
-                        const status = args[1]?.toLowerCase(); // on atau off
-
-                        if (status === 'on') {
-                            updateGroupSettings(from, 'antilink', true);
-                            await sock.sendMessage(from, { text: '🛡️ Anti-Link diaktifkan! Member yang kirim link grup lain akan dihapus otomatis.' }, { quoted: msg });
-                        } else if (status === 'off') {
-                            updateGroupSettings(from, 'antilink', false);
-                            await sock.sendMessage(from, { text: '🛡️ Anti-Link dimatikan.' }, { quoted: msg });
-                        } else {
-                            await sock.sendMessage(from, { text: 'Pilih on atau off.\nContoh: .antilink on' }, { quoted: msg });
-                        }
-                        return;
-                    }
-
-                    // --- ANTI TOXIC ---
-                    if (textLower.startsWith('.antitoxic')) {
-                        if (!isGroup) return sock.sendMessage(from, { text: '❌ Hanya untuk grup.' }, { quoted: msg });
-                        if (!isAdmin) return sock.sendMessage(from, { text: '❌ Khusus Admin Grup.' }, { quoted: msg });
-                        if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ Jadikan saya Admin dulu!' }, { quoted: msg });
-
-                        const args = text.split(' ');
-                        const status = args[1]?.toLowerCase();
-
-                        if (status === 'on') {
-                            updateGroupSettings(from, 'antitoxic', true);
-                            await sock.sendMessage(from, { text: '🤬 Anti-Toxic diaktifkan! Chat kasar akan dihapus.' }, { quoted: msg });
-                        } else if (status === 'off') {
-                            updateGroupSettings(from, 'antitoxic', false);
-                            await sock.sendMessage(from, { text: '🤬 Anti-Toxic dimatikan.' }, { quoted: msg });
-                        } else {
-                            await sock.sendMessage(from, { text: 'Pilih on atau off.\nContoh: .antitoxic on' }, { quoted: msg });
-                        }
-                        return;
                     }
                 }
 
