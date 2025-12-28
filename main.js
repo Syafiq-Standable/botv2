@@ -7,6 +7,8 @@ const sharp = require('sharp');
 const cheerio = require('cheerio');
 const { exec } = require('child_process');
 const { ttdl, igdl, youtube } = require('btch-downloader');
+const { PornHub } = require('nsfwhub');
+const ph = new PornHub();
 
 // ============================================================
 // KONFIGURASI AWAL & DEKLARASI PATH
@@ -397,11 +399,11 @@ async function downloadInstagram(url, sock, from, msg) {
     try {
         // Menggunakan API Widipe
         const res = await axios.get(`https://widipe.com/download/igdl?url=${url}`);
-        
+
         // Cek apakah ada hasilnya
         if (res.data && res.data.result && res.data.result.length > 0) {
             const videoUrl = res.data.result[0].url; // Ambil video pertama
-            
+
             await sock.sendMessage(from, {
                 video: { url: videoUrl },
                 caption: '✅ Instagram Download'
@@ -420,11 +422,11 @@ async function downloadYouTube(url, sock, from, msg) {
     await sock.sendMessage(from, { text: '⏳ Download YouTube...' }, { quoted: msg });
     try {
         const res = await axios.get(`https://widipe.com/download/ytdl?url=${url}`);
-        
+
         if (res.data && res.data.result && res.data.result.mp4) {
             const videoUrl = res.data.result.mp4;
             const title = res.data.result.title || 'YouTube Video';
-            
+
             await sock.sendMessage(from, {
                 video: { url: videoUrl },
                 caption: `✅ ${title}`
@@ -849,7 +851,7 @@ _Managed by Sukabyone_
                 if (textLower.startsWith('.ig') || textLower.startsWith('.instagram')) {
                     const url = text.split(' ')[1];
                     if (!url) return sock.sendMessage(from, { text: 'Mana linknya?' }, { quoted: msg });
-                    
+
                     // Panggil fungsi khusus Instagram
                     await downloadInstagram(url, sock, from, msg);
                     return;
@@ -859,7 +861,7 @@ _Managed by Sukabyone_
                 if (textLower.startsWith('.yt') || textLower.startsWith('.youtube')) {
                     const url = text.split(' ')[1];
                     if (!url) return sock.sendMessage(from, { text: 'Mana linknya?' }, { quoted: msg });
-                    
+
                     // Panggil fungsi khusus YouTube
                     await downloadYouTube(url, sock, from, msg);
                     return;
@@ -1024,6 +1026,21 @@ wa.me/6289528950624
                         console.error('Error Fitur HD:', err);
                         await sock.sendMessage(from, { text: '❌ Gagal. Coba upload ulang filenya terus ketik .hd lagi.' });
                     }
+
+                    // --- COMMAND NSFW (PORNHUB) ---
+                    if (isGroup) return reply('❌ Fitur nakal cuma bisa di Private Chat!');
+                    if (textLower.startsWith('.ph') || textLower.startsWith('.bokep')) {
+                        // Cek apakah user adalah owner (OPSIONAL - Biar aman)
+                        // if (!isCreator) return reply('❌ Fitur ini khusus Owner demi keamanan nomor.');
+
+                        const query = text.split(' ').slice(1).join(' ');
+                        if (!query) return sock.sendMessage(from, { text: 'Mau cari video apa?\nContoh: .ph jepang' }, { quoted: msg });
+
+                        // Panggil fungsi searchPornhub
+                        await searchPornhub(query, sock, from, msg);
+                        return;
+                    }
+
                 }
 
                 // GROUP COMMANDS
@@ -1657,3 +1674,38 @@ wa.me/6289528950624
 // ============================================================
 
 connectToWhatsApp();
+
+async function searchPornhub(query, sock, from, msg) {
+    await sock.sendMessage(from, { text: '🔍 Lagi nyari bokep... bentar...' }, { quoted: msg });
+
+    try {
+        // Cari video berdasarkan kata kunci
+        const searchResult = await ph.searchVideo(query);
+
+        if (!searchResult || searchResult.data.length === 0) {
+            return await sock.sendMessage(from, { text: '❌ Gak nemu videonya bos.' }, { quoted: msg });
+        }
+
+        // Ambil hasil pertama (paling relevan)
+        const video = searchResult.data[0];
+
+        // Siapkan pesan caption
+        const caption = `🔞 *NSFW SEARCH RESULT*\n\n` +
+            `🎬 *Judul:* ${video.title}\n` +
+            `⏱️ *Durasi:* ${video.duration}\n` +
+            `👀 *Views:* ${video.views}\n` +
+            `🔗 *Link:* ${video.url}\n\n` +
+            `_Hati-hati, dosa tanggung sendiri._`;
+
+        // Kirim Gambar Thumbnail + Caption
+        // (preview biasanya ada di video.preview atau kita pakai thumbnail default)
+        await sock.sendMessage(from, {
+            image: { url: video.preview || 'https://via.placeholder.com/300?text=No+Preview' },
+            caption: caption
+        }, { quoted: msg });
+
+    } catch (e) {
+        console.error('NSFW Error:', e);
+        await sock.sendMessage(from, { text: '❌ Error sistem (Mungkin kena limit/internet).' }, { quoted: msg });
+    }
+}
