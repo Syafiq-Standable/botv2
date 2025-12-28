@@ -772,57 +772,118 @@ async function connectToWhatsApp() {
                     return;
                 }
 
+                // ============================================
+                // UPDATE COMMAND: .menu / .help (AESTHETIC V2)
+                // ============================================
                 if (textLower === '.menu' || textLower === '.help') {
                     const userNama = msg.pushName || 'User';
+
+                    // Logic Waktu & Salam
+                    const hour = new Date().getHours();
+                    let greeting = 'Malam 🌑';
+                    if (hour >= 3 && hour < 11) greeting = 'Pagi 🌤️';
+                    else if (hour >= 11 && hour < 15) greeting = 'Siang ☀️';
+                    else if (hour >= 15 && hour < 19) greeting = 'Sore 🌇';
+
                     const menuText = `
-*SAM* — _v1.2 (Stable)_
-━━━━━━━━━━━━━━
+╭━━━[ *SAM BOT V1.4* ]━━━⬣
+┃
+┃ 👋 *Hi, ${userNama}*
+┃ 🗓️ _${greeting}_
+┃
+┃ 👤 *Status:* ${isGroup ? 'Member Group' : 'Private User'}
+┃ 🤖 *Mode:* ${isGroup ? 'Group Chat' : 'Direct Message'}
+┃
+╰━━━━━━━━━━━━━━━━━━⬣
 
-*USER:* ${userNama.toUpperCase()}
-*MODE:* ${isGroup ? 'Group Chat' : 'Private Chat'}
+╭───「 *📥 DOWNLOADER* 」
+│ ✦ *.tt* _TikTok No WM_
+│ ✦ *.ig* _Instagram Video_
+│ ✦ *.yt* _YouTube Video_
+│ ✦ *.play* _Play Music_
+╰───✇
 
-*— MEDIA TOOLS*
-.tt        (tiktok)
-.ig        (instagram)
-.s         (stiker)
-.qrgen     (kode qr)
+╭───「 *🛠️ TOOLS & EDIT* 」
+│ ✦ *.s* _Stiker Maker_
+│ ✦ *.hd* _Video to HD_
+│ ✦ *.qrgen* _Create QR Code_
+│ ✦ *.toimg* _Stiker to Image_
+╰───✇
 
-*— GROUP ADMIN*
-.h         (hidetag)
-.tagall    (mention all)
-.kick      (keluarkan)
-.ban       (blokir)
-.mute      (bungkam)
-.setname   (ganti nama)
-.setdesc   (ganti deskripsi)
-.opengroup (buka grup)
-.closegroup (tutup grup)
+╭───「 *👮 GROUP ADMIN* 」
+│ ✦ *.h* _Hidetag (All)_
+│ ✦ *.tagall* _Mention Member_
+│ ✦ *.kick* _Kick User_
+│ ✦ *.ban* _Ban User_
+│ ✦ *.mute* _Tutup Grup_
+│ ✦ *.unmute* _Buka Grup_
+│ ✦ *.promote* _Admin+_
+│ ✦ *.demote* _Admin-_
+│ ✦ *.opengroup* _Buka Chat_
+│ ✦ *.closegroup* _Tutup Chat_
+╰───✇
 
-*— SCHEDULER (ALARM)*
-.setalarm  (set jam|pesan)
-.listalarm (cek jadwal)
-.delalarm  (hapus jadwal)
+╭───「 *⏰ SCHEDULER* 」
+│ ✦ *.setalarm* _Pasang Alarm_
+│ ✦ *.listalarm* _Cek Jadwal_
+│ ✦ *.delalarm* _Hapus Alarm_
+╰───✇
 
-*— OPERATOR ONLY*
-.addrent   (tambah sewa)
-.delrent   (hapus sewa)
+╭───「 *🎡 FUN & ISLAMI* 」
+│ ✦ *.truth* *.dare*
+│ ✦ *.waifu* *.neko*
+│ ✦ *.sholat* _Jadwal Sholat_
+╰───✇
 
-*— HIBURAN & LAINNYA*
-.truth     .waifu
-.dare      .neko
-.sholat    (jadwal)
+╭───「 *ℹ️ SYSTEM INFO* 」
+│ ✦ *.profile* *.ping*
+│ ✦ *.sewa* *.ceksewa*
+│ ✦ *.cekidgroup*
+╰───✇
 
-*— INFO SYSTEM*
-.profile   .ping
-.sewa      .help
-.ceksewa   .cekidgroup
-
-━━━━━━━━━━━━━━
-_Managed by Sukabyone_
-*BOT SAM* — _Tuff & Reliable_
+   *POWERED BY SUKABYONE*
+    _Keep it Tuff & Reliable_
 `.trim();
 
+                    // Mengirim menu dengan thumbnail (jika ada) atau text biasa
                     await sock.sendMessage(from, { text: menuText }, { quoted: msg });
+                    return;
+                }
+
+                // ============================================
+                // BARU: .menuop (Menu Khusus Operator - DARK MODE STYLE)
+                // ============================================
+                if (textLower === '.menuop') {
+                    // Cek validasi Operator
+                    if (!isOperator(sender.split('@')[0])) {
+                        return sock.sendMessage(from, { text: '⚠️ *ACCESS DENIED* \nMenu ini dikunci khusus Operator.' }, { quoted: msg });
+                    }
+
+                    const menuOpText = `
+░█▀▀░█▀█░█▄█░░
+░▀▀█░█▀█░█░█░░
+░▀▀▀░▀░▀░▀░▀░░
+*OPERATOR DASHBOARD* 🛠️
+
+╭──「 *💸 RENTAL SYSTEM* 」
+│ 🟢 *.addrent* _<hari>_
+│ 🔴 *.delrent* _<id>_
+│ 📋 *.listrent* _Check Active_
+╰──────────────⳹
+
+╭──「 *🔞 HIDDEN SEARCH* 」
+│ 🔍 *.sfile* _Search File_
+│ 💃 *.asupan* _TikTok Random_
+│ 📺 *.dood* _DoodStream_
+│ 🔞 *.xv* _XVideos_
+╰──────────────⳹
+
+*Note:*
+_Gunakan fitur hidden dengan bijak._
+_Log aktivitas tercatat sistem._
+`.trim();
+
+                    await sock.sendMessage(from, { text: menuOpText }, { quoted: msg });
                     return;
                 }
 
