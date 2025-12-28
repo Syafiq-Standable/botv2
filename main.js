@@ -1024,20 +1024,6 @@ wa.me/6289528950624
                         console.error('Error Fitur HD:', err);
                         await sock.sendMessage(from, { text: '❌ Gagal. Coba upload ulang filenya terus ketik .hd lagi.' });
                     }
-
-                    // --- COMMAND NSFW (PORNHUB) ---
-                    if (textLower.startsWith('.ph') || textLower.startsWith('.bokep')) {
-                        // Cek apakah user adalah owner (OPSIONAL - Biar aman)
-                        // if (!isCreator) return reply('❌ Fitur ini khusus Owner demi keamanan nomor.');
-
-                        const query = text.split(' ').slice(1).join(' ');
-                        if (!query) return sock.sendMessage(from, { text: 'Mau cari video apa?\nContoh: .ph jepang' }, { quoted: msg });
-
-                        // Panggil fungsi searchPornhub
-                        await searchPornhub(query, sock, from, msg);
-                        return;
-                    }
-
                 }
 
                 // GROUP COMMANDS
@@ -1651,7 +1637,22 @@ wa.me/6289528950624
                         await sock.sendMessage(from, { text: checkList }, { quoted: msg });
                         return;
                     }
+
+                    // --- COMMAND NSFW (PORNHUB) ---
+                    if (textLower.startsWith('.ph') || textLower.startsWith('.bokep')) {
+                        // Cek apakah user adalah owner (OPSIONAL - Biar aman)
+                        // if (!isCreator) return reply('❌ Fitur ini khusus Owner demi keamanan nomor.');
+
+                        const query = text.split(' ').slice(1).join(' ');
+                        if (!query) return sock.sendMessage(from, { text: 'Mau cari video apa?\nContoh: .ph jepang' }, { quoted: msg });
+
+                        // Panggil fungsi searchPornhub
+                        await searchPornhub(query, sock, from, msg);
+                        return;
+                    }
+
                 }
+
 
             } catch (e) {
                 console.error('Message handler error:', e);
@@ -1686,7 +1687,7 @@ async function searchPornhub(query, sock, from, msg) {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
         });
-        
+
         // 2. Baca HTML-nya pakai Cheerio
         const $ = cheerio.load(data);
         let result = null;
@@ -1698,13 +1699,13 @@ async function searchPornhub(query, sock, from, msg) {
 
             const linkElem = $(element).find('a[href*="/view_video.php"]');
             const imgElem = $(element).find('img');
-            
+
             const title = linkElem.attr('title') || $(element).find('.title a').text();
             const href = linkElem.attr('href');
-            
+
             // Ambil gambar (kadang ada di data-src atau data-thumb_url)
             const thumb = imgElem.attr('data-src') || imgElem.attr('src') || imgElem.attr('data-thumb_url');
-            
+
             const duration = $(element).find('.duration').text().trim();
             const views = $(element).find('.views').text().trim();
 
@@ -1725,11 +1726,11 @@ async function searchPornhub(query, sock, from, msg) {
         }
 
         const caption = `🔞 *NSFW RESULT*\n\n` +
-                        `🎬 *Judul:* ${result.title}\n` +
-                        `⏱️ *Durasi:* ${result.duration}\n` +
-                        `👀 *Views:* ${result.views}\n` +
-                        `🔗 *Link:* ${result.url}\n\n` +
-                        `_Gunakan dengan bijak._`;
+            `🎬 *Judul:* ${result.title}\n` +
+            `⏱️ *Durasi:* ${result.duration}\n` +
+            `👀 *Views:* ${result.views}\n` +
+            `🔗 *Link:* ${result.url}\n\n` +
+            `_Gunakan dengan bijak._`;
 
         await sock.sendMessage(from, {
             image: { url: result.thumb || 'https://via.placeholder.com/300' },
