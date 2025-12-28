@@ -389,76 +389,28 @@ Ketik *.sewa* untuk info perpanjangan.
 }
 
 // ============================================================
-// FITUR DOWNLOADER SEDERHANA
+// FITUR DOWNLOADER .TT .IG .YTMP3 .YTMP4 .FB .X
 // ============================================================
 
-async function ytMp4(url, options) {
-    const getUrl = await ytdl.getInfo(url, options);
-
-    const sampahDir = path.join(__dirname, 'database', 'sampah');
-    if (!fs.existsSync(sampahDir)) {
-        fs.mkdirSync(sampahDir, { recursive: true });
-    }
-
-    const timestamp = Date.now();
-    const audioPath = path.join(sampahDir, `audio_${timestamp}.mp4`);
-    const videoPath = path.join(sampahDir, `video_${timestamp}.mp4`);
-    const outputPath = path.join(sampahDir, `output_${timestamp}.mp4`);
-
+async function downloadSosmed(url) {
     try {
-        // 1. Download Audio
-        await new Promise((resolv, rejectt) => {
-            ytdl(url, { format: ytdl.chooseFormat(getUrl.formats, { quality: 'highestaudio', filter: 'audioonly' }) })
-                .pipe(fs.createWriteStream(audioPath))
-                .on('finish', resolv)
-                .on('error', rejectt);
+        // Kita nembak ke API Cobalt (gratis & bersih)
+        const response = await axios.post('https://cobalt.api.sc/api/json', {
+            url: url
+        }, {
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
         });
 
-        // 2. Download Video
-        await new Promise((resolv, rejectt) => {
-            ytdl(url, { format: ytdl.chooseFormat(getUrl.formats, { quality: 'highestvideo', filter: 'videoonly' }) })
-                .pipe(fs.createWriteStream(videoPath))
-                .on('finish', resolv)
-                .on('error', rejectt);
-        });
+        // Kalau gagal
+        if (response.data.status === 'error') return null;
 
-        // 3. Gabungkan Audio dan Video
-        await new Promise((resolv, rejectt) => {
-            exec(`ffmpeg -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac "${outputPath}"`, (error) => {
-                if (error) {
-                    rejectt(new Error(`FFmpeg Error: ${error.message}`));
-                    return;
-                }
-                resolv();
-            });
-        });
-
-        // 4. Baca Hasil dan Hapus Sampah
-        const result = fs.readFileSync(outputPath);
-        await fs.promises.unlink(audioPath);
-        await fs.promises.unlink(videoPath);
-        await fs.promises.unlink(outputPath);
-
-        // 5. Kembalikan Metadata
-        const details = getUrl.videoDetails;
-        return {
-            title: details.title,
-            result,
-            thumb: getUrl.player_response.microformat.playerMicroformatRenderer.thumbnail.thumbnails[0].url,
-            views: details.viewCount,
-            likes: details.likes,
-            dislike: details.dislikes,
-            channel: details.ownerChannelName,
-            uploadDate: details.uploadDate,
-            desc: details.description
-        };
-
+        // Kalau sukses, ambil link downloadnya
+        return response.data.url;
     } catch (e) {
-        // Cleanup semua file
-        [audioPath, videoPath, outputPath].forEach(async (p) => {
-            if (fs.existsSync(p)) await fs.promises.unlink(p).catch(() => { });
-        });
-        throw e;
+        return null;
     }
 }
 
@@ -481,77 +433,6 @@ async function downloadTikTok(url, sock, from, msg) {
     }
 }
 
-async function fetchInstagramMedia(url) {
-    try {
-        const { data } = await axios.post(
-            'https://yt1s.io/api/ajaxSearch',
-            new URLSearchParams({ q: url, w: '', p: 'home', lang: 'en' }),
-            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-        );
-
-        const $ = cheerio.load(data.data);
-        const result = $('a.abutton.is-success.is-fullwidth.btn-premium').map((_, b) => ({
-            title: $(b).attr('title'),
-            url: $(b).attr('href')
-        })).get();
-
-        if (result.length > 0) {
-            return {
-                title: result[0].title,
-                url: result[0].url
-            };
-        }
-        throw new Error('Media tidak ditemukan');
-
-    } catch (e) {
-        throw e;
-    }
-}
-
-async function downloadInstagram(url, sock, from, msg) {
-    await sock.sendMessage(from, { text: '⏳ Mengambil link scrapper dan mengunduh media...' }, { quoted: msg });
-
-    try {
-        const media = await fetchInstagramMedia(url);
-        const mediaUrl = media.url;
-
-        if (!mediaUrl) {
-            throw new Error('Scrapper gagal menemukan link download media.');
-        }
-
-        const mediaResponse = await axios.get(mediaUrl, {
-            responseType: 'arraybuffer',
-            timeout: 30000
-        });
-
-        const mediaBuffer = mediaResponse.data;
-        const contentType = mediaResponse.headers['content-type'];
-
-        const isVideo = contentType && contentType.startsWith('video/');
-        const isImage = contentType && contentType.startsWith('image/');
-
-        if (isVideo) {
-            await sock.sendMessage(from, {
-                video: mediaBuffer,
-                mimetype: contentType,
-                caption: `✅ Instagram Video (Tipe: ${contentType})`
-            }, { quoted: msg });
-        } else if (isImage) {
-            await sock.sendMessage(from, {
-                image: mediaBuffer,
-                mimetype: contentType,
-                caption: `✅ Instagram Photo (Tipe: ${contentType})`
-            }, { quoted: msg });
-        } else {
-            console.error(`[DOWNLOAD FAIL] URL: ${mediaUrl}, Content-Type: ${contentType}`);
-            throw new Error(`Tipe media tidak dikenali (${contentType})`);
-        }
-
-    } catch (error) {
-        console.error('Download Instagram Error:', error.message);
-        await sock.sendMessage(from, { text: `❌ Gagal download Instagram. Error: ${error.message}` }, { quoted: msg });
-    }
-}
 
 // ============================================================
 // FITUR STICKER
@@ -937,6 +818,46 @@ _Managed by Sukabyone_
                         return sock.sendMessage(from, { text: '❌ Link TikTok tidak valid!' }, { quoted: msg });
                     }
                     await downloadTikTok(url, sock, from, msg);
+                    return;
+                }
+
+                if (textLower.startsWith('.tt2') ||
+                    textLower.startsWith('.tiktok2') ||
+                    textLower.startsWith('.ig') ||
+                    textLower.startsWith('.instagram') ||
+                    textLower.startsWith('.yt') ||
+                    textLower.startsWith('.youtube') ||
+                    textLower.startsWith('.twt') ||
+                    textLower.startsWith('.twitter')) {
+
+                    const args = text.split(' ');
+                    const url = args[1];
+
+                    // Cek ada linknya gak
+                    if (!url) {
+                        return sock.sendMessage(from, { text: '❌ Mana linknya kak?\nContoh: .ig https://instagram.com/...' }, { quoted: msg });
+                    }
+
+                    await sock.sendMessage(from, { text: '⏳ Tunggu sebentar, sedang download...' }, { quoted: msg });
+
+                    try {
+                        // Memanggil fungsi downloadSosmed (Pastikan fungsi ini sudah ada di paling bawah file)
+                        let linkVideo = await downloadSosmed(url);
+
+                        if (!linkVideo) {
+                            return sock.sendMessage(from, { text: '❌ Gagal download. Pastikan link benar & tidak diprivate.' }, { quoted: msg });
+                        }
+
+                        // Kirim Videonya
+                        await sock.sendMessage(from, {
+                            video: { url: linkVideo },
+                            caption: '✅ Nih kak videonya (No Watermark)'
+                        }, { quoted: msg });
+
+                    } catch (err) {
+                        console.log('Error sosmed:', err);
+                        await sock.sendMessage(from, { text: '❌ Ada error sistem saat mengambil video.' }, { quoted: msg });
+                    }
                     return;
                 }
 
