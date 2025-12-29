@@ -1139,46 +1139,114 @@ wa.me/6289528950624
 
                     // --- [ TAGGING COMMANDS ] ---
 
-                    if (textLower.startsWith('.hidetag') || textLower === '.h' || textLower === '.tagall') {
-                        if (!isUserAdmin && !isOperator(sender)) return sock.sendMessage(from, { text: '❌ Cuma Admin/Operator yang bisa panggil warga!' });
-
-                        let teks = textLower === '.tagall' ? '📢 *PANGGILAN WARGA*' : (text.slice(textLower.startsWith('.h ') ? 3 : 9) || 'Panggilan 📢');
-
-                        if (textLower === '.tagall') {
-                            teks += '\n\n' + participants.map((p, i) => `${i + 1}. @${p.id.split('@')[0]}`).join('\n');
+                    if (textLower === '.tagall') {
+                        if (!isUserAdmin && !isOperator(sender)) {
+                            return sock.sendMessage(from, { text: '❌ Hanya admin/operator!' });
                         }
 
-                        return await sock.sendMessage(from, { text: teks, mentions: participants.map(p => p.id) });
+                        let tagText = '📢 *TAG ALL*\n\n';
+                        participants.forEach((p, i) => {
+                            tagText += `${i + 1}. @${p.id.split('@')[0]}\n`;
+                        });
+
+                        await sock.sendMessage(from, {
+                            text: tagText,
+                            mentions: participants.map(p => p.id)
+                        });
+                        return;
                     }
 
-                    // --- [ STAFF ONLY: KICK, PROMOTE, DEMOTE ] ---
+                    if (textLower.startsWith('.h ')) {
+                        if (!isUserAdmin && !isOperator(sender)) return;
 
-                    const isStaffCmd = ['.kick', '.ban', '.promote', '.demote'].some(cmd => textLower.startsWith(cmd));
+                        const pesan = text.slice(3).trim();
+                        if (!pesan) return;
+
+                        await sock.sendMessage(from, {
+                            text: pesan,
+                            mentions: participants.map(p => p.id)
+                        });
+                    }
+
+                    // --- [ STAFF ONLY: KICK, BAN, UNBAN, ADD, PROMOTE, DEMOTE ] ---
+                    const isStaffCmd = ['.kick', '.ban', '.unban', '.add', '.promote', '.demote'].some(cmd => textLower.startsWith(cmd));
                     if (isStaffCmd) {
-                        if (!isUserAdmin) return sock.sendMessage(from, { text: '❌ Kamu bukan admin!' });
-
-                        let targets = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
-                        const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
-                        if (targets.length === 0 && quoted) targets.push(quoted);
-
-                        if (targets.length === 0) return sock.sendMessage(from, { text: '❌ Tag atau reply orangnya dulu!' });
-
-                        const action = textLower.startsWith('.kick') || textLower.startsWith('.ban') ? 'remove' :
-                            textLower.startsWith('.promote') ? 'promote' : 'demote';
-
                         try {
+                            // Ambil metadata realtime biar akurat banget
+                            const groupMetadata = await sock.groupMetadata(from);
+                            const participants = groupMetadata.participants;
+
+                            const botStatus = participants.find(p => p.id.includes(sock.user.id.split(':')[0]))?.admin;
+                            const userStatus = participants.find(p => p.id.includes(sender.split(':')[0]))?.admin;
+
+                            const botIsAdmin = botStatus === 'admin' || botStatus === 'superadmin';
+                            const userIsAdmin = userStatus === 'admin' || userStatus === 'superadmin' || isOperator(sender);
+
+                            if (!userIsAdmin) return sock.sendMessage(from, { text: '❌ Kamu bukan admin/operator, Bos!' });
+
+                            // Ambil target (Tag, Reply, atau Manual Input untuk .add)
+                            let targets = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                            const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
+                            if (targets.length === 0 && quoted) targets.push(quoted);
+
+                            // --- LOGIKA KHUSUS .ADD ---
+                            if (textLower.startsWith('.add')) {
+                                if (!botIsAdmin) return sock.sendMessage(from, { text: '❌ Jadiin BOT SAM admin dulu buat nambah member!' });
+                                let input = text.slice(5).replace(/[^0-9]/g, '');
+                                if (!input && targets.length === 0) return sock.sendMessage(from, { text: '❌ Masukin nomor atau tag orangnya!' });
+
+                                let jid = targets.length > 0 ? targets[0] : input + '@s.whatsapp.net';
+                                const response = await sock.groupParticipantsUpdate(from, [jid], 'add');
+                                const status = response[0].status;
+
+                                if (status === '200') return sock.sendMessage(from, { text: `✅ @${jid.split('@')[0]} berhasil dimasukin!`, mentions: [jid] });
+                                if (status === '403') return sock.sendMessage(from, { text: `⚠️ Gagal! @${jid.split('@')[0]} nge-lock privasi grup.`, mentions: [jid] });
+                                return sock.sendMessage(from, { text: `❌ Gagal (Status: ${status})` });
+                            }
+
+                            // --- LOGIKA KHUSUS .UNBAN ---
+                            if (textLower.startsWith('.unban')) {
+                                if (targets.length === 0) return sock.sendMessage(from, { text: '❌ Tag atau reply orang yang mau di-unban!' });
+                                const bans = loadBans();
+                                if (!bans[from]) return sock.sendMessage(from, { text: '❌ Nggak ada daftar ban di grup ini.' });
+
+                                let count = 0;
+                                targets.forEach(t => {
+                                    if (bans[from].includes(t)) {
+                                        bans[from] = bans[from].filter(id => id !== t);
+                                        count++;
+                                    }
+                                });
+
+                                if (count > 0) {
+                                    saveBans(bans);
+                                    return sock.sendMessage(from, { text: `✅ Berhasil menghapus ${count} member dari daftar blacklist!` });
+                                }
+                                return sock.sendMessage(from, { text: '❌ Orang tersebut nggak ada di daftar ban.' });
+                            }
+
+                            // --- LOGIKA KICK, BAN, PROMOTE, DEMOTE ---
+                            if (targets.length === 0) return sock.sendMessage(from, { text: '❌ Tag atau reply orangnya dulu!' });
+                            if (!botIsAdmin) return sock.sendMessage(from, { text: '❌ BOT SAM harus admin buat fitur ini!' });
+
+                            const action = (textLower.startsWith('.kick') || textLower.startsWith('.ban')) ? 'remove' :
+                                textLower.startsWith('.promote') ? 'promote' : 'demote';
+
                             await sock.groupParticipantsUpdate(from, targets, action);
+
                             if (textLower.startsWith('.ban')) {
                                 const bans = loadBans();
                                 if (!bans[from]) bans[from] = [];
                                 targets.forEach(t => { if (!bans[from].includes(t)) bans[from].push(t) });
                                 saveBans(bans);
                             }
+
                             await sock.sendMessage(from, { text: `✅ Berhasil mengeksekusi ${targets.length} member!` });
+
                         } catch (e) {
-                            // Hapus cek isBotAdmin dari error handling
                             await sock.sendMessage(from, { text: `❌ Gagal: ${e.message}` });
                         }
+                        return;
                     }
 
                     // --- [ GROUP SETTINGS ] ---
