@@ -899,51 +899,6 @@ async function connectToWhatsApp() {
                     return;
                 }
 
-                // ============================================
-                // BARU: .menuop (Menu Khusus Operator - DARK MODE STYLE)
-                // ============================================
-                if (textLower === '.menu18') {
-                    // Cek validasi Operator
-                    if (!isOperator(sender.split('@')[0])) {
-                        return sock.sendMessage(from, { text: '⚠️ *ACCESS DENIED* \nMenu ini dikunci khusus Operator.' }, { quoted: msg });
-                    }
-
-                    const menuOpText = `
-
-╭───「 🔥 HOT & RANDOM 」
-│ ✦ .nsfw      Random Hot Real NSFW
-│ ✦ .real      Same seperti .nsfw
-│ ✦ .hot       Random konten viral panas
-╰───✇
-╭───「 🫦 BODY FOCUS 」
-│ ✦ .boobs     Big Boobs / Tits Real
-│ ✦ .tits      Sama seperti .boobs
-│ ✦ .dada      Big boobs Indo style
-│ ✦ .ass       Perfect Ass / PAWG
-│ ✦ .bokong    Pantat montok real
-│ ✦ .pantat    Sama seperti .ass
-╰───✇
-╭───「 📸 AMATEUR & SELCA 」
-│ ✦ .gonewild  GoneWild / Amateur Real
-│ ✦ .amateur   Konten amateur selfie
-│ ✦ .gw        GoneWild style
-╰───✇
-╭───「 🎥 SHORT CLIP & GIF 」
-│ ✦ .gif       NSFW GIF / Clip pendek real
-│ ✦ .nsfwgif   Sama seperti .gif
-│ ✦ .clip      Video pendek hot real
-╰───✇
-╭───「 🧕 ASUPAN SOFT (NON-NUDE) 」
-│ ✦ .ukhti     Ukhti viral TikTok gemoy
-│ ✦ .hijab     Hijab tobrut / jilboobs soft
-│ ✦ .asupan    Asupan cewek TikTok santuy
-╰───✇
-`.trim();
-
-                    await sock.sendMessage(from, { text: menuOpText }, { quoted: msg });
-                    return;
-                }
-
                 if (textLower === '.ping') {
                     const start = Date.now();
                     await sock.sendMessage(from, { text: '🏓 Pong!' });
@@ -973,49 +928,41 @@ async function connectToWhatsApp() {
                     return;
                 }
 
-                async function onMessage(m) {
-                    const prefix = '!' // Contoh prefix
-                    if (!m.text.startsWith(prefix)) return
+                // Cek kalau user cuma ngetik command tanpa link
+                if ( textLower.startsWith('ytmp3') ||  textLower.startsWith('ytmp4') && !url) {
+                    return console.log('Sukabyone, masukin linknya juga dong!')
+                }
 
-                    const args = m.text.slice(prefix.length).trim().split(/ +/)
-                    const command = args.shift().toLowerCase()
-                    const url = args[0]
+                // LOGIKA PERINTAH
+                if (textLower.startsWith('ytmp3')) {
+                    try {
+                        console.log('Sabar, BOT SAM lagi cari MP3-nya...')
+                        // Kita panggil fungsi yt() langsung dengan settingan mp3
+                        const result = await yt(url, '128kbps', 'mp3', '128', 'en154')
 
-                    // Cek kalau user cuma ngetik command tanpa link
-                    if ((command === 'ytmp3' || command === 'ytmp4') && !url) {
-                        return console.log('Sukabyone, masukin linknya juga dong!')
-                    }
-
-                    // LOGIKA PERINTAH
-                    if (command === 'ytmp3') {
-                        try {
-                            console.log('Sabar, BOT SAM lagi cari MP3-nya...')
-                            // Kita panggil fungsi yt() langsung dengan settingan mp3
-                            const result = await yt(url, '128kbps', 'mp3', '128', 'en154')
-
-                            console.log(`Berhasil! Judul: ${result.title}`)
-                            console.log(`Link Download: ${result.dl_link}`)
-                            // Di sini kamu bisa tambahin code kirim file sesuai library botmu
-                        } catch (err) {
-                            console.error('Error nih:', err)
-                        }
-                    }
-
-                    if (command === 'ytmp4') {
-                        try {
-                            const resolusi = args[1] || '360p'
-                            console.log(`Sabar, BOT SAM lagi nyiapin video ${resolusi}...`)
-
-                            const bitrate = resolusi.replace('p', '')
-                            const result = await yt(url, resolusi, 'mp4', bitrate, 'en154')
-
-                            console.log(`Siap! Judul: ${result.title}`)
-                            console.log(`Link Download: ${result.dl_link}`)
-                        } catch (err) {
-                            console.error('Waduh error:', err)
-                        }
+                        console.log(`Berhasil! Judul: ${result.title}`)
+                        console.log(`Link Download: ${result.dl_link}`)
+                        // Di sini kamu bisa tambahin code kirim file sesuai library botmu
+                    } catch (err) {
+                        console.error('Error nih:', err)
                     }
                 }
+
+                if ( textLower.startsWith('ytmp4')) {
+                    try {
+                        const resolusi = args[1] || '360p'
+                        console.log(`Sabar, BOT SAM lagi nyiapin video ${resolusi}...`)
+
+                        const bitrate = resolusi.replace('p', '')
+                        const result = await yt(url, resolusi, 'mp4', bitrate, 'en154')
+
+                        console.log(`Siap! Judul: ${result.title}`)
+                        console.log(`Link Download: ${result.dl_link}`)
+                    } catch (err) {
+                        console.error('Waduh error:', err)
+                    }
+                }
+
 
                 if (textLower === '.sticker' || textLower === '.s') {
                     const imgMsg = msg.message?.imageMessage ||
