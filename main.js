@@ -1105,359 +1105,131 @@ wa.me/6289528950624
                     }
                 }
 
-                // GROUP COMMANDS
+                // ============================================================
+                // GROUP COMMANDS - OPTIMIZED BY BOT SAM
+                // ============================================================
                 if (isGroup) {
-                    const groupMetadata = await sock.groupMetadata(from);
-                    const participants = groupMetadata.participants;
+                    let groupMetadata, participants, isBotAdmin, isUserAdmin;
 
-                    // Ambil nomor bot & sender tanpa embel-embel :1 atau :2
-                    const cleanBot = sock.user.id.split(':')[0];
-                    const cleanSender = sender.split(':')[0];
+                    try {
+                        // Ambil metadata sekali untuk semua command di bawah
+                        groupMetadata = await sock.groupMetadata(from);
+                        participants = groupMetadata.participants;
 
-                    // Cari partipan yang ID-nya mengandung nomor tersebut
-                    const botPart = participants.find(p => p.id.includes(cleanBot));
-                    const userPart = participants.find(p => p.id.includes(cleanSender));
+                        // Normalisasi ID agar tidak bug karena device ID (:1, :2, dll)
+                        const botNumber = sock.user.id.split(':')[0];
+                        const senderNumber = sender.split(':')[0];
 
-                    // Cek apakah mereka admin (bisa 'admin' atau 'superadmin')
-                    const isBotAdmin = botPart?.admin === 'admin' || botPart?.admin === 'superadmin';
-                    const isUserAdmin = userPart?.admin === 'admin' || userPart?.admin === 'superadmin';
+                        const botPart = participants.find(p => p.id.includes(botNumber));
+                        const userPart = participants.find(p => p.id.includes(senderNumber));
+
+                        isBotAdmin = botPart?.admin === 'admin' || botPart?.admin === 'superadmin';
+                        isUserAdmin = userPart?.admin === 'admin' || userPart?.admin === 'superadmin';
+                    } catch (err) {
+                        console.error('Gagal memuat info grup:', err.message);
+                        // Jika bot di-kick atau error 403, jangan lanjut eksekusi
+                        if (err.message.includes('403')) return;
+                    }
+
+                    // --- [ UTILITY COMMANDS ] ---
 
                     if (textLower === '.cekidgroup') {
-                        const idGroupText = `🌐 *ID GRUP*\n\nID: ${from}\n_Gunakan ID ini untuk keperluan sewa atau operator._`;
-                        await sock.sendMessage(from, { text: idGroupText }, { quoted: msg });
-                        return;
-                    }
-
-                    if (textLower.startsWith('.hidetag') || textLower === '.h') {
-                        if (!isUserAdmin && !isOperator(sender)) {
-                            return sock.sendMessage(from, { text: '❌ Hanya admin/operator yang bisa pakai ini, Bos!' });
-                        }
-
-                        const teks = text.slice(9) || 'Panggilan untuk warga grup! 📢';
-                        await sock.sendMessage(from, {
-                            text: teks,
-                            mentions: participants.map(p => p.id)
-                        });
-                        return;
-                    }
-
-                    // ALARM COMMANDS
-                    if (textLower.startsWith('.setalarm')) {
-                        if (!isUserAdmin && !isOperator(sender)) return;
-
-                        if (text.trim() === '.setalarm') {
-                            return sock.sendMessage(from, {
-                                text: `⚠️ *FORMAT SALAH, BOS!*\n\nPenggunaan:\n*.setalarm Jam | Pesan*\nContoh:\n.setalarm 07:00 | Waktunya bangun!\n_Note: Pake format 24 jam ya._`
-                            });
-                        }
-
-                        const input = text.slice(10).split('|');
-                        if (input.length < 2) {
-                            return sock.sendMessage(from, {
-                                text: `❌ *DATA KURANG LENGKAP!*\n\nJangan lupa kasih pembatas garis tegak (|) antara jam dan pesannya.\nContoh: .setalarm 12:00 | Makan siang!`
-                            });
-                        }
-
-                        const time = input[0].trim();
-                        const msgAlarm = input[1].trim();
-
-                        if (!/^\d{2}:\d{2}$/.test(time)) {
-                            return sock.sendMessage(from, {
-                                text: `🕒 *FORMAT JAM SALAH!*\n\nPake format HH:mm (Contoh: 07:05 atau 21:00).`
-                            });
-                        }
-
-                        try {
-                            let db = loadJSON('scheduler.json', []);
-                            db.push({
-                                id: Date.now(),
-                                groupId: from,
-                                time: time,
-                                message: msgAlarm
-                            });
-                            saveJSON('scheduler.json', db);
-
-                            await sock.sendMessage(from, {
-                                text: `✅ *ALARM BERHASIL DISET!*\n\n⏰ Jam: ${time}\n📝 Pesan: ${msgAlarm}`
-                            });
-                        } catch (e) {
-                            console.log('Error setalarm:', e.message);
-                            await sock.sendMessage(from, { text: '❌ Waduh, sistem database lagi error nih, Bos.' });
-                        }
-                    }
-
-                    if (textLower.startsWith('.delalarm ')) {
-                        if (!isUserAdmin && !isOperator(sender)) return;
-
-                        const index = parseInt(text.split(' ')[1]) - 1;
-                        if (isNaN(index)) return sock.sendMessage(from, { text: 'Masukin nomornya, Bos. Contoh: .delalarm 1' });
-
-                        let db = loadJSON('scheduler.json', []);
-                        let groupTasks = db.filter(item => item.groupId === from);
-
-                        if (index < 0 || index >= groupTasks.length) {
-                            return sock.sendMessage(from, { text: 'Nomor alarm nggak ketemu.' });
-                        }
-
-                        const targetId = groupTasks[index].id;
-                        let newDb = db.filter(item => item.id !== targetId);
-                        saveJSON('scheduler.json', newDb);
-
-                        await sock.sendMessage(from, { text: `✅ Alarm nomor ${index + 1} berhasil dihapus!` });
-                        return;
-                    }
-
-                    if (textLower === '.listalarm') {
-                        let db = loadJSON('scheduler.json', []);
-                        let groupTasks = db.filter(item => item.groupId === from);
-
-                        if (groupTasks.length === 0) {
-                            return sock.sendMessage(from, { text: 'Belum ada alarm yang di-set buat grup ini, Bos.' });
-                        }
-
-                        let listText = `⏰ *DAFTAR ALARM GRUP*\n\n`;
-                        groupTasks.forEach((task, i) => {
-                            listText += `${i + 1}. [${task.time}] - ${task.message}\n`;
-                        });
-                        listText += `\n_Hapus pake: .delalarm [nomor]_`;
-
-                        await sock.sendMessage(from, { text: listText });
-                        return;
-                    }
-
-                    if (textLower.startsWith('.h ')) {
-                        if (!isUserAdmin && !isOperator(sender)) return;
-
-                        const pesan = text.slice(3).trim();
-                        if (!pesan) return;
-
-                        await sock.sendMessage(from, {
-                            text: pesan,
-                            mentions: participants.map(p => p.id)
-                        });
-                    }
-
-                    if (textLower === '.tagall') {
-                        if (!isUserAdmin && !isOperator(sender)) {
-                            return sock.sendMessage(from, { text: '❌ Hanya admin/operator!' });
-                        }
-
-                        let tagText = '📢 *TAG ALL*\n\n';
-                        participants.forEach((p, i) => {
-                            tagText += `${i + 1}. @${p.id.split('@')[0]}\n`;
-                        });
-
-                        await sock.sendMessage(from, {
-                            text: tagText,
-                            mentions: participants.map(p => p.id)
-                        });
-                        return;
-                    }
-
-                    if (textLower.startsWith('.kick')) {
-                        if (!isUserAdmin || !isBotAdmin) {
-                            return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
-                        }
-
-                        let targets = [];
-                        const ext = msg.message?.extendedTextMessage;
-
-                        if (ext?.contextInfo?.mentionedJid) {
-                            targets = ext.contextInfo.mentionedJid;
-                        }
-
-                        if (targets.length === 0) {
-                            return sock.sendMessage(from, { text: '❌ Tag member yang ingin dikick!' });
-                        }
-
-                        try {
-                            await sock.groupParticipantsUpdate(from, targets, 'remove');
-                            await sock.sendMessage(from, {
-                                text: `✅ Berhasil mengkick ${targets.length} member!`
-                            });
-                        } catch (e) {
-                            await sock.sendMessage(from, { text: `❌ Gagal: ${e.message}` });
-                        }
-                        return;
-                    }
-
-                    if (textLower.startsWith('.ban ')) {
-                        if (!isUserAdmin || !isBotAdmin) {
-                            return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
-                        }
-
-                        let target = null;
-                        if (msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.length) {
-                            target = msg.message.extendedTextMessage.contextInfo.mentionedJid[0];
-                        }
-
-                        if (!target) {
-                            return sock.sendMessage(from, { text: '❌ Tag member yang ingin diban!' });
-                        }
-
-                        try {
-                            await sock.groupParticipantsUpdate(from, [target], 'remove');
-                            const bans = loadBans();
-                            if (!bans[from]) bans[from] = [];
-                            if (!bans[from].includes(target)) {
-                                bans[from].push(target);
-                                saveBans(bans);
-                            }
-
-                            await sock.sendMessage(from, {
-                                text: `✅ @${target.split('@')[0]} berhasil dibanned!`,
-                                mentions: [target]
-                            });
-                        } catch (e) {
-                            await sock.sendMessage(from, { text: `❌ Gagal: ${e.message}` });
-                        }
-                        return;
-                    }
-
-                    if (textLower.startsWith('.mute')) {
-                        if (!isUserAdmin && !isOperator(sender)) return;
-
-                        let target = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-                        if (!target && msg.message?.extendedTextMessage?.contextInfo?.quotedMessage) {
-                            target = msg.message.extendedTextMessage.contextInfo.participant;
-                        }
-
-                        if (!target) return sock.sendMessage(from, { text: 'Tag targetnya, Bos.' });
-
-                        const muted = loadMuted();
-                        if (!muted[from]) muted[from] = [];
-                        if (!muted[from].includes(target)) {
-                            muted[from].push(target);
-                            saveMuted(muted);
-                        }
-
-                        await sock.sendMessage(from, { text: `🤐 @${target.split('@')[0]} has been silenced.`, mentions: [target] });
-                        return;
-                    }
-
-                    if (textLower.startsWith('.unmute')) {
-                        if (!isUserAdmin && !isOperator(sender)) return;
-
-                        let target = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
-                        if (!target) return;
-
-                        const muted = loadMuted();
-                        if (muted[from]) {
-                            muted[from] = muted[from].filter(id => id !== target);
-                            saveMuted(muted);
-                        }
-
-                        await sock.sendMessage(from, { text: `🔊 @${target.split('@')[0]} can speak again.`, mentions: [target] });
-                        return;
-                    }
-
-                    if (textLower.startsWith('.promote') || textLower.startsWith('.demote')) {
-                        if (!isUserAdmin || !isBotAdmin) {
-                            return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
-                        }
-
-                        let targets = [];
-                        const ext = msg.message?.extendedTextMessage;
-
-                        if (ext?.contextInfo?.mentionedJid) {
-                            targets = ext.contextInfo.mentionedJid;
-                        }
-
-                        if (targets.length === 0) {
-                            return sock.sendMessage(from, { text: '❌ Tag member!' });
-                        }
-
-                        const action = textLower.startsWith('.promote') ? 'promote' : 'demote';
-
-                        try {
-                            await sock.groupParticipantsUpdate(from, targets, action);
-                            await sock.sendMessage(from, {
-                                text: `✅ Berhasil ${action} ${targets.length} member!`
-                            });
-                        } catch (e) {
-                            await sock.sendMessage(from, { text: `❌ Gagal: ${e.message}` });
-                        }
-                        return;
-                    }
-
-                    if (textLower === '.opengroup') {
-                        if (!isUserAdmin || !isBotAdmin) {
-                            return sock.sendMessage(from, { text: '❌ Bot dan user harus admin grup!' });
-                        }
-
-                        try {
-                            await sock.groupSettingUpdate(from, 'not_announcement');
-                            await sock.sendMessage(from, { text: '✅ Grup berhasil *DIBUKA*! Semua member kini bisa mengirim pesan.' });
-                        } catch (e) {
-                            await sock.sendMessage(from, { text: `❌ Gagal membuka grup: ${e.message}` });
-                        }
-                        return;
-                    }
-
-                    if (textLower === '.closegroup') {
-                        if (!isUserAdmin || !isBotAdmin) {
-                            return sock.sendMessage(from, { text: '❌ Bot dan user harus admin grup!' });
-                        }
-
-                        try {
-                            await sock.groupSettingUpdate(from, 'announcement');
-                            await sock.sendMessage(from, { text: '✅ Grup berhasil *DITUTUP*! Hanya admin yang bisa mengirim pesan.' });
-                        } catch (e) {
-                            await sock.sendMessage(from, { text: `❌ Gagal menutup grup: ${e.message}` });
-                        }
-                        return;
-                    }
-
-                    if (textLower.startsWith('.setname ')) {
-                        if (!isUserAdmin || !isBotAdmin) {
-                            return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
-                        }
-
-                        const newName = text.slice(9);
-                        if (!newName || newName.length > 25) {
-                            return sock.sendMessage(from, { text: '❌ Nama grup maksimal 25 karakter!' });
-                        }
-
-                        try {
-                            await sock.groupUpdateSubject(from, newName);
-                            await sock.sendMessage(from, { text: `✅ Nama grup berhasil diubah!` });
-                        } catch (e) {
-                            await sock.sendMessage(from, { text: `❌ Gagal: ${e.message}` });
-                        }
-                        return;
+                        return await sock.sendMessage(from, { text: `🌐 *ID GRUP*\n\nID: ${from}` }, { quoted: msg });
                     }
 
                     if (textLower === '.cekstatus') {
-                        if (!isGroup) return;
                         const statusBot = isBotAdmin ? 'Admin 😎' : 'Member Biasa 😶';
                         const statusUser = isUserAdmin ? 'Admin 👑' : 'Member Biasa 👤';
-
-                        await sock.sendMessage(from, {
-                            text: `🤖 *Status BOT SAM:* ${statusBot}\n👤 *Status Kamu:* ${statusUser}`
-                        }, { quoted: msg });
+                        return await sock.sendMessage(from, { text: `🤖 *Status BOT SAM:* ${statusBot}\n👤 *Status Kamu:* ${statusUser}` }, { quoted: msg });
                     }
 
-                    if (textLower.startsWith('.remind')) {
+                    // --- [ TAGGING COMMANDS ] ---
+
+                    if (textLower.startsWith('.hidetag') || textLower === '.h' || textLower === '.tagall') {
+                        if (!isUserAdmin && !isOperator(sender)) return sock.sendMessage(from, { text: '❌ Cuma Admin/Operator yang bisa panggil warga!' });
+
+                        let teks = textLower === '.tagall' ? '📢 *PANGGILAN WARGA*' : (text.slice(textLower.startsWith('.h ') ? 3 : 9) || 'Panggilan 📢');
+
+                        if (textLower === '.tagall') {
+                            teks += '\n\n' + participants.map((p, i) => `${i + 1}. @${p.id.split('@')[0]}`).join('\n');
+                        }
+
+                        return await sock.sendMessage(from, { text: teks, mentions: participants.map(p => p.id) });
+                    }
+
+                    // --- [ STAFF ONLY: KICK, PROMOTE, DEMOTE ] ---
+
+                    const isStaffCmd = ['.kick', '.ban', '.promote', '.demote'].some(cmd => textLower.startsWith(cmd));
+                    if (isStaffCmd) {
+                        if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ BOT SAM harus jadi admin dulu!' });
+                        if (!isUserAdmin) return sock.sendMessage(from, { text: '❌ Kamu bukan admin!' });
+
+                        let targets = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
+                        const quoted = msg.message?.extendedTextMessage?.contextInfo?.participant;
+                        if (targets.length === 0 && quoted) targets.push(quoted);
+
+                        if (targets.length === 0) return sock.sendMessage(from, { text: '❌ Tag atau reply orangnya dulu!' });
+
+                        const action = textLower.startsWith('.kick') || textLower.startsWith('.ban') ? 'remove' :
+                            textLower.startsWith('.promote') ? 'promote' : 'demote';
+
+                        try {
+                            await sock.groupParticipantsUpdate(from, targets, action);
+                            if (textLower.startsWith('.ban')) {
+                                const bans = loadBans();
+                                if (!bans[from]) bans[from] = [];
+                                targets.forEach(t => { if (!bans[from].includes(t)) bans[from].push(t) });
+                                saveBans(bans);
+                            }
+                            await sock.sendMessage(from, { text: `✅ Berhasil mengeksekusi ${targets.length} member!` });
+                        } catch (e) {
+                            await sock.sendMessage(from, { text: `❌ Gagal: ${e.message}` });
+                        }
+                    }
+
+                    // --- [ GROUP SETTINGS ] ---
+
+                    if (textLower === '.opengroup' || textLower === '.closegroup') {
+                        if (!isBotAdmin || !isUserAdmin) return sock.sendMessage(from, { text: '❌ Bot & User harus admin!' });
+                        const open = textLower === '.opengroup';
+                        await sock.groupSettingUpdate(from, open ? 'not_announcement' : 'announcement');
+                        return await sock.sendMessage(from, { text: `✅ Grup berhasil ${open ? '*DIBUKA*' : '*DITUTUP*'}!` });
+                    }
+
+                    if (textLower.startsWith('.setname ')) {
+                        if (!isBotAdmin || !isUserAdmin) return sock.sendMessage(from, { text: '❌ Bot & User harus admin!' });
+                        const newName = text.slice(9).trim();
+                        if (!newName || newName.length > 25) return sock.sendMessage(from, { text: '❌ Nama max 25 karakter!' });
+                        await sock.groupUpdateSubject(from, newName);
+                        return await sock.sendMessage(from, { text: `✅ Nama grup diubah!` });
+                    }
+
+                    // --- [ ALARM & REMINDER ] ---
+
+                    if (textLower.startsWith('.setalarm')) {
+                        if (!isUserAdmin && !isOperator(sender)) return;
+                        const input = text.slice(10).split('|');
+                        if (input.length < 2) return sock.sendMessage(from, { text: 'Format: .setalarm Jam | Pesan' });
+                        const time = input[0].trim();
+                        if (!/^\d{2}:\d{2}$/.test(time)) return sock.sendMessage(from, { text: 'Format jam: HH:mm' });
+
+                        let db = loadJSON('scheduler.json', []);
+                        db.push({ id: Date.now(), groupId: from, time, message: input[1].trim() });
+                        saveJSON('scheduler.json', db);
+                        return await sock.sendMessage(from, { text: `✅ Alarm di-set ke ${time}` });
+                    }
+
+                    if (textLower.startsWith('.remind ')) {
                         const input = text.split(' ');
-                        if (input.length < 3) return sock.sendMessage(from, { text: 'Format: .remind [durasi][s/m/h] [pesan]\nContoh: .remind 10m jemput adek' });
-
+                        if (input.length < 3) return sock.sendMessage(from, { text: 'Format: .remind 10m pesan' });
                         const timeStr = input[1];
-                        const message = text.slice(text.indexOf(timeStr) + timeStr.length).trim();
-
                         const duration = parseInt(timeStr);
-                        let ms = 0;
-                        if (timeStr.endsWith('s')) ms = duration * 1000;
-                        else if (timeStr.endsWith('m')) ms = duration * 60 * 1000;
-                        else if (timeStr.endsWith('h')) ms = duration * 60 * 60 * 1000;
-                        else return sock.sendMessage(from, { text: 'Pake s/m/h Bos (Contoh: 10m)' });
+                        const ms = timeStr.endsWith('s') ? duration * 1000 : timeStr.endsWith('m') ? duration * 60000 : timeStr.endsWith('h') ? duration * 3600000 : 0;
+                        if (ms === 0) return sock.sendMessage(from, { text: 'Gunakan s/m/h (contoh: 5m)' });
 
-                        await sock.sendMessage(from, { text: `✅ Oke, SAM bakal ingetin "${message}" dalam ${timeStr}.` });
-
+                        await sock.sendMessage(from, { text: `✅ SAM bakal ingetin dalam ${timeStr}!` });
                         setTimeout(async () => {
-                            await sock.sendMessage(from, {
-                                text: `⏰ *REMINDER:* ${message}\n\nHey @${sender.split('@')[0]}, waktunya tiba!`,
-                                mentions: [sender]
-                            });
+                            await sock.sendMessage(from, { text: `⏰ *REMINDER:* ${text.split(' ').slice(2).join(' ')}`, mentions: [sender] });
                         }, ms);
                     }
                 }
