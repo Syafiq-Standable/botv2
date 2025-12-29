@@ -55,9 +55,6 @@ function saveJSON(filePath, data) {
     }
 }
 
-const loadTempSearch = () => loadJSON(path.join(FOLDER, 'temp_search.json'), {});
-const saveTempSearch = (data) => saveJSON(path.join(FOLDER, 'temp_search.json'), data);
-
 async function listRentals(sock) {
     const rentals = loadRentals();
     const now = Date.now();
@@ -95,16 +92,16 @@ async function listRentals(sock) {
 }
 
 async function post(url, formdata) {
-    // Langsung pakai fetch bawaan Node.js
-    return fetch(url, {
-        method: 'POST',
-        headers: {
-            'accept': "*/*",
-            'accept-language': "en-US,en;q=0.9",
-            'content-type': "application/x-www-form-urlencoded; charset=UTF-8"
-        },
-        body: new URLSearchParams(Object.entries(formdata))
-    })
+  // Langsung pakai fetch bawaan Node.js
+  return fetch(url, {
+    method: 'POST',
+    headers: {
+      'accept': "*/*",
+      'accept-language': "en-US,en;q=0.9",
+      'content-type': "application/x-www-form-urlencoded; charset=UTF-8"
+    },
+    body: new URLSearchParams(Object.entries(formdata))
+  })
 }
 
 // Database functions
@@ -439,7 +436,7 @@ async function yt(url, quality, type, bitrate, server = 'en154') {
     let ytId = ytIdRegex.exec(url);
     if (!ytId) throw 'Link YouTube tidak valid!';
     let link = 'https://youtu.be/' + ytId[1];
-
+    
     // Kita tambahin User-Agent biar gak dikira bot amat sama y2mate
     const headers = {
         'content-type': "application/x-www-form-urlencoded; charset=UTF-8",
@@ -454,7 +451,7 @@ async function yt(url, quality, type, bitrate, server = 'en154') {
         headers: headers,
         body: new URLSearchParams({ url: link, q_auto: '0', ajax: '1' })
     });
-
+    
     // Cek dulu response-nya oke apa nggak sebelum di .json()
     const text = await res.text();
     let json;
@@ -464,13 +461,13 @@ async function yt(url, quality, type, bitrate, server = 'en154') {
         console.error("Respon bukan JSON:", text.slice(0, 100)); // Log 100 karakter pertama biar tau errornya apa
         throw 'Server y2mate lagi sibuk atau nge-block request. Coba lagi nanti ya!';
     }
-
+    
     if (!json.result) throw 'Hasil tidak ditemukan!';
 
     let { document } = (new JSDOM(json.result)).window;
     let tables = document.querySelectorAll('table');
     let table = tables[{ mp4: 0, mp3: 1 }[type] || 0];
-
+    
     if (!table) throw 'Gagal mengambil tabel download.';
 
     // Cari link convert ID-nya
@@ -481,26 +478,26 @@ async function yt(url, quality, type, bitrate, server = 'en154') {
     let res2 = await fetch(`https://www.y2mate.com/${server}/convert`, {
         method: 'POST',
         headers: headers,
-        body: new URLSearchParams({
-            type: 'youtube',
-            _id: id[1],
-            v_id: ytId[1],
-            ajax: '1',
-            ftype: type,
-            fquality: bitrate
+        body: new URLSearchParams({ 
+            type: 'youtube', 
+            _id: id[1], 
+            v_id: ytId[1], 
+            ajax: '1', 
+            ftype: type, 
+            fquality: bitrate 
         })
     });
-
+    
     let json2 = await res2.json();
     if (!json2.result) throw 'Gagal mengonversi video.';
-
+    
     let resUrl = /<a.+?href="(.+?)"/.exec(json2.result)[1];
-
-    return {
-        dl_link: resUrl.replace(/https/g, 'http'),
-        thumb,
-        title,
-        filesizeF: 'Terhitung...'
+    
+    return { 
+        dl_link: resUrl.replace(/https/g, 'http'), 
+        thumb, 
+        title, 
+        filesizeF: 'Terhitung...' 
     };
 }
 
@@ -725,14 +722,25 @@ async function connectToWhatsApp() {
 
                 if (msg.key.fromMe && !text.startsWith('.')) return;
 
-                // Sistem Mute
+                // --- LOGIKA GRUP GLOBAL (BIAR GAK REPOT) ---
+                let groupMetadata, participants, isBotAdmin, isUserAdmin;
+                if (isGroup) {
+                    groupMetadata = await sock.groupMetadata(from);
+                    participants = groupMetadata.participants;
+                    
+                    // Pengecekan Admin yang lebih akurat
+                    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+                    const botPart = participants.find(p => p.id === botId);
+                    const userPart = participants.find(p => p.id === sender);
+
+                    isBotAdmin = botPart?.admin === 'admin' || botPart?.admin === 'superadmin';
+                    isUserAdmin = userPart?.admin === 'admin' || userPart?.admin === 'superadmin';
+                }
+
+                // Sistem Mute (Sekarang lebih enteng karena metadata sudah ada di atas)
                 const muted = loadMuted();
                 if (isGroup && muted[from]?.includes(sender)) {
-                    const groupMetadata = await sock.groupMetadata(from);
-                    const participants = groupMetadata.participants;
-                    const botAdmin = participants.find(p => p.id === botNumber)?.admin;
-
-                    if (botAdmin) {
+                    if (isBotAdmin) {
                         await sock.sendMessage(from, { delete: msg.key });
                     }
                     return;
@@ -945,61 +953,8 @@ async function connectToWhatsApp() {
                     return;
                 }
 
-                // Cek kalau user cuma ngetik command tanpa link
-                if (textLower.startsWith('ytmp3') || textLower.startsWith('ytmp4') && !url) {
-                    return console.log('Sukabyone, masukin linknya juga dong!')
-                }
 
-
-                // Youtube Downloader
-                if (textLower.startsWith('.yta ')) {
-                    const url = text.split(' ')[1];
-                    if (!ytIdRegex.test(url)) {
-                        return sock.sendMessage(from, { text: '❌ Link YouTube tidak valid, Sukabyone!' }, { quoted: msg });
-                    }
-
-                    try {
-                        await sock.sendMessage(from, { text: '⏳ Sedang memproses audio, tunggu bentar ya...' }, { quoted: msg });
-                        const data = await yt(url, '128kbps', 'mp3', '128');
-
-                        await sock.sendMessage(from, {
-                            audio: { url: data.dl_link },
-                            mimetype: 'audio/mp4',
-                            fileName: `${data.title}.mp3`
-                        }, { quoted: msg });
-                    } catch (e) {
-                        console.error(e);
-                        sock.sendMessage(from, { text: '❌ Gagal mendownload audio.' }, { quoted: msg });
-                    }
-                    return;
-                }
-
-                if (textLower.startsWith('.ytv ')) {
-                    const args = text.split(' ');
-                    const url = args[1];
-                    const res = args[2] || '360p'; // Default 360p kalau user ga input resolusi
-
-                    if (!ytIdRegex.test(url)) {
-                        return sock.sendMessage(from, { text: '❌ Mana link YouTube-nya?' }, { quoted: msg });
-                    }
-
-                    try {
-                        await sock.sendMessage(from, { text: `⏳ Lagi nyiapin video ${res}, sabar ya...` }, { quoted: msg });
-                        const data = await yt(url, res, 'mp4', res.replace('p', ''));
-
-                        await sock.sendMessage(from, {
-                            video: { url: data.dl_link },
-                            caption: `✨ *Title:* ${data.title}\n📂 *Size:* ${data.filesizeF}`,
-                            gifPlayback: false
-                        }, { quoted: msg });
-                    } catch (e) {
-                        console.error(e);
-                        sock.sendMessage(from, { text: '❌ Gagal mendownload video. Coba resolusi lain (360p/720p).' }, { quoted: msg });
-                    }
-                    return;
-                }
-
-
+                // Sticker maker
                 if (textLower === '.sticker' || textLower === '.s') {
                     const imgMsg = msg.message?.imageMessage ||
                         msg.message?.extendedTextMessage?.contextInfo?.quotedMessage?.imageMessage;
@@ -1475,31 +1430,6 @@ wa.me/6289528950624
                         return;
                     }
 
-                    if (textLower.startsWith('.play ')) {
-                        const query = text.split(' ').slice(1).join(' ');
-                        if (!query) {
-                            return sock.sendMessage(from, {
-                                text: '❌ Format: .play [judul lagu/artis]\nContoh: .play coldplay yellow'
-                            }, { quoted: msg });
-                        }
-
-                        await searchAndPlayMusic(query, sock, from, msg);
-                        return;
-                    }
-
-                    // Command .play untuk link langsung (opsional)
-                    if (textLower.startsWith('.playdirect ') || textLower.startsWith('.pld ')) {
-                        const url = text.split(' ')[1];
-                        if (!url || !url.includes('youtube.com') && !url.includes('youtu.be')) {
-                            return sock.sendMessage(from, {
-                                text: '❌ Format: .playdirect [link youtube]\nContoh: .playdirect https://youtube.com/...'
-                            }, { quoted: msg });
-                        }
-
-                        await downloadMusicDirect(url, sock, from, msg);
-                        return;
-                    }
-
                     if (textLower.startsWith('.remind')) {
                         const input = text.split(' ');
                         if (input.length < 3) return sock.sendMessage(from, { text: 'Format: .remind [durasi][s/m/h] [pesan]\nContoh: .remind 10m jemput adek' });
@@ -1674,11 +1604,6 @@ wa.me/6289528950624
                         }
                     }
 
-                    // 4. LEGACY COMMANDS (Peringatan)
-                    else if (textLower.startsWith(prefix + 'addprem') || textLower.startsWith(prefix + 'delprem')) {
-                        return sock.sendMessage(from, { text: `⚠️ Command lawas. Gunakan *${prefix}addrent* atau *${prefix}delrent*.` }, { quoted: msg });
-                    }
-
                     // AUDIT COMMAND
                     if (textLower === '.checkall') {
                         if (!isOperator(senderId)) return;
@@ -1732,199 +1657,3 @@ wa.me/6289528950624
 // ============================================================
 
 connectToWhatsApp();
-
-// ============================================================
-// FITUR PLAY MUSIC (denethdev-ytmp3)
-// ============================================================
-
-async function searchAndPlayMusic(query, sock, from, msg) {
-    try {
-        // Kirim status sedang mencari
-        await sock.sendMessage(from, { text: `🔍 Mencari lagu: "${query}"...` }, { quoted: msg });
-
-        // Cari lagu menggunakan ytmp3
-        const results = await ytmp3.search(query);
-
-        if (!results || results.length === 0) {
-            return await sock.sendMessage(from, {
-                text: '❌ Lagu tidak ditemukan. Coba kata kunci lain.'
-            }, { quoted: msg });
-        }
-
-        // Ambil 3 hasil pertama
-        const topResults = results.slice(0, 3);
-
-        // Buat daftar pilihan
-        let listText = `🎵 *HASIL PENCARIAN LAGU*\n\n`;
-        topResults.forEach((song, index) => {
-            const duration = song.duration ? ` (${song.duration})` : '';
-            listText += `${index + 1}. *${song.title}*${duration}\n`;
-            if (song.artist) listText += `   👤 ${song.artist}\n`;
-            listText += `   🔗 ${song.url}\n\n`;
-        });
-
-        listText += `\nBalas dengan nomor pilihan (1-${topResults.length}) untuk mendownload.`;
-        listText += `\n_Timeout: 30 detik_`;
-
-        // Simpan data hasil pencarian untuk referensi
-        const searchId = Date.now();
-        const tempSearchData = loadJSON('temp_search.json', {});
-        tempSearchData[searchId] = {
-            query,
-            results: topResults,
-            from,
-            sender: msg.key.participant || from,
-            timestamp: Date.now()
-        };
-        saveJSON('temp_search.json', tempSearchData);
-
-        // Kirim daftar lagu
-        await sock.sendMessage(from, { text: listText }, { quoted: msg });
-
-        // Setup listener untuk pilihan user
-        setupSearchListener(sock, searchId);
-
-    } catch (error) {
-        console.error('Search music error:', error.message);
-        await sock.sendMessage(from, {
-            text: '❌ Gagal mencari lagu. Server mungkin sibuk.'
-        }, { quoted: msg });
-    }
-}
-
-function setupSearchListener(sock, searchId) {
-    // Hapus listener lama jika ada
-    if (sock.searchListener) {
-        sock.ev.removeListener('messages.upsert', sock.searchListener);
-    }
-
-    const listener = async (m) => {
-        const msg = m.messages[0];
-        if (!msg || !msg.message) return;
-
-        const from = msg.key.remoteJid;
-        const sender = msg.key.participant || from;
-        const text = (msg.message?.conversation || '').trim();
-
-        // Cek apakah ini respons dari search yang aktif
-        const tempSearchData = loadJSON('temp_search.json', {});
-        const searchData = tempSearchData[searchId];
-
-        if (!searchData) return;
-        if (from !== searchData.from) return;
-        if (sender !== searchData.sender) return;
-
-        // Cek timeout (30 detik)
-        if (Date.now() - searchData.timestamp > 30000) {
-            delete tempSearchData[searchId];
-            saveJSON('temp_search.json', tempSearchData);
-            sock.ev.removeListener('messages.upsert', listener);
-            return;
-        }
-
-        // Cek jika user memilih nomor
-        const choice = parseInt(text);
-        if (isNaN(choice) || choice < 1 || choice > searchData.results.length) {
-            return; // Bukan pilihan valid
-        }
-
-        // Hapus listener setelah mendapat respons
-        sock.ev.removeListener('messages.upsert', listener);
-        delete tempSearchData[searchId];
-        saveJSON('temp_search.json', tempSearchData);
-
-        // Proses download lagu terpilih
-        const selectedSong = searchData.results[choice - 1];
-        await downloadSelectedMusic(selectedSong, sock, from, msg);
-    };
-
-    sock.searchListener = listener;
-    sock.ev.on('messages.upsert', listener);
-
-    // Auto cleanup setelah 30 detik
-    setTimeout(() => {
-        sock.ev.removeListener('messages.upsert', listener);
-        const tempSearchData = loadJSON('temp_search.json', {});
-        delete tempSearchData[searchId];
-        saveJSON('temp_search.json', tempSearchData);
-    }, 30000);
-}
-
-async function downloadSelectedMusic(song, sock, from, msg) {
-    try {
-        await sock.sendMessage(from, {
-            text: `⏳ Mendownload: *${song.title}*...`
-        }, { quoted: msg });
-
-        // Download lagu menggunakan ytmp3
-        const audioData = await ytmp3.download(song.url);
-
-        if (!audioData || !audioData.buffer) {
-            throw new Error('Data audio tidak valid');
-        }
-
-        // Konversi buffer ke Uint8Array jika perlu
-        const audioBuffer = Buffer.isBuffer(audioData.buffer)
-            ? audioData.buffer
-            : Buffer.from(audioData.buffer);
-
-        // Kirim audio
-        await sock.sendMessage(from, {
-            audio: audioBuffer,
-            mimetype: 'audio/mp4',
-            fileName: `${song.title.replace(/[^\w\s]/gi, '')}.mp3`,
-            ptt: false
-        }, { quoted: msg });
-
-        // Kirim info lagu
-        const infoText = `✅ *DOWNLOAD BERHASIL*\n\n` +
-            `🎵 *Judul:* ${song.title}\n` +
-            (song.artist ? `👤 *Artis:* ${song.artist}\n` : '') +
-            (song.duration ? `⏱️ *Durasi:* ${song.duration}\n` : '') +
-            `📊 *Size:* ${(audioBuffer.length / (1024 * 1024)).toFixed(2)} MB`;
-
-        await sock.sendMessage(from, { text: infoText });
-
-    } catch (error) {
-        console.error('Download music error:', error.message);
-        await sock.sendMessage(from, {
-            text: '❌ Gagal mendownload lagu. Coba lagi nanti.'
-        }, { quoted: msg });
-    }
-}
-
-// Fungsi untuk download langsung (tanpa pilihan)
-async function downloadMusicDirect(url, sock, from, msg) {
-    try {
-        await sock.sendMessage(from, {
-            text: '⏳ Mendownload lagu...'
-        }, { quoted: msg });
-
-        const audioData = await ytmp3.download(url);
-
-        if (!audioData || !audioData.buffer) {
-            throw new Error('Data audio tidak valid');
-        }
-
-        const audioBuffer = Buffer.isBuffer(audioData.buffer)
-            ? audioData.buffer
-            : Buffer.from(audioData.buffer);
-
-        await sock.sendMessage(from, {
-            audio: audioBuffer,
-            mimetype: 'audio/mp4',
-            fileName: 'music.mp3',
-            ptt: false
-        }, { quoted: msg });
-
-        await sock.sendMessage(from, {
-            text: '✅ Lagu berhasil didownload!'
-        });
-
-    } catch (error) {
-        console.error('Direct download error:', error.message);
-        await sock.sendMessage(from, {
-            text: '❌ Gagal mendownload. Pastikan link valid.'
-        }, { quoted: msg });
-    }
-}
