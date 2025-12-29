@@ -431,60 +431,73 @@ async function downloadInstagram(url, sock, from, msg) {
 }
 
 // --- FUNGSI INTI DOWNLOAD (YT) ---
-async function yt(url, quality, type, bitrate, server = 'en818') {
-    let ytId = ytIdRegex.exec(url)
-    if (!ytId) throw 'Link YouTube-nya nggak valid tuh!'
+async function yt(url, quality, type, bitrate, server = 'en154') {
+    let ytId = ytIdRegex.exec(url);
+    if (!ytId) throw 'Link YouTube tidak valid!';
+    let link = 'https://youtu.be/' + ytId[1];
+    
+    // Kita tambahin User-Agent biar gak dikira bot amat sama y2mate
+    const headers = {
+        'content-type': "application/x-www-form-urlencoded; charset=UTF-8",
+        'user-agent': "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+        'accept': "*/*",
+        'origin': "https://www.y2mate.com",
+        'referer': `https://www.y2mate.com/${server}`
+    };
 
-    url = 'https://youtu.be/' + ytId[1]
-    let res = await post(`https://www.y2mate.com/${server}/analyze/ajax`, {
-        url,
-        q_auto: 0,
-        ajax: 1
-    })
-
-    let json = await res.json()
-    let { document } = (new JSDOM(json.result)).window
-    let tables = document.querySelectorAll('table')
-    let table = tables[{ mp4: 0, mp3: 1 }[type] || 0]
-
-    let list
-    switch (type) {
-        case 'mp4':
-            list = Object.fromEntries([...table.querySelectorAll('td > a[href="#"]')].filter(v => !/\.3gp/.test(v.innerHTML)).map(v => [v.innerHTML.match(/.*?(?=\()/)[0].trim(), v.parentElement.nextSibling.nextSibling.innerHTML]))
-            break
-        case 'mp3':
-            list = { '128kbps': table.querySelector('td > a[href="#"]').parentElement.nextSibling.nextSibling.innerHTML }
-            break
-        default:
-            list = {}
+    let res = await fetch(`https://www.y2mate.com/${server}/analyze/ajax`, {
+        method: 'POST',
+        headers: headers,
+        body: new URLSearchParams({ url: link, q_auto: '0', ajax: '1' })
+    });
+    
+    // Cek dulu response-nya oke apa nggak sebelum di .json()
+    const text = await res.text();
+    let json;
+    try {
+        json = JSON.parse(text);
+    } catch (e) {
+        console.error("Respon bukan JSON:", text.slice(0, 100)); // Log 100 karakter pertama biar tau errornya apa
+        throw 'Server y2mate lagi sibuk atau nge-block request. Coba lagi nanti ya!';
     }
+    
+    if (!json.result) throw 'Hasil tidak ditemukan!';
 
-    let filesize = list[quality]
-    let id = /var k__id = "(.*?)"/.exec(document.body.innerHTML) || ['', '']
-    let thumb = document.querySelector('img').src
-    let title = document.querySelector('b').innerHTML
+    let { document } = (new JSDOM(json.result)).window;
+    let tables = document.querySelectorAll('table');
+    let table = tables[{ mp4: 0, mp3: 1 }[type] || 0];
+    
+    if (!table) throw 'Gagal mengambil tabel download.';
 
-    let res2 = await post(`https://www.y2mate.com/${server}/convert`, {
-        type: 'youtube',
-        _id: id[1],
-        v_id: ytId[1],
-        ajax: '1',
-        token: '',
-        ftype: type,
-        fquality: bitrate
-    })
+    // Cari link convert ID-nya
+    let id = /var k__id = "(.*?)"/.exec(document.body.innerHTML) || ['', ''];
+    let thumb = document.querySelector('img')?.src || '';
+    let title = document.querySelector('b')?.innerHTML || 'YouTube Video';
 
-    let json2 = await res2.json()
-    let KB = parseFloat(filesize) * (1000 * /MB$/.test(filesize))
-    let resUrl = /<a.+?href="(.+?)"/.exec(json2.result)[1]
-
-    return {
-        dl_link: resUrl.replace(/https/g, 'http'),
-        thumb,
-        title,
-        filesizeF: filesize,
-        filesize: KB
-    }
+    let res2 = await fetch(`https://www.y2mate.com/${server}/convert`, {
+        method: 'POST',
+        headers: headers,
+        body: new URLSearchParams({ 
+            type: 'youtube', 
+            _id: id[1], 
+            v_id: ytId[1], 
+            ajax: '1', 
+            ftype: type, 
+            fquality: bitrate 
+        })
+    });
+    
+    let json2 = await res2.json();
+    if (!json2.result) throw 'Gagal mengonversi video.';
+    
+    let resUrl = /<a.+?href="(.+?)"/.exec(json2.result)[1];
+    
+    return { 
+        dl_link: resUrl.replace(/https/g, 'http'), 
+        thumb, 
+        title, 
+        filesizeF: 'Terhitung...' 
+    };
 }
 
 async function downloadTikTok(url, sock, from, msg) {
