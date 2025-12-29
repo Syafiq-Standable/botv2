@@ -1109,7 +1109,7 @@ wa.me/6289528950624
                 // GROUP COMMANDS - OPTIMIZED BY BOT SAM
                 // ============================================================
                 if (isGroup) {
-                    let groupMetadata, participants, isBotAdmin, isUserAdmin;
+                    let groupMetadata, participants, isUserAdmin;
 
                     try {
                         // Ambil metadata sekali untuk semua command di bawah
@@ -1117,13 +1117,8 @@ wa.me/6289528950624
                         participants = groupMetadata.participants;
 
                         // Normalisasi ID agar tidak bug karena device ID (:1, :2, dll)
-                        const botNumber = sock.user.id.split(':')[0];
                         const senderNumber = sender.split(':')[0];
-
-                        const botPart = participants.find(p => p.id.includes(botNumber));
                         const userPart = participants.find(p => p.id.includes(senderNumber));
-
-                        isBotAdmin = botPart?.admin === 'admin' || botPart?.admin === 'superadmin';
                         isUserAdmin = userPart?.admin === 'admin' || userPart?.admin === 'superadmin';
                     } catch (err) {
                         console.error('Gagal memuat info grup:', err.message);
@@ -1138,9 +1133,8 @@ wa.me/6289528950624
                     }
 
                     if (textLower === '.cekstatus') {
-                        const statusBot = isBotAdmin ? 'Admin 😎' : 'Member Biasa 😶';
                         const statusUser = isUserAdmin ? 'Admin 👑' : 'Member Biasa 👤';
-                        return await sock.sendMessage(from, { text: `🤖 *Status BOT SAM:* ${statusBot}\n👤 *Status Kamu:* ${statusUser}` }, { quoted: msg });
+                        return await sock.sendMessage(from, { text: `👤 *Status Kamu:* ${statusUser}` }, { quoted: msg });
                     }
 
                     // --- [ TAGGING COMMANDS ] ---
@@ -1161,7 +1155,6 @@ wa.me/6289528950624
 
                     const isStaffCmd = ['.kick', '.ban', '.promote', '.demote'].some(cmd => textLower.startsWith(cmd));
                     if (isStaffCmd) {
-                        if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ BOT SAM harus jadi admin dulu!' });
                         if (!isUserAdmin) return sock.sendMessage(from, { text: '❌ Kamu bukan admin!' });
 
                         let targets = msg.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
@@ -1183,6 +1176,7 @@ wa.me/6289528950624
                             }
                             await sock.sendMessage(from, { text: `✅ Berhasil mengeksekusi ${targets.length} member!` });
                         } catch (e) {
+                            // Hapus cek isBotAdmin dari error handling
                             await sock.sendMessage(from, { text: `❌ Gagal: ${e.message}` });
                         }
                     }
@@ -1190,18 +1184,26 @@ wa.me/6289528950624
                     // --- [ GROUP SETTINGS ] ---
 
                     if (textLower === '.opengroup' || textLower === '.closegroup') {
-                        if (!isBotAdmin || !isUserAdmin) return sock.sendMessage(from, { text: '❌ Bot & User harus admin!' });
+                        if (!isUserAdmin) return sock.sendMessage(from, { text: '❌ Kamu bukan admin!' });
                         const open = textLower === '.opengroup';
-                        await sock.groupSettingUpdate(from, open ? 'not_announcement' : 'announcement');
-                        return await sock.sendMessage(from, { text: `✅ Grup berhasil ${open ? '*DIBUKA*' : '*DITUTUP*'}!` });
+                        try {
+                            await sock.groupSettingUpdate(from, open ? 'not_announcement' : 'announcement');
+                            return await sock.sendMessage(from, { text: `✅ Grup berhasil ${open ? '*DIBUKA*' : '*DITUTUP*'}!` });
+                        } catch (e) {
+                            return await sock.sendMessage(from, { text: `❌ Gagal mengubah setting grup` });
+                        }
                     }
 
                     if (textLower.startsWith('.setname ')) {
-                        if (!isBotAdmin || !isUserAdmin) return sock.sendMessage(from, { text: '❌ Bot & User harus admin!' });
+                        if (!isUserAdmin) return sock.sendMessage(from, { text: '❌ Kamu bukan admin!' });
                         const newName = text.slice(9).trim();
                         if (!newName || newName.length > 25) return sock.sendMessage(from, { text: '❌ Nama max 25 karakter!' });
-                        await sock.groupUpdateSubject(from, newName);
-                        return await sock.sendMessage(from, { text: `✅ Nama grup diubah!` });
+                        try {
+                            await sock.groupUpdateSubject(from, newName);
+                            return await sock.sendMessage(from, { text: `✅ Nama grup diubah!` });
+                        } catch (e) {
+                            return await sock.sendMessage(from, { text: `❌ Gagal mengubah nama grup` });
+                        }
                     }
 
                     // --- [ ALARM & REMINDER ] ---
@@ -1235,21 +1237,20 @@ wa.me/6289528950624
 
                     // --- [ COMMAND ADD MEMBER ] ---
                     if (textLower.startsWith('.add ')) {
-                        if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ BOT SAM harus jadi admin dulu!' });
                         if (!isUserAdmin) return sock.sendMessage(from, { text: '❌ Kamu bukan admin!' });
 
                         // Ambil nomor dari chat, hapus spasi, plus, dll
                         let input = text.slice(5).replace(/[^0-9]/g, '');
-                        
+
                         if (!input) return sock.sendMessage(from, { text: '❌ Masukkan nomornya! Contoh: .add 62812345678' });
-                        
+
                         // Tambahin suffix @s.whatsapp.net kalau belum ada
                         let jid = input + '@s.whatsapp.net';
 
                         try {
                             const response = await sock.groupParticipantsUpdate(from, [jid], 'add');
-                            
-                            // Cek respon WhatsApp (kadang sukses, kadang cuma kirim invite)
+
+                            // Cek respon WhatsApp
                             if (response[0].status === '200') {
                                 await sock.sendMessage(from, { text: `✅ Berhasil menambahkan @${input} ke grup!`, mentions: [jid] });
                             } else if (response[0].status === '403') {
@@ -1258,6 +1259,7 @@ wa.me/6289528950624
                                 await sock.sendMessage(from, { text: `⚠️ Status: ${response[0].status}. Mungkin nomor salah atau sudah di grup.` });
                             }
                         } catch (e) {
+                            // Hapus pengecekan isBotAdmin dari error
                             await sock.sendMessage(from, { text: `❌ Error: ${e.message}` });
                         }
                         return;
