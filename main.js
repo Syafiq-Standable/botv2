@@ -92,16 +92,16 @@ async function listRentals(sock) {
 }
 
 async function post(url, formdata) {
-  // Langsung pakai fetch bawaan Node.js
-  return fetch(url, {
-    method: 'POST',
-    headers: {
-      'accept': "*/*",
-      'accept-language': "en-US,en;q=0.9",
-      'content-type': "application/x-www-form-urlencoded; charset=UTF-8"
-    },
-    body: new URLSearchParams(Object.entries(formdata))
-  })
+    // Langsung pakai fetch bawaan Node.js
+    return fetch(url, {
+        method: 'POST',
+        headers: {
+            'accept': "*/*",
+            'accept-language': "en-US,en;q=0.9",
+            'content-type': "application/x-www-form-urlencoded; charset=UTF-8"
+        },
+        body: new URLSearchParams(Object.entries(formdata))
+    })
 }
 
 // Database functions
@@ -436,7 +436,7 @@ async function yt(url, quality, type, bitrate, server = 'en154') {
     let ytId = ytIdRegex.exec(url);
     if (!ytId) throw 'Link YouTube tidak valid!';
     let link = 'https://youtu.be/' + ytId[1];
-    
+
     // Kita tambahin User-Agent biar gak dikira bot amat sama y2mate
     const headers = {
         'content-type': "application/x-www-form-urlencoded; charset=UTF-8",
@@ -451,7 +451,7 @@ async function yt(url, quality, type, bitrate, server = 'en154') {
         headers: headers,
         body: new URLSearchParams({ url: link, q_auto: '0', ajax: '1' })
     });
-    
+
     // Cek dulu response-nya oke apa nggak sebelum di .json()
     const text = await res.text();
     let json;
@@ -461,13 +461,13 @@ async function yt(url, quality, type, bitrate, server = 'en154') {
         console.error("Respon bukan JSON:", text.slice(0, 100)); // Log 100 karakter pertama biar tau errornya apa
         throw 'Server y2mate lagi sibuk atau nge-block request. Coba lagi nanti ya!';
     }
-    
+
     if (!json.result) throw 'Hasil tidak ditemukan!';
 
     let { document } = (new JSDOM(json.result)).window;
     let tables = document.querySelectorAll('table');
     let table = tables[{ mp4: 0, mp3: 1 }[type] || 0];
-    
+
     if (!table) throw 'Gagal mengambil tabel download.';
 
     // Cari link convert ID-nya
@@ -478,26 +478,26 @@ async function yt(url, quality, type, bitrate, server = 'en154') {
     let res2 = await fetch(`https://www.y2mate.com/${server}/convert`, {
         method: 'POST',
         headers: headers,
-        body: new URLSearchParams({ 
-            type: 'youtube', 
-            _id: id[1], 
-            v_id: ytId[1], 
-            ajax: '1', 
-            ftype: type, 
-            fquality: bitrate 
+        body: new URLSearchParams({
+            type: 'youtube',
+            _id: id[1],
+            v_id: ytId[1],
+            ajax: '1',
+            ftype: type,
+            fquality: bitrate
         })
     });
-    
+
     let json2 = await res2.json();
     if (!json2.result) throw 'Gagal mengonversi video.';
-    
+
     let resUrl = /<a.+?href="(.+?)"/.exec(json2.result)[1];
-    
-    return { 
-        dl_link: resUrl.replace(/https/g, 'http'), 
-        thumb, 
-        title, 
-        filesizeF: 'Terhitung...' 
+
+    return {
+        dl_link: resUrl.replace(/https/g, 'http'),
+        thumb,
+        title,
+        filesizeF: 'Terhitung...'
     };
 }
 
@@ -722,25 +722,14 @@ async function connectToWhatsApp() {
 
                 if (msg.key.fromMe && !text.startsWith('.')) return;
 
-                // --- LOGIKA GRUP GLOBAL (BIAR GAK REPOT) ---
-                let groupMetadata, participants, isBotAdmin, isUserAdmin;
-                if (isGroup) {
-                    groupMetadata = await sock.groupMetadata(from);
-                    participants = groupMetadata.participants;
-                    
-                    // Pengecekan Admin yang lebih akurat
-                    const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-                    const botPart = participants.find(p => p.id === botId);
-                    const userPart = participants.find(p => p.id === sender);
-
-                    isBotAdmin = botPart?.admin === 'admin' || botPart?.admin === 'superadmin';
-                    isUserAdmin = userPart?.admin === 'admin' || userPart?.admin === 'superadmin';
-                }
-
-                // Sistem Mute (Sekarang lebih enteng karena metadata sudah ada di atas)
+                // Sistem Mute
                 const muted = loadMuted();
                 if (isGroup && muted[from]?.includes(sender)) {
-                    if (isBotAdmin) {
+                    const groupMetadata = await sock.groupMetadata(from);
+                    const participants = groupMetadata.participants;
+                    const botAdmin = participants.find(p => p.id === botNumber)?.admin;
+
+                    if (botAdmin) {
                         await sock.sendMessage(from, { delete: msg.key });
                     }
                     return;
@@ -1258,32 +1247,56 @@ wa.me/6289528950624
                     }
 
                     if (textLower.startsWith('.kick')) {
-                        if (!isUserAdmin || !isBotAdmin) {
-                            return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
-                        }
-
-                        let targets = [];
-                        const ext = msg.message?.extendedTextMessage;
-
-                        if (ext?.contextInfo?.mentionedJid) {
-                            targets = ext.contextInfo.mentionedJid;
-                        }
-
-                        if (targets.length === 0) {
-                            return sock.sendMessage(from, { text: '❌ Tag member yang ingin dikick!' });
-                        }
+                        if (!isGroup) return sock.sendMessage(from, { text: '❌ Fitur ini cuma buat di grup, Sukabyone!' });
 
                         try {
+                            // 1. Ambil data member terbaru dulu
+                            const groupMetadata = await sock.groupMetadata(from);
+                            const participants = groupMetadata.participants;
+
+                            // 2. Identifikasi ID Bot & ID Pengirim dengan benar
+                            const botId = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+                            const senderId = sender;
+
+                            // 3. Cek status admin
+                            const botParticipant = participants.find(p => p.id === botId);
+                            const userParticipant = participants.find(p => p.id === senderId);
+
+                            const isBotAdmin = botParticipant?.admin === 'admin' || botParticipant?.admin === 'superadmin';
+                            const isUserAdmin = userParticipant?.admin === 'admin' || userParticipant?.admin === 'superadmin';
+
+                            // 4. Validasi admin
+                            if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ BOT SAM bukan admin di sini!' });
+                            if (!isUserAdmin) return sock.sendMessage(from, { text: '❌ Kamu harus jadi admin dulu!' });
+
+                            // 5. Ambil target (bisa tag atau reply)
+                            let targets = [];
+                            const ext = msg.message?.extendedTextMessage;
+                            const mentioned = ext?.contextInfo?.mentionedJid || [];
+                            const quoted = ext?.contextInfo?.participant; // Kalau user cuma reply chat orangnya
+
+                            if (mentioned.length > 0) {
+                                targets = mentioned;
+                            } else if (quoted) {
+                                targets = [quoted];
+                            }
+
+                            if (targets.length === 0) {
+                                return sock.sendMessage(from, { text: '❌ Tag membernya atau reply chatnya yang mau dikick!' });
+                            }
+
+                            // 6. Eksekusi
                             await sock.groupParticipantsUpdate(from, targets, 'remove');
                             await sock.sendMessage(from, {
                                 text: `✅ Berhasil mengkick ${targets.length} member!`
                             });
+
                         } catch (e) {
+                            console.error(e);
                             await sock.sendMessage(from, { text: `❌ Gagal: ${e.message}` });
                         }
                         return;
                     }
-
                     if (textLower.startsWith('.ban ')) {
                         if (!isUserAdmin || !isBotAdmin) {
                             return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
