@@ -1232,6 +1232,36 @@ wa.me/6289528950624
                             await sock.sendMessage(from, { text: `⏰ *REMINDER:* ${text.split(' ').slice(2).join(' ')}`, mentions: [sender] });
                         }, ms);
                     }
+
+                    // --- [ COMMAND ADD MEMBER ] ---
+                    if (textLower.startsWith('.add ')) {
+                        if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ BOT SAM harus jadi admin dulu!' });
+                        if (!isUserAdmin) return sock.sendMessage(from, { text: '❌ Kamu bukan admin!' });
+
+                        // Ambil nomor dari chat, hapus spasi, plus, dll
+                        let input = text.slice(5).replace(/[^0-9]/g, '');
+                        
+                        if (!input) return sock.sendMessage(from, { text: '❌ Masukkan nomornya! Contoh: .add 62812345678' });
+                        
+                        // Tambahin suffix @s.whatsapp.net kalau belum ada
+                        let jid = input + '@s.whatsapp.net';
+
+                        try {
+                            const response = await sock.groupParticipantsUpdate(from, [jid], 'add');
+                            
+                            // Cek respon WhatsApp (kadang sukses, kadang cuma kirim invite)
+                            if (response[0].status === '200') {
+                                await sock.sendMessage(from, { text: `✅ Berhasil menambahkan @${input} ke grup!`, mentions: [jid] });
+                            } else if (response[0].status === '403') {
+                                await sock.sendMessage(from, { text: `❌ Gagal! Nomor @${input} membatasi undangan grup. Kirim link grup aja secara manual.`, mentions: [jid] });
+                            } else {
+                                await sock.sendMessage(from, { text: `⚠️ Status: ${response[0].status}. Mungkin nomor salah atau sudah di grup.` });
+                            }
+                        } catch (e) {
+                            await sock.sendMessage(from, { text: `❌ Error: ${e.message}` });
+                        }
+                        return;
+                    }
                 }
 
                 // ============================================================
