@@ -92,16 +92,16 @@ async function listRentals(sock) {
 }
 
 async function post(url, formdata) {
-  // Langsung pakai fetch bawaan Node.js
-  return fetch(url, {
-    method: 'POST',
-    headers: {
-      'accept': "*/*",
-      'accept-language': "en-US,en;q=0.9",
-      'content-type': "application/x-www-form-urlencoded; charset=UTF-8"
-    },
-    body: new URLSearchParams(Object.entries(formdata))
-  })
+    // Langsung pakai fetch bawaan Node.js
+    return fetch(url, {
+        method: 'POST',
+        headers: {
+            'accept': "*/*",
+            'accept-language': "en-US,en;q=0.9",
+            'content-type': "application/x-www-form-urlencoded; charset=UTF-8"
+        },
+        body: new URLSearchParams(Object.entries(formdata))
+    })
 }
 
 // Database functions
@@ -436,7 +436,7 @@ async function yt(url, quality, type, bitrate, server = 'en154') {
     let ytId = ytIdRegex.exec(url);
     if (!ytId) throw 'Link YouTube tidak valid!';
     let link = 'https://youtu.be/' + ytId[1];
-    
+
     // Kita tambahin User-Agent biar gak dikira bot amat sama y2mate
     const headers = {
         'content-type': "application/x-www-form-urlencoded; charset=UTF-8",
@@ -451,7 +451,7 @@ async function yt(url, quality, type, bitrate, server = 'en154') {
         headers: headers,
         body: new URLSearchParams({ url: link, q_auto: '0', ajax: '1' })
     });
-    
+
     // Cek dulu response-nya oke apa nggak sebelum di .json()
     const text = await res.text();
     let json;
@@ -461,13 +461,13 @@ async function yt(url, quality, type, bitrate, server = 'en154') {
         console.error("Respon bukan JSON:", text.slice(0, 100)); // Log 100 karakter pertama biar tau errornya apa
         throw 'Server y2mate lagi sibuk atau nge-block request. Coba lagi nanti ya!';
     }
-    
+
     if (!json.result) throw 'Hasil tidak ditemukan!';
 
     let { document } = (new JSDOM(json.result)).window;
     let tables = document.querySelectorAll('table');
     let table = tables[{ mp4: 0, mp3: 1 }[type] || 0];
-    
+
     if (!table) throw 'Gagal mengambil tabel download.';
 
     // Cari link convert ID-nya
@@ -478,26 +478,26 @@ async function yt(url, quality, type, bitrate, server = 'en154') {
     let res2 = await fetch(`https://www.y2mate.com/${server}/convert`, {
         method: 'POST',
         headers: headers,
-        body: new URLSearchParams({ 
-            type: 'youtube', 
-            _id: id[1], 
-            v_id: ytId[1], 
-            ajax: '1', 
-            ftype: type, 
-            fquality: bitrate 
+        body: new URLSearchParams({
+            type: 'youtube',
+            _id: id[1],
+            v_id: ytId[1],
+            ajax: '1',
+            ftype: type,
+            fquality: bitrate
         })
     });
-    
+
     let json2 = await res2.json();
     if (!json2.result) throw 'Gagal mengonversi video.';
-    
+
     let resUrl = /<a.+?href="(.+?)"/.exec(json2.result)[1];
-    
-    return { 
-        dl_link: resUrl.replace(/https/g, 'http'), 
-        thumb, 
-        title, 
-        filesizeF: 'Terhitung...' 
+
+    return {
+        dl_link: resUrl.replace(/https/g, 'http'),
+        thumb,
+        title,
+        filesizeF: 'Terhitung...'
     };
 }
 
@@ -1109,10 +1109,18 @@ wa.me/6289528950624
                 if (isGroup) {
                     const groupMetadata = await sock.groupMetadata(from);
                     const participants = groupMetadata.participants;
-                    const botAdmin = participants.find(p => p.id === botNumber)?.admin;
-                    const userAdmin = participants.find(p => p.id === sender)?.admin;
-                    const isBotAdmin = botAdmin === 'admin' || botAdmin === 'superadmin';
-                    const isUserAdmin = userAdmin === 'admin' || userAdmin === 'superadmin';
+
+                    // Ambil nomor bot & sender tanpa embel-embel :1 atau :2
+                    const cleanBot = sock.user.id.split(':')[0];
+                    const cleanSender = sender.split(':')[0];
+
+                    // Cari partipan yang ID-nya mengandung nomor tersebut
+                    const botPart = participants.find(p => p.id.includes(cleanBot));
+                    const userPart = participants.find(p => p.id.includes(cleanSender));
+
+                    // Cek apakah mereka admin (bisa 'admin' atau 'superadmin')
+                    const isBotAdmin = botPart?.admin === 'admin' || botPart?.admin === 'superadmin';
+                    const isUserAdmin = userPart?.admin === 'admin' || userPart?.admin === 'superadmin';
 
                     if (textLower === '.cekidgroup') {
                         const idGroupText = `🌐 *ID GRUP*\n\nID: ${from}\n_Gunakan ID ini untuk keperluan sewa atau operator._`;
@@ -1247,7 +1255,7 @@ wa.me/6289528950624
                     }
 
                     if (textLower.startsWith('.kick')) {
-                        if (!isUserAdmin) {
+                        if (!isUserAdmin || !isBotAdmin) {
                             return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
                         }
 
