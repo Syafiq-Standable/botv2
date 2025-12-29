@@ -1106,13 +1106,20 @@ wa.me/6289528950624
                 }
 
                 // GROUP COMMANDS
-                if (isGroup) {
+               if (isGroup) {
                     const groupMetadata = await sock.groupMetadata(from);
                     const participants = groupMetadata.participants;
-                    const botAdmin = participants.find(p => p.id === botNumber)?.admin;
-                    const userAdmin = participants.find(p => p.id === sender)?.admin;
-                    const isBotAdmin = botAdmin === 'admin' || botAdmin === 'superadmin';
-                    const isUserAdmin = userAdmin === 'admin' || userAdmin === 'superadmin';
+
+                    // --- PERBAIKAN DI SINI ---    
+                    // Kita bersihkan ID Bot dan ID Pengirim dari :1, :2, dll
+                    const cleanBot = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+                    const cleanSender = sender.split(':')[0] + '@s.whatsapp.net';
+
+                    const botPart = participants.find(p => p.id === cleanBot);
+                    const userPart = participants.find(p => p.id === cleanSender);
+
+                    const isBotAdmin = botPart?.admin === 'admin' || botPart?.admin === 'superadmin';
+                    const isUserAdmin = userPart?.admin === 'admin' || userPart?.admin === 'superadmin';
 
                     if (textLower === '.cekidgroup') {
                         const idGroupText = `🌐 *ID GRUP*\n\nID: ${from}\n_Gunakan ID ini untuk keperluan sewa atau operator._`;
