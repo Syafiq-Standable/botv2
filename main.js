@@ -6,7 +6,8 @@ const path = require('path');
 const sharp = require('sharp');
 const cheerio = require('cheerio');
 const { exec } = require('child_process');
-const { ttdl, igdl, youtube } = require('btch-downloader');
+const fetch = require('node-fetch')
+const { JSDOM } = require('jsdom')
 
 // ============================================================
 // KONFIGURASI AWAL & DEKLARASI PATH
@@ -19,6 +20,8 @@ const WELCOME_DB = path.join(FOLDER, 'welcome.json');
 const RENTALS_DB = path.join(FOLDER, 'rentals.json');
 const OPERATORS_DB = path.join(FOLDER, 'operators.json');
 const MUTE_DB = path.join(FOLDER, 'muted.json');
+const ytIdRegex = /(?:youtube\.com\/\S*(?:(?:\/e(?:mbed))?\/|watch\?(?:\S*?&?v\=))|youtu\.be\/)([a-zA-Z0-9_-]{6,11})/
+const servers = ['en136', 'id4', 'en60', 'en61', 'en68']
 
 // Buat folder data jika belum ada
 try {
@@ -86,6 +89,18 @@ async function listRentals(sock) {
     }
 
     return activeRentals;
+}
+
+function post(url, formdata) {
+    return fetch(url, {
+        method: 'POST',
+        headers: {
+            accept: "*/*",
+            'accept-language': "en-US,en;q=0.9",
+            'content-type': "application/x-www-form-urlencoded; charset=UTF-8"
+        },
+        body: new URLSearchParams(Object.entries(formdata))
+    })
 }
 
 // Database functions
@@ -415,26 +430,60 @@ async function downloadInstagram(url, sock, from, msg) {
     }
 }
 
-// --- DOWNLOADER YOUTUBE (Pakai API Widipe) ---
-async function downloadYouTube(url, sock, from, msg) {
-    await sock.sendMessage(from, { text: '⏳ Download YouTube...' }, { quoted: msg });
-    try {
-        const res = await axios.get(`https://widipe.com/download/ytdl?url=${url}`);
+// --- FUNGSI INTI DOWNLOAD (YT) ---
+async function yt(url, quality, type, bitrate, server = 'en818') {
+    let ytId = ytIdRegex.exec(url)
+    if (!ytId) throw 'Link YouTube-nya nggak valid tuh!'
 
-        if (res.data && res.data.result && res.data.result.mp4) {
-            const videoUrl = res.data.result.mp4;
-            const title = res.data.result.title || 'YouTube Video';
+    url = 'https://youtu.be/' + ytId[1]
+    let res = await post(`https://www.y2mate.com/${server}/analyze/ajax`, {
+        url,
+        q_auto: 0,
+        ajax: 1
+    })
 
-            await sock.sendMessage(from, {
-                video: { url: videoUrl },
-                caption: `✅ ${title}`
-            }, { quoted: msg });
-        } else {
-            throw new Error('Video tidak ditemukan');
-        }
-    } catch (error) {
-        console.error('YouTube download error:', error.message);
-        await sock.sendMessage(from, { text: '❌ Gagal download YouTube.' }, { quoted: msg });
+    let json = await res.json()
+    let { document } = (new JSDOM(json.result)).window
+    let tables = document.querySelectorAll('table')
+    let table = tables[{ mp4: 0, mp3: 1 }[type] || 0]
+
+    let list
+    switch (type) {
+        case 'mp4':
+            list = Object.fromEntries([...table.querySelectorAll('td > a[href="#"]')].filter(v => !/\.3gp/.test(v.innerHTML)).map(v => [v.innerHTML.match(/.*?(?=\()/)[0].trim(), v.parentElement.nextSibling.nextSibling.innerHTML]))
+            break
+        case 'mp3':
+            list = { '128kbps': table.querySelector('td > a[href="#"]').parentElement.nextSibling.nextSibling.innerHTML }
+            break
+        default:
+            list = {}
+    }
+
+    let filesize = list[quality]
+    let id = /var k__id = "(.*?)"/.exec(document.body.innerHTML) || ['', '']
+    let thumb = document.querySelector('img').src
+    let title = document.querySelector('b').innerHTML
+
+    let res2 = await post(`https://www.y2mate.com/${server}/convert`, {
+        type: 'youtube',
+        _id: id[1],
+        v_id: ytId[1],
+        ajax: '1',
+        token: '',
+        ftype: type,
+        fquality: bitrate
+    })
+
+    let json2 = await res2.json()
+    let KB = parseFloat(filesize) * (1000 * /MB$/.test(filesize))
+    let resUrl = /<a.+?href="(.+?)"/.exec(json2.result)[1]
+
+    return {
+        dl_link: resUrl.replace(/https/g, 'http'),
+        thumb,
+        title,
+        filesizeF: filesize,
+        filesize: KB
     }
 }
 
@@ -924,14 +973,48 @@ async function connectToWhatsApp() {
                     return;
                 }
 
-                // 3. YOUTUBE
-                if (textLower.startsWith('.yt') || textLower.startsWith('.youtube')) {
-                    const url = text.split(' ')[1];
-                    if (!url) return sock.sendMessage(from, { text: 'Mana linknya?' }, { quoted: msg });
+                async function onMessage(m) {
+                    const prefix = '!' // Contoh prefix
+                    if (!m.text.startsWith(prefix)) return
 
-                    // Panggil fungsi khusus YouTube
-                    await downloadYouTube(url, sock, from, msg);
-                    return;
+                    const args = m.text.slice(prefix.length).trim().split(/ +/)
+                    const command = args.shift().toLowerCase()
+                    const url = args[0]
+
+                    // Cek kalau user cuma ngetik command tanpa link
+                    if ((command === 'ytmp3' || command === 'ytmp4') && !url) {
+                        return console.log('Sukabyone, masukin linknya juga dong!')
+                    }
+
+                    // LOGIKA PERINTAH
+                    if (command === 'ytmp3') {
+                        try {
+                            console.log('Sabar, BOT SAM lagi cari MP3-nya...')
+                            // Kita panggil fungsi yt() langsung dengan settingan mp3
+                            const result = await yt(url, '128kbps', 'mp3', '128', 'en154')
+
+                            console.log(`Berhasil! Judul: ${result.title}`)
+                            console.log(`Link Download: ${result.dl_link}`)
+                            // Di sini kamu bisa tambahin code kirim file sesuai library botmu
+                        } catch (err) {
+                            console.error('Error nih:', err)
+                        }
+                    }
+
+                    if (command === 'ytmp4') {
+                        try {
+                            const resolusi = args[1] || '360p'
+                            console.log(`Sabar, BOT SAM lagi nyiapin video ${resolusi}...`)
+
+                            const bitrate = resolusi.replace('p', '')
+                            const result = await yt(url, resolusi, 'mp4', bitrate, 'en154')
+
+                            console.log(`Siap! Judul: ${result.title}`)
+                            console.log(`Link Download: ${result.dl_link}`)
+                        } catch (err) {
+                            console.error('Waduh error:', err)
+                        }
+                    }
                 }
 
                 if (textLower === '.sticker' || textLower === '.s') {
@@ -1620,61 +1703,6 @@ wa.me/6289528950624
                         await sock.sendMessage(from, { text: checkList }, { quoted: msg });
                         return;
                     }
-
-                    // --- ASUPAN TIKTOK CUSTOM SEARCH ---
-                    if (textLower.startsWith('.asupan') || textLower.startsWith('.ukhti') || textLower.startsWith('.hijab')) {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner/Private chat!' }, { quoted: msg });
-
-                        // Ambil keyword setelah command (kalau ada)
-                        let keyword = text.split(' ').slice(1).join(' ');
-                        if (keyword === '') keyword = null; // Biar random kalau nggak ada keyword
-
-                        await asupanTikTokCustom(keyword, sock, from, msg);
-                        return;
-                    }
-
-                    // DUCKDUCK GO
-                    if (textLower.startsWith('.18 ') || textLower.startsWith('.nsfw ')) {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner/Private!' }, { quoted: msg });
-
-                        const keyword = text.split(' ').slice(1).join(' ') || 'hot real nsfw';
-                        await duckduckgoNSFWImage(keyword, sock, from, msg);
-                        return;
-                    }
-
-                    // Random tanpa keyword
-                    if (textLower === '.18' || textLower === '.nsfw') {
-                        await duckduckgoNSFWImage('nsfw real hot', sock, from, msg);
-                        return;
-                    }
-
-                        // ENAKs
-                    if (textLower.startsWith('.yandex18 ') || textLower === '.yandex18') {
-                        const keyword = text.split(' ').slice(1).join(' ') || 'nsfw real';
-                        await yandexNSFWImage(keyword, sock, from, msg);
-                    }
-
-                    // --- DOODSTREAM SEARCH (Link Only) ---
-                    if (textLower.startsWith('.dood')) {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
-
-                        const query = text.split(' ').slice(1).join(' ');
-                        if (!query) return sock.sendMessage(from, { text: 'Cari apa? Contoh: .dood skandal sma' }, { quoted: msg });
-
-                        await searchDood(query, sock, from, msg);
-                        return;
-                    }
-
-                    // --- SFILE SEARCH (File/RAR) ---
-                    if (textLower.startsWith('.sfile')) {
-                        if (!isOperator) return sock.sendMessage(from, { text: '❌ Khusus Owner!' }, { quoted: msg });
-
-                        const query = text.split(' ').slice(1).join(' ');
-                        if (!query) return sock.sendMessage(from, { text: 'Cari apa? Contoh: .sfile full album' }, { quoted: msg });
-
-                        await searchSfile(query, sock, from, msg);
-                        return;
-                    }
                 }
 
 
@@ -1696,298 +1724,3 @@ wa.me/6289528950624
 // ============================================================
 
 connectToWhatsApp();
-
-// ============================================================
-// NSFW FOTO UNCENSORED VIA DUCKDUCKGO (FIX VQD 2025)
-// ============================================================
-async function duckduckgoNSFWImage(keyword = 'nsfw real hot', sock, from, msg) {
-    await sock.sendMessage(from, { text: `🔍 Lagi cari foto NSFW uncensored "${keyword}" via DuckDuckGo (fix 2025)...` }, { quoted: msg });
-
-    try {
-        // Step 1: Get vqd token - Update regex terbaru 2025
-        const params = new URLSearchParams({ q: keyword });
-        const tokenRes = await axios.post('https://duckduckgo.com/', params, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)',
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
-        });
-
-        // Regex update: Bisa vqd='...' atau vqd="..."
-        let vqd = tokenRes.data.match(/vqd[=\s]*[=:]\s*['"]([\d-]+)['"]/)?.[1] ||
-            tokenRes.data.match(/vqd=([\d-]+)/)?.[1];
-
-        if (!vqd) {
-            return sock.sendMessage(from, { text: '❌ Gagal ambil vqd token (DDG ubah struktur lagi). Coba lagi 5 menit kemudian atau keyword lain ya bos.' }, { quoted: msg });
-        }
-
-        // Step 2: Search image uncensored (p=-1 = safe search off)
-        const searchUrl = `https://duckduckgo.com/i.js?o=json&q=${encodeURIComponent(keyword)}&vqd=${vqd}&p=-1&f=,,,,,&u=b`;
-
-        const { data } = await axios.get(searchUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)',
-                'Referer': 'https://duckduckgo.com/'
-            }
-        });
-
-        if (!data.results || data.results.length === 0) {
-            return sock.sendMessage(from, { text: `❌ Gak nemu foto uncensored untuk "${keyword}". Coba keyword lebih spesifik!` }, { quoted: msg });
-        }
-
-        // Filter & random foto real hot
-        const validImages = data.results.filter(img => img.image && img.width > 300 && img.height > 300); // Filter thumbnail kecil
-        if (validImages.length === 0) return sock.sendMessage(from, { text: '❌ Hasil kosong/kualitas rendah.' }, { quoted: msg });
-
-        const randomImg = validImages[Math.floor(Math.random() * validImages.length)];
-
-        const buffer = await axios.get(randomImg.image, { responseType: 'arraybuffer' });
-
-        const caption = `🔞 *NSFW FOTO UNCENSORED - DUCKDUCKGO 2025*\n` +
-            `📌 *Keyword:* ${keyword}\n` +
-            `🎬 *Title:* ${randomImg.title || 'Real hot photo'}\n` +
-            `📏 *Size:* ${randomImg.width}x${randomImg.height}\n` +
-            `🔗 ${randomImg.url}\n\n` +
-            `_Real human • No blur/sensor • Fresh daily 😈💦_`;
-
-        await sock.sendMessage(from, {
-            image: buffer.data,
-            caption
-        }, { quoted: msg });
-
-    } catch (e) {
-        console.error('DDG NSFW Image Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Error total (mungkin block IP). Coba lagi nanti atau ganti ke alternatif Yandex ya bos!' }, { quoted: msg });
-    }
-}
-
-// ============================================================
-// ALTERNATIF: YANDEX NSFW IMAGE UNCENSORED (LEBIH MANTEP 2025)
-// ============================================================
-async function yandexNSFWImage(keyword = 'nsfw real hot', sock, from, msg) {
-    await sock.sendMessage(from, { text: `🔍 Lagi cari foto NSFW uncensored Yandex "${keyword}" (real hot tanpa sensor)...` }, { quoted: msg });
-
-    try {
-        const searchUrl = `https://yandex.com/images/search?text=${encodeURIComponent(keyword)}&isize=large&iorient=square`;
-
-        const { data } = await axios.get(searchUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
-        });
-
-        const $ = cheerio.load(data);
-        const images = [];
-
-        $('.serp-item').each((i, el) => {
-            const json = $(el).attr('data-bem');
-            if (json) {
-                try {
-                    const parsed = JSON.parse(json);
-                    const img = parsed['serp-item'].img_href || parsed['serp-item'].orig;
-                    if (img) images.push(img);
-                } catch { }
-            }
-        });
-
-        if (images.length === 0) {
-            return sock.sendMessage(from, { text: `❌ Gak nemu foto di Yandex untuk "${keyword}".` }, { quoted: msg });
-        }
-
-        const randomUrl = images[Math.floor(Math.random() * images.length)];
-
-        const buffer = await axios.get(randomUrl, { responseType: 'arraybuffer' });
-
-        const caption = `🔞 *NSFW FOTO UNCENSORED - YANDEX 2025*\n` +
-            `📌 *Keyword:* ${keyword}\n` +
-            `🔗 ${randomUrl}\n\n` +
-            `_Real human super hot • No filter • Yandex juara uncensored 😈💦_`;
-
-        await sock.sendMessage(from, {
-            image: buffer.data,
-            caption
-        }, { quoted: msg });
-
-    } catch (e) {
-        console.error('Yandex NSFW Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Error Yandex. Coba lagi ya!' }, { quoted: msg });
-    }
-}
-
-// ============================================================
-// FITUR ASUPAN TIKTOK CUSTOM SEARCH (REAL UKHTI VIRAL INDO)
-// ============================================================
-async function asupanTikTokCustom(keyword = null, sock, from, msg) {
-    await sock.sendMessage(from, { text: '🔄 Lagi nyari asupan ukhti viral TikTok' + (keyword ? ` "${keyword}"` : '') + '...' }, { quoted: msg });
-
-    try {
-        let finalQuery;
-
-        if (keyword) {
-            // Kalau ada keyword custom dari user
-            finalQuery = keyword.toLowerCase().trim();
-        } else {
-            // Kalau nggak ada (cuma .asupan), pake random dari list default
-            const defaultKeywords = [
-                'ukhti gemoy viral', 'jilbab sempit hot', 'cewek hijab montok', 'ukhti tobrut goyang',
-                'asupan hijab seksi', 'hijab viral indo', 'ukhti cantik body goals', 'goyang hijab hot',
-                'ukhti kacamata tobrut', 'jilboobs tiktok 2025', 'asupan ukhti bahenol'
-            ];
-            finalQuery = defaultKeywords[Math.floor(Math.random() * defaultKeywords.length)];
-        }
-
-        // Request ke tikwm.com API search
-        const { data } = await axios.post('https://www.tikwm.com/api/feed/search', {
-            keywords: finalQuery,
-            count: 15,      // Lebih banyak biar peluang nemu hot lebih besar
-            cursor: 0,
-            web: 1,
-            hd: 1
-        }, {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)'
-            }
-        });
-
-        if (!data?.data?.videos || data.data.videos.length === 0) {
-            return sock.sendMessage(from, { text: `❌ Gak nemu asupan ukhti dengan keyword "${finalQuery}" nih bos. Coba keyword lain!` }, { quoted: msg });
-        }
-
-        const videos = data.data.videos.filter(v => v.play); // Pastikan ada link video
-        const randomVideo = videos[Math.floor(Math.random() * videos.length)];
-
-        let videoUrl = randomVideo.play;
-        if (!videoUrl.startsWith('http')) {
-            videoUrl = 'https://www.tikwm.com' + videoUrl;
-        }
-
-        // Download ke buffer biar aman kirim WA
-        const bufferVideo = await axios.get(videoUrl, {
-            responseType: 'arraybuffer',
-            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
-        });
-
-        const caption = `🧕 *ASUPAN UKHTI TIKTOK VIRAL*\n` +
-            `🔍 *Keyword:* ${finalQuery}\n` +
-            `📝 *Caption:* ${randomVideo.title || 'Ukhti hot viral'}\n` +
-            `👀 *Views:* ${randomVideo.play_count?.toLocaleString() || 'Banyak'}\n` +
-            `👤 *User:* @${randomVideo.author.nickname}\n\n` +
-            `_Real Indo • Santuy turning on 😏🇮🇩_`;
-
-        await sock.sendMessage(from, {
-            video: bufferVideo.data,
-            caption: caption,
-            gifPlayback: false
-        }, { quoted: msg });
-
-    } catch (e) {
-        console.error('Asupan Custom Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Gagal ambil asupan: ' + e.message + '. Coba lagi ya bos!' }, { quoted: msg });
-    }
-}
-
-// ============================================================
-// FITUR: DOODSTREAM FINDER (JALUR PINTAS)
-// Mencari link Doodstream langsung lewat DuckDuckGo
-// ============================================================
-async function searchDood(query, sock, from, msg) {
-    await sock.sendMessage(from, { text: `🕵️ Nyari link Doodstream: "${query}"...` }, { quoted: msg });
-
-    try {
-        // Trik Dorking: Kita cari link yang domainnya dood.*
-        const dork = `site:dood.la OR site:dood.so OR site:dood.re OR site:dood.wf "${query}"`;
-        const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(dork)}`;
-
-        // Pakai Proxy biar IP VPS gak diblok DuckDuckGo
-        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(searchUrl)}`;
-
-        const { data } = await axios.get(proxyUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
-        });
-
-        const $ = cheerio.load(data);
-        const results = [];
-
-        // Scraping hasil pencarian DuckDuckGo (Versi HTML Ringan)
-        $('.result__body').each((i, element) => {
-            if (results.length >= 5) return; // Limit 5 aja
-
-            const title = $(element).find('.result__a').text().trim();
-            const link = $(element).find('.result__a').attr('href');
-            const snippet = $(element).find('.result__snippet').text().trim();
-
-            // Filter: Pastikan linknya mengarah ke Dood
-            if (link && (link.includes('dood') || link.includes('ds2play'))) {
-                results.push({ title, link, snippet });
-            }
-        });
-
-        if (results.length === 0) {
-            return sock.sendMessage(from, { text: '❌ Gak nemu link Doodstream buat keyword itu.' }, { quoted: msg });
-        }
-
-        let caption = `🕵️ *DOODSTREAM FINDER*\nQuery: _${query}_\n\n`;
-        results.forEach((res, i) => {
-            caption += `${i + 1}. *${res.title}*\n`;
-            caption += `🔗 ${res.link}\n\n`;
-        });
-        caption += `_Link bisa ditonton langsung tanpa VPN (biasanya)._`;
-
-        await sock.sendMessage(from, {
-            image: { url: 'https://i.imgur.com/L12a70m.png' }, // Logo Doodstream (opsional)
-            caption: caption
-        }, { quoted: msg });
-
-    } catch (e) {
-        console.error('Dood Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Gagal searching (DuckDuckGo limit/Proxy error).' }, { quoted: msg });
-    }
-}
-
-// ============================================================
-// FITUR: SFILE SEARCH (FILE VIRAL/RAR)
-// ============================================================
-async function searchSfile(query, sock, from, msg) {
-    await sock.sendMessage(from, { text: `📂 Mengaduk-aduk Sfile.mobi: "${query}"...` }, { quoted: msg });
-
-    try {
-        const searchUrl = `https://sfile.mobi/search.php?q=${encodeURIComponent(query)}&search=Search`;
-
-        const { data } = await axios.get(searchUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile)' }
-        });
-
-        const $ = cheerio.load(data);
-        const results = [];
-
-        $('.list').each((i, element) => {
-            if (results.length >= 5) return;
-
-            const linkElem = $(element).find('a');
-            const title = linkElem.text().trim();
-            const href = linkElem.attr('href');
-            const size = $(element).text().match(/\((.*?)\)/)?.[1] || 'Unknown';
-
-            if (title && href && href.includes('sfile.mobi')) {
-                results.push({ title, url: href, size });
-            }
-        });
-
-        if (results.length === 0) {
-            return sock.sendMessage(from, { text: '❌ File tidak ditemukan di Sfile.' }, { quoted: msg });
-        }
-
-        let caption = `📂 *SFILE VIRAL SEARCH*\n\n`;
-        results.forEach((res, i) => {
-            caption += `${i + 1}. *${res.title}*\n`;
-            caption += `📦 Size: ${res.size}\n`;
-            caption += `🔗 ${res.url}\n\n`;
-        });
-        caption += `_Biasanya berisi video viral, full album rar, dll._`;
-
-        await sock.sendMessage(from, { text: caption }, { quoted: msg });
-
-    } catch (e) {
-        console.error('Sfile Error:', e.message);
-        await sock.sendMessage(from, { text: '❌ Error scraping Sfile.' }, { quoted: msg });
-    }
-}
