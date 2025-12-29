@@ -929,38 +929,57 @@ async function connectToWhatsApp() {
                 }
 
                 // Cek kalau user cuma ngetik command tanpa link
-                if ( textLower.startsWith('ytmp3') ||  textLower.startsWith('ytmp4') && !url) {
+                if (textLower.startsWith('ytmp3') || textLower.startsWith('ytmp4') && !url) {
                     return console.log('Sukabyone, masukin linknya juga dong!')
                 }
 
-                // LOGIKA PERINTAH
-                if (textLower.startsWith('ytmp3')) {
-                    try {
-                        console.log('Sabar, BOT SAM lagi cari MP3-nya...')
-                        // Kita panggil fungsi yt() langsung dengan settingan mp3
-                        const result = await yt(url, '128kbps', 'mp3', '128', 'en154')
 
-                        console.log(`Berhasil! Judul: ${result.title}`)
-                        console.log(`Link Download: ${result.dl_link}`)
-                        // Di sini kamu bisa tambahin code kirim file sesuai library botmu
-                    } catch (err) {
-                        console.error('Error nih:', err)
+                // Youtube Downloader
+                if (textLower.startsWith('.yta ')) {
+                    const url = text.split(' ')[1];
+                    if (!ytIdRegex.test(url)) {
+                        return sock.sendMessage(from, { text: '❌ Link YouTube tidak valid, Sukabyone!' }, { quoted: msg });
                     }
+
+                    try {
+                        await sock.sendMessage(from, { text: '⏳ Sedang memproses audio, tunggu bentar ya...' }, { quoted: msg });
+                        const data = await yt(url, '128kbps', 'mp3', '128');
+
+                        await sock.sendMessage(from, {
+                            audio: { url: data.dl_link },
+                            mimetype: 'audio/mp4',
+                            fileName: `${data.title}.mp3`
+                        }, { quoted: msg });
+                    } catch (e) {
+                        console.error(e);
+                        sock.sendMessage(from, { text: '❌ Gagal mendownload audio.' }, { quoted: msg });
+                    }
+                    return;
                 }
 
-                if ( textLower.startsWith('ytmp4')) {
-                    try {
-                        const resolusi = args[1] || '360p'
-                        console.log(`Sabar, BOT SAM lagi nyiapin video ${resolusi}...`)
+                if (textLower.startsWith('.ytv ')) {
+                    const args = text.split(' ');
+                    const url = args[1];
+                    const res = args[2] || '360p'; // Default 360p kalau user ga input resolusi
 
-                        const bitrate = resolusi.replace('p', '')
-                        const result = await yt(url, resolusi, 'mp4', bitrate, 'en154')
-
-                        console.log(`Siap! Judul: ${result.title}`)
-                        console.log(`Link Download: ${result.dl_link}`)
-                    } catch (err) {
-                        console.error('Waduh error:', err)
+                    if (!ytIdRegex.test(url)) {
+                        return sock.sendMessage(from, { text: '❌ Mana link YouTube-nya?' }, { quoted: msg });
                     }
+
+                    try {
+                        await sock.sendMessage(from, { text: `⏳ Lagi nyiapin video ${res}, sabar ya...` }, { quoted: msg });
+                        const data = await yt(url, res, 'mp4', res.replace('p', ''));
+
+                        await sock.sendMessage(from, {
+                            video: { url: data.dl_link },
+                            caption: `✨ *Title:* ${data.title}\n📂 *Size:* ${data.filesizeF}`,
+                            gifPlayback: false
+                        }, { quoted: msg });
+                    } catch (e) {
+                        console.error(e);
+                        sock.sendMessage(from, { text: '❌ Gagal mendownload video. Coba resolusi lain (360p/720p).' }, { quoted: msg });
+                    }
+                    return;
                 }
 
 
