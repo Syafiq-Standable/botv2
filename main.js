@@ -1409,23 +1409,30 @@ wa.me/6289528950624
                     }
 
                     if (textLower.startsWith('.setname ')) {
-                        if (!isUserAdmin || !isBotAdmin) {
-                            return sock.sendMessage(from, { text: '❌ Bot dan user harus admin!' });
-                        }
+                    // 1. Cek apakah ini di dalam grup
+                    if (!isGroup) return sock.sendMessage(from, { text: '❌ Perintah ini cuma bisa di grup, Sukabyone!' });
 
-                        const newName = text.slice(9);
-                        if (!newName || newName.length > 25) {
-                            return sock.sendMessage(from, { text: '❌ Nama grup maksimal 25 karakter!' });
-                        }
+                    // 2. Cek apakah user & bot adalah admin (Pakai variabel isUserAdmin & isBotAdmin yang tadi kita benerin)
+                    if (!isUserAdmin) return sock.sendMessage(from, { text: '❌ Cuma admin yang boleh ganti nama grup!' });
+                    if (!isBotAdmin) return sock.sendMessage(from, { text: '❌ Jadikan BOT SAM admin dulu biar bisa ganti nama grup.' });
 
-                        try {
-                            await sock.groupUpdateSubject(from, newName);
-                            await sock.sendMessage(from, { text: `✅ Nama grup berhasil diubah!` });
-                        } catch (e) {
-                            await sock.sendMessage(from, { text: `❌ Gagal: ${e.message}` });
-                        }
-                        return;
+                    // 3. Ambil nama baru dari pesan
+                    const newName = text.slice(9).trim(); 
+
+                    // 4. Validasi input
+                    if (!newName) return sock.sendMessage(from, { text: '❌ Masukkan nama barunya dong! Contoh: .setname Grup Keren' });
+                    if (newName.length > 25) return sock.sendMessage(from, { text: '❌ Nama grup kepanjangan, maksimal 25 karakter ya.' });
+
+                    try {
+                        // 5. Eksekusi ganti nama
+                        await sock.groupUpdateSubject(from, newName);
+                        await sock.sendMessage(from, { text: `✅ Nama grup berhasil diganti jadi: *${newName}*` });
+                    } catch (e) {
+                        console.error(e);
+                        await sock.sendMessage(from, { text: `❌ Gagal ganti nama: ${e.message}` });
                     }
+                    return;
+                }
 
                     if (textLower.startsWith('.remind')) {
                         const input = text.split(' ');
